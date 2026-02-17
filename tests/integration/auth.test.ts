@@ -58,7 +58,7 @@ function stubRequest(method: HttpMethod, path: string, _headers: Record<string, 
           return { status: 400, body: { error: { code: 'INVALID_EMAIL', message: 'Invalid email address' } }, headers: {} }
         }
         const passwordStr = body.password as string
-        if (passwordStr.length < 8 || !/[A-Z]/.test(passwordStr) || !/[0-9]/.test(passwordStr) || !/[^A-Za-z0-9]/.test(passwordStr)) {
+        if (passwordStr.length < 8 || !/[A-Z]/.test(passwordStr) || !/[a-z]/.test(passwordStr) || !/[0-9]/.test(passwordStr) || !/[^A-Za-z0-9]/.test(passwordStr)) {
           return { status: 400, body: { error: { code: 'WEAK_PASSWORD', message: 'Password does not meet requirements' } }, headers: {} }
         }
         if (emailStr === testUser.email) {

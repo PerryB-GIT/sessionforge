@@ -31,7 +31,7 @@
     "zod": "^3.23.0",
     "drizzle-orm": "^0.30.0",
     "postgres": "^3.4.0",
-    "@sessionforge/shared-types": "*"
+    "@sessionforge/shared-types": "file:../../packages/shared-types"
   },
   "dependencies": {}
 }

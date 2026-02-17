@@ -277,7 +277,7 @@ describe('validatePasswordStrength', () => {
   it('accepts passwords with various special characters', () => {
     const specialChars = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')']
     for (const ch of specialChars) {
-      const result = validatePasswordStrength(`Str0ng${ch}`)
+      const result = validatePasswordStrength(`Str0ngPass${ch}`)
       expect(result.valid, `expected valid for special char: ${ch}`).toBe(true)
     }
   })

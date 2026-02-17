@@ -1,6 +1,7 @@
 {
   "name": "sessionforge",
   "private": true,
+  "packageManager": "npm@10.9.3",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "turbo run dev",

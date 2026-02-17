@@ -6,7 +6,7 @@ import { Monitor, Terminal, Activity, TrendingUp, ArrowRight, Plus } from 'lucid
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { MachineStatusBadge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { SessionList } from '@/components/sessions/SessionList'
 import { useMachines } from '@/hooks/useMachines'
 import { useSessions } from '@/hooks/useSessions'
@@ -83,12 +83,13 @@ export default function DashboardPage() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <Button asChild size="sm">
-          <Link href="/sessions">
-            <Plus className="h-4 w-4" />
-            New Session
-          </Link>
-        </Button>
+        <Link
+          href="/sessions"
+          className={buttonVariants({ size: 'sm' })}
+        >
+          <Plus className="h-4 w-4" />
+          New Session
+        </Link>
       </div>
 
       {/* Stats row */}

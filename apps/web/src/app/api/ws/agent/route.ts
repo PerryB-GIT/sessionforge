@@ -45,10 +45,10 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // @ts-expect-error - Next.js experimental WebSocket API
-  const { socket: ws, response: upgradeResponse } = Deno
+  // @ts-expect-error - Next.js experimental WebSocket API not in types
+  const { socket: ws, response: upgradeResponse } = (typeof Deno !== 'undefined')
     ? // Deno runtime (Edge)
-      await req.socket?.upgrade?.()
+      await (req as unknown as { socket: { upgrade: () => Promise<{ socket: WebSocket; response: Response }> } }).socket?.upgrade?.()
     : // Node.js runtime via next-ws or custom server
       { socket: (req as unknown as { socket: WebSocket }).socket, response }
 

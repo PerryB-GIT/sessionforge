@@ -1,18 +1,18 @@
+# GoReleaser configuration for SessionForge Agent
+# https://goreleaser.com
 version: 2
 
 before:
   hooks:
     - go mod tidy
+    - go generate ./...
 
 builds:
-  - id: sessionforge
-    main: ./cmd/sessionforge
-    binary: sessionforge
-    ldflags:
-      - -s -w
-      - -X main.Version={{.Version}}
-      - -X main.BuildDate={{.Date}}
-      - -X main.GitCommit={{.Commit}}
+  - id: sessionforge-agent
+    binary: sessionforge-agent
+    main: ./cmd/agent
+    env:
+      - CGO_ENABLED=0
     goos:
       - linux
       - darwin
@@ -20,24 +20,39 @@ builds:
     goarch:
       - amd64
       - arm64
+    # Windows arm64 is excluded (not commonly needed)
     ignore:
       - goos: windows
         goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
 
 archives:
-  - format: tar.gz
-    name_template: "sessionforge_{{ .Os }}_{{ .Arch }}"
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "linux" }}Linux
+      {{- else if eq .Os "darwin" }}Darwin
+      {{- else if eq .Os "windows" }}Windows
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    # Windows gets zip, everything else tar.gz
     format_overrides:
       - goos: windows
         format: zip
+    files:
+      - README.md
+      - LICENSE
 
 checksum:
   name_template: "checksums.txt"
-
-release:
-  github:
-    owner: sessionforge
-    name: agent
+  algorithm: sha256
 
 changelog:
   sort: asc
@@ -45,3 +60,14 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: sessionforge
+    name: sessionforge
+  draft: false
+  prerelease: auto
+  name_template: "SessionForge Agent {{.Version}}"

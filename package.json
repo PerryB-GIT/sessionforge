@@ -7,7 +7,14 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "type-check": "turbo run type-check"
+    "type-check": "turbo run type-check",
+    "db:generate": "cd apps/web && npx drizzle-kit generate",
+    "db:push": "cd apps/web && npx drizzle-kit push",
+    "db:studio": "cd apps/web && npx drizzle-kit studio",
+    "docker:dev": "docker-compose up -d",
+    "docker:dev:tools": "docker-compose --profile tools up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

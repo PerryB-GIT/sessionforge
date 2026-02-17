@@ -1,0 +1,127 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: sessionforge-production
+  annotations:
+    # Allow unauthenticated requests - auth handled by application layer
+    run.googleapis.com/ingress: all
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scaling: scale to zero when no traffic
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        # Use Cloud SQL via connection string, not Cloud SQL proxy sidecar
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      serviceAccountName: sessionforge-cloudrun-sa@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+        - name: sessionforge
+          image: ghcr.io/sessionforge/sessionforge:production-latest
+          ports:
+            - name: http1
+              containerPort: 3000
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: "1"
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            # All sensitive values come from Secret Manager
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-db-url
+                  key: latest
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-redis-url
+                  key: latest
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-nextauth-secret
+                  key: latest
+            - name: NEXTAUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-nextauth-url
+                  key: latest
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-google-client-id
+                  key: latest
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-google-client-secret
+                  key: latest
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-github-client-id
+                  key: latest
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-github-client-secret
+                  key: latest
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-resend-api-key
+                  key: latest
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-secret-key
+                  key: latest
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-webhook-secret
+                  key: latest
+            - name: STRIPE_PRO_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-pro-price-id
+                  key: latest
+            - name: STRIPE_TEAM_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-team-price-id
+                  key: latest
+            - name: STRIPE_ENTERPRISE_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-enterprise-price-id
+                  key: latest
+            - name: GCS_BUCKET_NAME
+              value: sessionforge-session-logs-prod
+            - name: GOOGLE_CLOUD_PROJECT
+              value: PROJECT_ID
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            failureThreshold: 10
+            periodSeconds: 5
+  traffic:
+    - percent: 100
+      latestRevision: true

@@ -4,6 +4,7 @@ import Credentials from 'next-auth/providers/credentials'
 import Google from 'next-auth/providers/google'
 import GitHub from 'next-auth/providers/github'
 import Resend from 'next-auth/providers/resend'
+import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { db, users } from '@/db'
@@ -19,8 +20,8 @@ const credentialsSchema = z.object({
 // ─── Auth Config ──────────────────────────────────────────────────────────────
 
 export const authConfig: NextAuthConfig = {
-  // STUB: AUTH_SECRET must be set in environment (openssl rand -base64 32)
-  secret: process.env.AUTH_SECRET,
+  adapter: DrizzleAdapter(db),
+  secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
 
   session: {
     strategy: 'jwt',

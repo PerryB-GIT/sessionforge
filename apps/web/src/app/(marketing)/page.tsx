@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import { ArrowRight, Check, Monitor, Terminal, Globe, Zap, Shield, BarChart3, Users, Building2 } from 'lucide-react'
 
@@ -419,11 +421,14 @@ export default function LandingPage() {
               <a href="/terms" className="text-sm text-gray-500 hover:text-white transition-colors">
                 Terms
               </a>
+              <a href="/aup" className="text-sm text-gray-500 hover:text-white transition-colors">
+                Acceptable Use
+              </a>
               <a href="/docs" className="text-sm text-gray-500 hover:text-white transition-colors">
                 Docs
               </a>
             </div>
-            <p className="text-xs text-gray-600">&copy; 2024 SessionForge. All rights reserved.</p>
+            <p className="text-xs text-gray-600">&copy; 2026 SupportForge LLC. All rights reserved.</p>
           </div>
         </div>
       </footer>

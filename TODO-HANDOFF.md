@@ -1,6 +1,6 @@
 # SessionForge — Agent Coordination Board
-**Last Updated:** 2026-02-17 (QA ✅ complete — 195 tests)
-**Phase:** Frontend still running | Backend ✅ | Go Agent ✅ | DevOps ✅ | QA ✅
+**Last Updated:** 2026-02-17 (ALL 5 AGENTS COMPLETE ✅ — integration merge in progress)
+**Phase:** ALL DONE — merging dev/* → dev/integration
 
 ---
 
@@ -9,7 +9,7 @@
 | Agent | Worktree Branch | Status | Current Task |
 |-------|----------------|--------|--------------|
 | Backend Architect | dev/backend | ✅ DONE | All APIs, WebSocket, tRPC, Stripe — 27 files |
-| Frontend Engineer | dev/frontend | 🔄 Building | Dashboard UI, auth pages, terminal, onboarding |
+| Frontend Engineer | dev/frontend | ✅ DONE | 46 files, 8 commits — full UI, terminal, onboarding |
 | Agent Developer | dev/desktop | ✅ DONE | Go CLI, PTY, WebSocket client — 28 files, 7 commits |
 | DevOps Engineer | dev/infra | ✅ DONE | Docker, 5 CI/CD workflows, GCP infra, Cloudflare |
 | QA Engineer | dev/qa | ✅ DONE | 195 tests (125 unit, 70 integration, E2E ready) — 9 commits |
@@ -127,6 +127,20 @@
 - [x] `turbo.json` updated with all pipeline tasks
 - [x] `package.json` updated with db:*, docker:* scripts
 
+### [2026-02-17] Frontend Engineer → All ✅ DONE — 46 Files, Full UI
+- [x] **Auth pages**: login (email/pw + Google/GitHub/magic link), signup (pw strength), verify-email, forgot-password, reset-password
+- [x] **Dashboard pages**: overview stats, machines list/detail, sessions list/terminal, API keys (show-once create), settings, org settings, onboarding wizard
+- [x] **Marketing landing page**: hero + animated terminal demo, features, 4-tier pricing, CTAs
+- [x] **xterm.js terminal**: `sessions/[id]/page.tsx` — dark Catppuccin theme, ResizeObserver + fit addon, base64 WS I/O, macOS window chrome
+- [x] **MachineSetupWizard**: 3-step OS picker (Linux/macOS/Windows), copy install command, verify polling
+- [x] **OnboardingWizard**: 5-step — org name → API key (show-once) → install → verify → celebrate
+- [x] **CommandPalette**: Cmd+K/Ctrl+K, navigation + machines + sessions groups, arrow key nav
+- [x] **Zustand store**: machines, sessions, apiKeys, user, wsStatus with full CRUD actions
+- [x] **useWebSocket**: auto-reconnect (max 5), toast notifications, `machine_updated`/`session_updated`/`alert_fired` handlers
+- [x] **Tailwind dark palette**: `#0a0a0f` bg, `#111118` card, `#1e1e2e` border, `#8B5CF6` purple accent
+- [x] All backend calls marked `// STUB:` — replace with tRPC from `apps/web/src/server/router.ts`
+- [x] 8 commits in `dev/frontend`
+
 ### [2026-02-17] QA Engineer → All ✅ DONE — 195 Tests, 4 Docs
 - [x] **Unit (125 tests)**: api-keys format/hash/validate, plan limits (all 4 tiers), WS protocol Zod validators, auth (bcrypt/JWT/email tokens/password rules)
 - [x] **Integration (70 tests)**: register/login/logout/forgot-password, machine CRUD + isolation, session lifecycle + plan limits, WebSocket register/heartbeat/output/disconnect
@@ -206,12 +220,12 @@ Never store full key after creation
 ## 📝 NOTES FOR PERRY (Human Orchestrator)
 
 - All 5 agents launched simultaneously 2026-02-17
-- **4/5 agents DONE**: Backend ✅ | Go Agent ✅ | DevOps ✅ | QA ✅
-- **1/5 still running**: Frontend 🔄
+- **5/5 agents DONE** ✅ ALL COMPLETE
+- Integration merge: dev/* → dev/integration in progress
 - Phase 0 complete (scaffold done)
 - Phase 1 Backend: ALL routes live — 27 files, 7 commits in dev/backend
 - Phase 2 Go Agent: FULLY BUILT — 28 files, 7 commits in dev/desktop
-- Phase 3 Frontend: Building now — dashboard, auth, terminal, onboarding
+- Phase 3 Frontend: DONE — 46 files, 8 commits (46 TypeScript/CSS files, full UI)
 - QA: DONE — 195 tests (125 unit, 70 integration), E2E ready, 4 docs, 9 commits in dev/qa
 - **Integration next step**: Once Frontend + QA finish → merge all dev/* branches to dev/integration
 - **Perry action needed**: Purchase domains — sessionforge.dev, sessionforge.com, sessionforge.io (~$34)

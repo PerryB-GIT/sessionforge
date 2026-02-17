@@ -1,0 +1,39 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies (re-installed in Docker)
+node_modules
+**/node_modules
+
+# Build outputs (re-built in Docker)
+.next
+**/dist
+**/build
+
+# Development config
+.env
+.env.local
+.env.*.local
+
+# Testing
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/coverage
+
+# Docs / misc
+*.md
+!apps/web/README.md
+docs
+.github
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor config
+.vscode
+.idea
+*.swp

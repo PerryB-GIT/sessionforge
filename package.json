@@ -1,0 +1,37 @@
+{
+  "name": "@sessionforge/qa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SessionForge QA test suite - unit, integration, and E2E tests",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:coverage": "vitest run --coverage",
+    "test:ci": "vitest run --reporter=verbose && playwright test --reporter=github",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "vitest": "^1.5.0",
+    "@vitest/coverage-v8": "^1.5.0",
+    "@playwright/test": "^1.44.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.10",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0",
+    "ws": "^8.17.0",
+    "bcryptjs": "^2.4.3",
+    "jose": "^5.2.0",
+    "zod": "^3.23.0",
+    "drizzle-orm": "^0.30.0",
+    "postgres": "^3.4.0",
+    "@sessionforge/shared-types": "*"
+  },
+  "dependencies": {}
+}

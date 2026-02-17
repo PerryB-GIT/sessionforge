@@ -221,13 +221,14 @@ Never store full key after creation
 
 - All 5 agents launched simultaneously 2026-02-17
 - **5/5 agents DONE** ✅ ALL COMPLETE
-- Integration merge: dev/* → dev/integration in progress
+- Integration merge: ✅ COMPLETE — dev/integration has all 5 branches merged (172 files, 19,068 lines)
 - Phase 0 complete (scaffold done)
 - Phase 1 Backend: ALL routes live — 27 files, 7 commits in dev/backend
 - Phase 2 Go Agent: FULLY BUILT — 28 files, 7 commits in dev/desktop
 - Phase 3 Frontend: DONE — 46 files, 8 commits (46 TypeScript/CSS files, full UI)
 - QA: DONE — 195 tests (125 unit, 70 integration), E2E ready, 4 docs, 9 commits in dev/qa
-- **Integration next step**: Once Frontend + QA finish → merge all dev/* branches to dev/integration
+- **Integration**: ✅ COMPLETE — `dev/integration` branch has all 5 merged (172 files, 19,068 lines)
+- **Next step for Perry**: `git checkout dev/integration && docker-compose up -d && npm install && npm run dev`
 - **Perry action needed**: Purchase domains — sessionforge.dev, sessionforge.com, sessionforge.io (~$34)
 - **Perry action needed**: Set up Stripe products/prices and add price IDs to .env
 - **Perry action needed**: Set up Resend account for transactional email (free tier, 3k emails/month)

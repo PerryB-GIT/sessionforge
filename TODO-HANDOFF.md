@@ -1,6 +1,6 @@
 # SessionForge — Agent Coordination Board
-**Last Updated:** 2026-02-17
-**Phase:** 1 (Core Backend) + 2 (Desktop Agent) + 3 (Frontend) running in parallel
+**Last Updated:** 2026-02-17 (Go Agent ✅ complete)
+**Phase:** 3 (Frontend) + QA still running | Backend ✅ | Go Agent ✅ | DevOps ✅
 
 ---
 
@@ -8,11 +8,11 @@
 
 | Agent | Worktree Branch | Status | Current Task |
 |-------|----------------|--------|--------------|
-| Backend Architect | dev/backend | 🔄 Building | Auth, DB schema, tRPC, WebSocket broker |
-| Frontend Engineer | dev/frontend | 🔄 Building | Dashboard UI, auth pages, terminal |
-| Agent Developer | dev/desktop | 🔄 Building | Go CLI, PTY, WebSocket client |
-| DevOps Engineer | dev/infra | 🔄 Building | Docker, CI/CD, GCP config |
-| QA Engineer | dev/qa | 🔄 Building | Test scaffolding, E2E, docs |
+| Backend Architect | dev/backend | ✅ DONE | All APIs, WebSocket, tRPC, Stripe — 27 files |
+| Frontend Engineer | dev/frontend | 🔄 Building | Dashboard UI, auth pages, terminal, onboarding |
+| Agent Developer | dev/desktop | ✅ DONE | Go CLI, PTY, WebSocket client — 28 files, 7 commits |
+| DevOps Engineer | dev/infra | ✅ DONE | Docker, 5 CI/CD workflows, GCP infra, Cloudflare |
+| QA Engineer | dev/qa | 🔄 Building | Vitest unit tests, Playwright E2E, integration tests |
 
 ---
 
@@ -42,10 +42,14 @@
 - [ ] `.env.example` being created — copy to `.env.local` and fill in for local dev
 - [ ] CI/CD pipelines being created in `.github/workflows/`
 
-### [2026-02-17] Agent Developer → Frontend (NEEDED BY FRONTEND)
-- [ ] Install command format: `curl -sSL https://sessionforge.dev/install.sh | sh -- --key sf_live_xxx`
-- [ ] Windows: `irm https://sessionforge.dev/install.ps1 | iex` with key param
-- [ ] Agent connects to `wss://HOST/api/ws/agent?key=API_KEY` on startup
+### [2026-02-17] Agent Developer → Frontend ✅ DONE — UNBLOCK FRONTEND INSTALL SECTION
+- [x] Install command format: `curl -sSL https://sessionforge.dev/install.sh | sh -- --key sf_live_xxx`
+- [x] Windows: `irm https://sessionforge.dev/install.ps1 | iex` with key param
+- [x] Agent connects to `wss://HOST/api/ws/agent?key=API_KEY` on startup
+- [x] Agent binary: `sessionforge-agent` (cross-compiled via goreleaser for linux/mac/windows amd64+arm64)
+- [x] Config stored at: `~/.config/sessionforge/config.toml` (Linux/Mac), `%APPDATA%\sessionforge\config.toml` (Windows)
+- [x] Service management: systemd (Linux), launchd (Mac), Windows Service
+- [x] Self-update: `sessionforge-agent update` — pulls from GitHub Releases
 
 ### [2026-02-17] QA → All Agents (FOR ALL AGENTS)
 - [ ] Test suite location: `tests/` in qa worktree
@@ -80,6 +84,21 @@
 - [x] Server disconnects after 90s of no heartbeat — agent must reconnect
 - [x] Session output: RPUSH to Redis ring buffer (2000 lines max)
 - [x] All message types match `packages/shared-types/src/ws-protocol.ts` exactly
+
+### [2026-02-17] Agent Developer → All ✅ DONE — Go Agent Complete
+- [x] `agent/cmd/sessionforge/` — cobra CLI entrypoint (`start`, `stop`, `status`, `update`, `config`)
+- [x] `agent/internal/config/` — TOML config management, auto-creates config dir on first run
+- [x] `agent/internal/system/` — gopsutil for CPU/memory/disk/hostname/OS detection
+- [x] `agent/internal/connection/` — WebSocket client with exponential backoff reconnection
+- [x] `agent/internal/session/` — PTY process spawning (creack/pty on Unix, conpty on Windows)
+- [x] `agent/internal/updater/` — self-update from GitHub Releases (go-update)
+- [x] `agent/scripts/install.sh` — one-liner installer for Linux/Mac
+- [x] `agent/scripts/install.ps1` — one-liner installer for Windows
+- [x] `.goreleaser.yml` — cross-compiles for linux/darwin/windows × amd64/arm64 with checksums
+- [x] Systemd unit: `agent/scripts/sessionforge-agent.service`
+- [x] Launchd plist: `agent/scripts/com.sessionforge.agent.plist`
+- [x] Windows Service: handled via agent `install-service` subcommand
+- [x] All message types wire directly to `packages/shared-types/src/ws-protocol.ts`
 
 ### [2026-02-17] Backend → QA ✅ DONE — UNBLOCK QA
 - [x] All API routes live and listed above — integration tests can target them
@@ -173,11 +192,17 @@ Never store full key after creation
 ## 📝 NOTES FOR PERRY (Human Orchestrator)
 
 - All 5 agents launched simultaneously 2026-02-17
+- **3/5 agents DONE**: Backend ✅ | Go Agent ✅ | DevOps ✅
+- **2/5 still running**: Frontend 🔄 | QA 🔄
 - Phase 0 complete (scaffold done)
-- Phase 1 (Backend), Phase 2 (Agent), Phase 3 (Frontend) all running in parallel
-- Infra (Phase 0 remaining) and QA scaffolding running in parallel
-- Next integration point: when backend routes are live, frontend switches from stubs to real calls
-- Domains still need to be purchased: sessionforge.dev, sessionforge.com, sessionforge.io (~$34)
+- Phase 1 Backend: ALL routes live — 27 files, 7 commits in dev/backend
+- Phase 2 Go Agent: FULLY BUILT — 28 files, 7 commits in dev/desktop
+- Phase 3 Frontend: Building now — dashboard, auth, terminal, onboarding
+- QA: Building now — Vitest unit tests, Playwright E2E, integration tests
+- **Integration next step**: Once Frontend + QA finish → merge all dev/* branches to dev/integration
+- **Perry action needed**: Purchase domains — sessionforge.dev, sessionforge.com, sessionforge.io (~$34)
+- **Perry action needed**: Set up Stripe products/prices and add price IDs to .env
+- **Perry action needed**: Set up Resend account for transactional email (free tier, 3k emails/month)
 
 ---
 

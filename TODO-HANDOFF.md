@@ -1,6 +1,6 @@
 # SessionForge — Agent Coordination Board
-**Last Updated:** 2026-02-17 (Go Agent ✅ complete)
-**Phase:** 3 (Frontend) + QA still running | Backend ✅ | Go Agent ✅ | DevOps ✅
+**Last Updated:** 2026-02-17 (QA ✅ complete — 195 tests)
+**Phase:** Frontend still running | Backend ✅ | Go Agent ✅ | DevOps ✅ | QA ✅
 
 ---
 
@@ -12,7 +12,7 @@
 | Frontend Engineer | dev/frontend | 🔄 Building | Dashboard UI, auth pages, terminal, onboarding |
 | Agent Developer | dev/desktop | ✅ DONE | Go CLI, PTY, WebSocket client — 28 files, 7 commits |
 | DevOps Engineer | dev/infra | ✅ DONE | Docker, 5 CI/CD workflows, GCP infra, Cloudflare |
-| QA Engineer | dev/qa | 🔄 Building | Vitest unit tests, Playwright E2E, integration tests |
+| QA Engineer | dev/qa | ✅ DONE | 195 tests (125 unit, 70 integration, E2E ready) — 9 commits |
 
 ---
 
@@ -51,11 +51,17 @@
 - [x] Service management: systemd (Linux), launchd (Mac), Windows Service
 - [x] Self-update: `sessionforge-agent update` — pulls from GitHub Releases
 
-### [2026-02-17] QA → All Agents (FOR ALL AGENTS)
-- [ ] Test suite location: `tests/` in qa worktree
-- [ ] To run unit tests: `vitest run`
-- [ ] To run E2E: `playwright test`
-- [ ] Coverage thresholds: 80% on auth, billing, sessions
+### [2026-02-17] QA → All Agents ✅ DONE — 195 Tests Delivered
+- [x] Test suite location: `tests/` in `dev/qa` worktree (9 commits)
+- [x] Unit tests (125): api-keys, plan-enforcement, ws-protocol, auth — `vitest run`
+- [x] Integration tests (70): auth, machines, sessions, websocket — `vitest run`
+- [x] E2E tests (Playwright): auth, machine-setup, session, billing — `playwright test`
+- [x] Coverage thresholds: 80/80/70 (statements/branches/lines) via v8 provider
+- [x] Fixtures: `tests/fixtures/users.ts`, `machines.ts`, `sessions.ts`
+- [x] Helpers: `tests/helpers/db.ts`, `auth.ts`, `ws.ts`
+- [x] Docs: `docs/getting-started.md`, `api-reference.md`, `agent-install.md`, `troubleshooting.md`
+- [x] All integration tests run without infra (in-memory stubs, real ws package for WebSocket tests)
+- [x] E2E stubs guard infra-dependent tests with `test.skip` so CI runs clean
 
 ---
 
@@ -120,6 +126,14 @@
 - [x] `infra/cloudflare/dns-records.md` — DNS setup guide
 - [x] `turbo.json` updated with all pipeline tasks
 - [x] `package.json` updated with db:*, docker:* scripts
+
+### [2026-02-17] QA Engineer → All ✅ DONE — 195 Tests, 4 Docs
+- [x] **Unit (125 tests)**: api-keys format/hash/validate, plan limits (all 4 tiers), WS protocol Zod validators, auth (bcrypt/JWT/email tokens/password rules)
+- [x] **Integration (70 tests)**: register/login/logout/forgot-password, machine CRUD + isolation, session lifecycle + plan limits, WebSocket register/heartbeat/output/disconnect
+- [x] **E2E Playwright**: auth flows, machine setup wizard, session terminal, billing/upgrade — stubs guarded with `test.skip` for CI safety
+- [x] **Docs**: getting-started, full API reference (all routes + WS protocol), agent-install (Linux/Mac/Windows), troubleshooting guide
+- [x] **Config**: vitest.config.ts (v8 coverage), playwright.config.ts (Chromium, retry x2 CI, video on fail), tsconfig with shared-types alias
+- [x] Run: `cd .worktrees/agent-qa && npm run test` (unit+integration) | `npm run test:e2e` (Playwright)
 
 ### [2026-02-17] Phase 0 → All Agents
 - [x] Monorepo scaffold at `C:/Users/Jakeb/sessionforge/`
@@ -192,13 +206,13 @@ Never store full key after creation
 ## 📝 NOTES FOR PERRY (Human Orchestrator)
 
 - All 5 agents launched simultaneously 2026-02-17
-- **3/5 agents DONE**: Backend ✅ | Go Agent ✅ | DevOps ✅
-- **2/5 still running**: Frontend 🔄 | QA 🔄
+- **4/5 agents DONE**: Backend ✅ | Go Agent ✅ | DevOps ✅ | QA ✅
+- **1/5 still running**: Frontend 🔄
 - Phase 0 complete (scaffold done)
 - Phase 1 Backend: ALL routes live — 27 files, 7 commits in dev/backend
 - Phase 2 Go Agent: FULLY BUILT — 28 files, 7 commits in dev/desktop
 - Phase 3 Frontend: Building now — dashboard, auth, terminal, onboarding
-- QA: Building now — Vitest unit tests, Playwright E2E, integration tests
+- QA: DONE — 195 tests (125 unit, 70 integration), E2E ready, 4 docs, 9 commits in dev/qa
 - **Integration next step**: Once Frontend + QA finish → merge all dev/* branches to dev/integration
 - **Perry action needed**: Purchase domains — sessionforge.dev, sessionforge.com, sessionforge.io (~$34)
 - **Perry action needed**: Set up Stripe products/prices and add price IDs to .env

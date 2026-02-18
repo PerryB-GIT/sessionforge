@@ -45,14 +45,13 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const reqAny = req as any
   // @ts-expect-error - Next.js experimental WebSocket API
+  const reqAny = req as { socket?: { upgrade?: () => Promise<{ socket: WebSocket; response: Response }> }; [k: string]: unknown }
   const { socket: ws, response: upgradeResponse } = typeof Deno !== 'undefined'
     ? // Deno runtime (Edge)
-      await reqAny.socket?.upgrade?.()
+      await reqAny.socket?.upgrade?.() ?? { socket: undefined, response }
     : // Node.js runtime via next-ws or custom server
-      { socket: reqAny.socket as WebSocket, response }
+      { socket: reqAny.socket as unknown as WebSocket, response }
 
   let machineId: string | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null

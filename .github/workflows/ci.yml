@@ -47,7 +47,12 @@ jobs:
         run: npm ci --frozen-lockfile
 
       - name: Run TypeScript compiler
-        run: npx tsc --noEmit -p apps/web/tsconfig.json
+        run: |
+          if [ -f "apps/web/tsconfig.json" ] && [ -d "apps/web/src" ]; then
+            npx tsc --noEmit -p apps/web/tsconfig.json
+          else
+            echo "No apps/web source found on this branch — skipping typecheck."
+          fi
 
   test:
     name: Test

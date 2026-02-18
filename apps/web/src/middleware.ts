@@ -102,13 +102,13 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   const session = await auth()
 
   if (isProtected && !session) {
-    const loginUrl = new URL('/login', req.url)
+    const loginUrl = new URL('/login', req.nextUrl.origin)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
   if (isAuthRoute && session) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
+    return NextResponse.redirect(new URL('/dashboard', req.nextUrl.origin))
   }
 
   return NextResponse.next()

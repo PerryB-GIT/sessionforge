@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Mail, Lock, Eye, EyeOff, Github, Chrome } from 'lucide-react'
+import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,12 +38,20 @@ export default function LoginPage() {
   async function onSubmit(data: FormData) {
     setIsLoading(true)
     try {
-      // STUB: Replace with tRPC or NextAuth signIn('credentials', ...)
-      await new Promise((r) => setTimeout(r, 1000))
-      toast.success('Signed in successfully!')
+      const result = await signIn('credentials', {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        toast.error('Invalid email or password')
+        return
+      }
+
       router.push('/dashboard')
     } catch {
-      toast.error('Invalid email or password')
+      toast.error('Something went wrong. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -56,8 +65,11 @@ export default function LoginPage() {
     }
     setIsMagicLoading(true)
     try {
-      // STUB: POST /api/auth/magic-link { email }
-      await new Promise((r) => setTimeout(r, 800))
+      const result = await signIn('resend', { email, redirect: false })
+      if (result?.error) {
+        toast.error('Failed to send magic link. Please try again.')
+        return
+      }
       toast.success(`Magic link sent to ${email}`)
       router.push('/verify-email')
     } finally {
@@ -66,9 +78,7 @@ export default function LoginPage() {
   }
 
   function handleOAuth(provider: 'google' | 'github') {
-    // STUB: NextAuth signIn(provider)
-    toast.info(`Redirecting to ${provider}...`)
-    window.location.href = `/api/auth/${provider}`
+    signIn(provider, { callbackUrl: '/dashboard' })
   }
 
   return (

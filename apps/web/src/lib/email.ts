@@ -4,7 +4,7 @@ const FROM = process.env.EMAIL_FROM ?? 'noreply@sessionforge.dev'
 const APP_URL = process.env.NEXTAUTH_URL ?? 'https://sessionforge.dev'
 
 export async function sendPasswordResetEmail(to: string, name: string | null, token: string) {
-  const resend = new Resend(process.env.RESEND_API_KEY)
+  const resend = new Resend(process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY)
   const resetUrl = `${APP_URL}/reset-password?token=${token}`
   const displayName = name ?? to
 

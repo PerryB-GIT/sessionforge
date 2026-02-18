@@ -45,7 +45,7 @@ export const authConfig: NextAuthConfig = {
   pages: {
     signIn: '/login',
     error: '/login',
-    verifyRequest: '/verify-email',
+    verifyRequest: '/verify-email?magic=1',
   },
 
   providers: [

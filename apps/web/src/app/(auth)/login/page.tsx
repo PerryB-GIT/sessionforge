@@ -80,9 +80,13 @@ function LoginForm() {
     }
     setIsMagicLoading(true)
     try {
-      await signIn('resend', { email, redirect: false })
-      toast.success(`Magic link sent to ${email}`)
-      router.push('/verify-email')
+      const result = await signIn('resend', { email, redirect: false, callbackUrl: '/dashboard' })
+      if (result?.error) {
+        toast.error('Failed to send magic link. Please try again.')
+        return
+      }
+      toast.success(`Magic link sent to ${email} — click it to sign in`)
+      router.push(`/verify-email?magic=1&email=${encodeURIComponent(email)}`)
     } catch {
       toast.error('Failed to send magic link')
     } finally {

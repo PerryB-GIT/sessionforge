@@ -45,13 +45,15 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // @ts-expect-error - Next.js experimental WebSocket API
-  const reqAny = req as { socket?: { upgrade?: () => Promise<{ socket: WebSocket; response: Response }> }; [k: string]: unknown }
-  const { socket: ws, response: upgradeResponse } = typeof Deno !== 'undefined'
-    ? // Deno runtime (Edge)
-      await reqAny.socket?.upgrade?.() ?? { socket: undefined, response }
-    : // Node.js runtime via next-ws or custom server
-      { socket: reqAny.socket as unknown as WebSocket, response }
+  // WebSocket upgrade — works with next-ws or a custom Node.js server
+  // eslint-disable-next-line
+  const reqRaw = req as Record<string, unknown>
+  const ws = reqRaw['socket'] as WebSocket | undefined
+  const upgradeResponse = reqRaw['upgradeResponse'] as Response | undefined ?? response
+
+  if (!ws) {
+    return new Response('WebSocket upgrade failed', { status: 500 })
+  }
 
   let machineId: string | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null

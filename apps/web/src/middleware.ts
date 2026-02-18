@@ -25,13 +25,10 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   if (!isProtected && !isAuthRoute) return NextResponse.next()
 
   // Use getToken which reads the JWT directly — no NextAuth handler needed
+  // Leave cookieName unset to use NextAuth v5 default: authjs.session-token
   const token = await getToken({
     req,
-    secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? '',
-    cookieName:
-      process.env.NODE_ENV === 'production'
-        ? '__Secure-next-auth.session-token'
-        : 'next-auth.session-token',
+    secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? '',
   })
 
   // Build base URL from forwarded headers (Cloud Run sets these correctly)

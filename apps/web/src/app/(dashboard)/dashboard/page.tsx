@@ -83,12 +83,13 @@ export default function DashboardPage() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <Button asChild size="sm">
-          <Link href="/sessions">
-            <Plus className="h-4 w-4" />
-            New Session
-          </Link>
-        </Button>
+        <Link
+          href="/sessions"
+          className="inline-flex items-center justify-center gap-2 rounded-lg text-xs font-medium transition-all h-7 px-3 bg-purple-500 text-white hover:bg-purple-600 shadow-lg shadow-purple-500/20"
+        >
+          <Plus className="h-4 w-4" />
+          New Session
+        </Link>
       </div>
 
       {/* Stats row */}

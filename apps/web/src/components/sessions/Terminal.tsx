@@ -1,24 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { toast } from 'sonner'
-
-// STUB: xterm.js types — install @xterm/xterm @xterm/addon-fit @xterm/addon-web-links
-interface ITerminal {
-  loadAddon: (addon: unknown) => void
-  open: (element: HTMLElement) => void
-  write: (data: string) => void
-  onData: (callback: (data: string) => void) => void
-  onResize: (callback: (size: { cols: number; rows: number }) => void) => void
-  dispose: () => void
-  focus: () => void
-  cols: number
-  rows: number
-}
-
-interface IFitAddon {
-  fit: () => void
-}
+import type { Terminal as XTermTerminal } from '@xterm/xterm'
+import type { FitAddon as XTermFitAddon } from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
 
 interface TerminalProps {
   sessionId: string
@@ -27,19 +13,15 @@ interface TerminalProps {
 }
 
 async function loadXterm(): Promise<{
-  Terminal: new (opts: Record<string, unknown>) => ITerminal
-  FitAddon: new () => IFitAddon
+  Terminal: typeof XTermTerminal
+  FitAddon: typeof XTermFitAddon
 } | null> {
   try {
-    // STUB: Dynamic import — works when @xterm/xterm is installed
     const [xtermMod, fitMod] = await Promise.all([
-      import('@xterm/xterm' as string),
-      import('@xterm/addon-fit' as string),
+      import('@xterm/xterm'),
+      import('@xterm/addon-fit'),
     ])
-    return {
-      Terminal: (xtermMod as { Terminal: new (opts: Record<string, unknown>) => ITerminal }).Terminal,
-      FitAddon: (fitMod as { FitAddon: new () => IFitAddon }).FitAddon,
-    }
+    return { Terminal: xtermMod.Terminal, FitAddon: fitMod.FitAddon }
   } catch {
     return null
   }
@@ -68,16 +50,18 @@ function StubTerminalContent({ sessionId }: { sessionId: string }) {
 
 export function Terminal({ sessionId, isConnected = false, onSendInput }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const terminalRef = useRef<ITerminal | null>(null)
-  const fitAddonRef = useRef<IFitAddon | null>(null)
+  const terminalRef = useRef<XTermTerminal | null>(null)
+  const fitAddonRef = useRef<XTermFitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
+  const [xtermFailed, setXtermFailed] = useState(false)
   const stubRef = useRef(false)
 
   const connectWebSocket = useCallback(() => {
     try {
-      // STUB: Replace with real dashboard WebSocket URL
-      const wsUrl = `${process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:3001'}/api/ws/dashboard`
+      // Use same-origin WS — relative URL converted to ws(s):// automatically
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${proto}//${window.location.host}/api/ws/dashboard`
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
@@ -133,6 +117,7 @@ export function Terminal({ sessionId, isConnected = false, onSendInput }: Termin
 
       if (!mods) {
         stubRef.current = true
+        setXtermFailed(true)
         return
       }
 
@@ -245,10 +230,13 @@ export function Terminal({ sessionId, isConnected = false, onSendInput }: Termin
       </div>
 
       {/* Terminal render area */}
-      <div ref={containerRef} className="flex-1 min-h-0 w-full p-1">
-        {/* StubTerminalContent renders only when xterm fails to load */}
-        <StubTerminalContent sessionId={sessionId} />
-      </div>
+      {xtermFailed ? (
+        <div className="flex-1 min-h-0 w-full overflow-y-auto">
+          <StubTerminalContent sessionId={sessionId} />
+        </div>
+      ) : (
+        <div ref={containerRef} className="flex-1 min-h-0 w-full p-1" />
+      )}
     </div>
   )
 }

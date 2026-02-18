@@ -1,9 +1,5 @@
-import NextAuth from 'next-auth'
 import { NextRequest, NextResponse } from 'next/server'
-import { authConfig } from '@/lib/auth.config'
-
-// Edge-safe auth instance using the lightweight config (no bcrypt, no DB)
-const { auth } = NextAuth(authConfig)
+import { getToken } from 'next-auth/jwt'
 
 // ─── Route Sets ────────────────────────────────────────────────────────────
 
@@ -28,20 +24,28 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
   if (!isProtected && !isAuthRoute) return NextResponse.next()
 
-  const session = await auth()
+  // Use getToken which reads the JWT directly — no NextAuth handler needed
+  const token = await getToken({
+    req,
+    secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? '',
+    cookieName:
+      process.env.NODE_ENV === 'production'
+        ? '__Secure-next-auth.session-token'
+        : 'next-auth.session-token',
+  })
 
   // Build base URL from forwarded headers (Cloud Run sets these correctly)
   const proto = req.headers.get('x-forwarded-proto') ?? 'https'
   const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? 'sessionforge.dev'
   const baseUrl = `${proto}://${host}`
 
-  if (isProtected && !session?.user?.id) {
+  if (isProtected && !token?.sub) {
     const loginUrl = new URL('/login', baseUrl)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  if (isAuthRoute && session?.user?.id) {
+  if (isAuthRoute && token?.sub) {
     return NextResponse.redirect(new URL('/dashboard', baseUrl))
   }
 

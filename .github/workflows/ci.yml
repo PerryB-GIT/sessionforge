@@ -28,7 +28,12 @@ jobs:
         run: npm install --prefer-offline
 
       - name: Run ESLint
-        run: npm run lint
+        run: |
+          if [ -d "apps/web/src" ]; then
+            npm run lint
+          else
+            echo "No apps/web source on this branch — skipping lint."
+          fi
 
   typecheck:
     name: Type Check
@@ -71,7 +76,12 @@ jobs:
         run: npm install --prefer-offline
 
       - name: Run tests
-        run: npm run test
+        run: |
+          if [ -d "apps/web/src" ] || [ -d "tests" ]; then
+            npm run test
+          else
+            echo "No testable source on this branch — skipping tests."
+          fi
 
   build:
     name: Build

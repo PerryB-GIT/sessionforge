@@ -117,8 +117,10 @@ jobs:
             --memory 512Mi \
             --cpu 1 \
             --port 3000 \
+            --vpc-connector sessionforge-connector \
+            --vpc-egress all-traffic \
             --set-env-vars "NODE_ENV=production,CORALOGIX_APP_NAME=sessionforge,CORALOGIX_ENDPOINT=https://ingress.coralogix.com,GRAFANA_OTLP_ENDPOINT=https://otlp-gateway-prod-us-east-0.grafana.net/otlp,NEXT_PUBLIC_APP_URL=https://sessionforge.dev,CORALOGIX_API_KEY=placeholder,GRAFANA_API_KEY=placeholder,GRAFANA_ORG_ID=placeholder" \
-            --set-secrets "DATABASE_URL=sessionforge-db-url:latest,REDIS_URL=sessionforge-redis-url:latest,NEXTAUTH_SECRET=sessionforge-nextauth-secret:latest,AUTH_SECRET=sessionforge-nextauth-secret:latest,E2E_TEST_SECRET=sessionforge-e2e-test-secret:latest,NEXTAUTH_URL=sessionforge-nextauth-url:latest,GITHUB_CLIENT_ID=sessionforge-github-client-id:latest,GITHUB_CLIENT_SECRET=sessionforge-github-client-secret:latest,GOOGLE_CLIENT_ID=sessionforge-google-client-id:latest,GOOGLE_CLIENT_SECRET=sessionforge-google-client-secret:latest,UPSTASH_REDIS_REST_URL=sessionforge-upstash-rest-url:latest,UPSTASH_REDIS_REST_TOKEN=sessionforge-upstash-rest-token:latest,STRIPE_SECRET_KEY=sessionforge-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=sessionforge-stripe-webhook-secret:latest,STRIPE_PRICE_PRO=sessionforge-stripe-price-pro:latest,STRIPE_PRICE_TEAM=sessionforge-stripe-price-team:latest,STRIPE_PRICE_ENTERPRISE=sessionforge-stripe-price-enterprise:latest,RESEND_API_KEY=sessionforge-resend-api-key:latest,AUTH_RESEND_KEY=sessionforge-resend-api-key:latest" \
+            --set-secrets "DATABASE_URL=sessionforge-db-url:latest,NEXTAUTH_SECRET=sessionforge-nextauth-secret:latest,AUTH_SECRET=sessionforge-nextauth-secret:latest,NEXTAUTH_URL=sessionforge-nextauth-url:latest,GITHUB_CLIENT_ID=sessionforge-github-client-id:latest,GITHUB_CLIENT_SECRET=sessionforge-github-client-secret:latest,GOOGLE_CLIENT_ID=sessionforge-google-client-id:latest,GOOGLE_CLIENT_SECRET=sessionforge-google-client-secret:latest,UPSTASH_REDIS_REST_URL=sessionforge-upstash-redis-url:latest,UPSTASH_REDIS_REST_TOKEN=sessionforge-upstash-redis-token:latest,STRIPE_SECRET_KEY=sessionforge-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=sessionforge-stripe-webhook-secret:latest,STRIPE_PRO_PRICE_ID=sessionforge-stripe-pro-price-id:latest,STRIPE_TEAM_PRICE_ID=sessionforge-stripe-team-price-id:latest,STRIPE_ENTERPRISE_PRICE_ID=sessionforge-stripe-enterprise-price-id:latest,RESEND_API_KEY=sessionforge-resend-api-key:latest,AUTH_RESEND_KEY=sessionforge-resend-api-key:latest,E2E_TEST_SECRET=sessionforge-e2e-test-secret:latest,SENTRY_DSN=sessionforge-sentry-dsn:latest" \
             --quiet
 
       - name: Output production URL
@@ -128,3 +130,4 @@ jobs:
             --project "${{ secrets.GCP_PROJECT_ID }}" \
             --format "value(status.url)")
           echo "Production URL: $URL"
+          echo "::notice title=Production URL::$URL"

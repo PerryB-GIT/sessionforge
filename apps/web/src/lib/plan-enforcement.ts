@@ -93,7 +93,7 @@ export async function checkSessionLimit(userId: string): Promise<void> {
 
   if (current >= limits.sessions) {
     throw new PlanLimitError(
-      `Your ${plan} plan allows a maximum of ${limits.sessions} concurrent session${limits.sessions === 1 ? '' : 's'}. ` +
+      `Your ${plan} plan allows a maximum of ${limits.sessions} concurrent session${(limits.sessions as number) === 1 ? '' : 's'}. ` +
         `You currently have ${current} running. Stop a session or upgrade your plan.`,
       'SESSION_LIMIT_EXCEEDED',
       limits.sessions,

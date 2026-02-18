@@ -25,7 +25,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci --frozen-lockfile
+        run: npm install --prefer-offline
 
       - name: Run ESLint
         run: npm run lint
@@ -44,7 +44,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci --frozen-lockfile
+        run: npm install --prefer-offline
 
       - name: Run TypeScript compiler
         run: |
@@ -68,7 +68,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci --frozen-lockfile
+        run: npm install --prefer-offline
 
       - name: Run tests
         run: npm run test
@@ -88,7 +88,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci --frozen-lockfile
+        run: npm install --prefer-offline
 
       - name: Build Next.js app
         run: npm run build

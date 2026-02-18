@@ -3,21 +3,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
-// ─── Rate Limiters ─────────────────────────────────────────────────────────────
+// ─── Rate Limiters (lazy — initialized per-request so env vars are available) ──
 
-const loginRatelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(5, '15 m'),
-  prefix: 'rl:login',
-  analytics: false,
-})
+let _loginRatelimit: Ratelimit | null = null
+let _magicLinkRatelimit: Ratelimit | null = null
 
-const magicLinkRatelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(3, '1 h'),
-  prefix: 'rl:magic',
-  analytics: false,
-})
+function getLoginRatelimit(): Ratelimit {
+  if (!_loginRatelimit) {
+    _loginRatelimit = new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(5, '15 m'),
+      prefix: 'rl:login',
+      analytics: false,
+    })
+  }
+  return _loginRatelimit
+}
+
+function getMagicLinkRatelimit(): Ratelimit {
+  if (!_magicLinkRatelimit) {
+    _magicLinkRatelimit = new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(3, '1 h'),
+      prefix: 'rl:magic',
+      analytics: false,
+    })
+  }
+  return _magicLinkRatelimit
+}
 
 const LOGIN_ROUTES = new Set([
   '/api/auth/callback/credentials',
@@ -44,38 +57,16 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl
 
   // ── Rate limiting ──────────────────────────────────────────────────────────
-  if (LOGIN_ROUTES.has(pathname)) {
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      ?? req.headers.get('x-real-ip')
-      ?? '127.0.0.1'
+  try {
+    if (LOGIN_ROUTES.has(pathname)) {
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        ?? req.headers.get('x-real-ip')
+        ?? '127.0.0.1'
 
-    const { success, limit, remaining, reset } = await loginRatelimit.limit(ip)
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Too many login attempts. Please try again later.' },
-        {
-          status: 429,
-          headers: {
-            'X-RateLimit-Limit': String(limit),
-            'X-RateLimit-Remaining': String(remaining),
-            'X-RateLimit-Reset': String(reset),
-            'Retry-After': String(Math.ceil((reset - Date.now()) / 1000)),
-          },
-        }
-      )
-    }
-  }
-
-  if (MAGIC_LINK_ROUTES.has(pathname) && req.method === 'POST') {
-    const body = await req.text()
-    const email = new URLSearchParams(body).get('email')
-      ?? req.nextUrl.searchParams.get('email')
-
-    if (email) {
-      const { success, limit, remaining, reset } = await magicLinkRatelimit.limit(`email:${email.toLowerCase()}`)
+      const { success, limit, remaining, reset } = await getLoginRatelimit().limit(ip)
       if (!success) {
         return NextResponse.json(
-          { error: 'Too many magic link requests. Please try again in an hour.' },
+          { error: 'Too many login attempts. Please try again later.' },
           {
             status: 429,
             headers: {
@@ -87,10 +78,37 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
           }
         )
       }
-      return NextResponse.next({
-        request: new Request(req.url, { method: req.method, headers: req.headers, body }),
-      })
     }
+
+    if (MAGIC_LINK_ROUTES.has(pathname) && req.method === 'POST') {
+      const body = await req.text()
+      const email = new URLSearchParams(body).get('email')
+        ?? req.nextUrl.searchParams.get('email')
+
+      if (email) {
+        const { success, limit, remaining, reset } = await getMagicLinkRatelimit().limit(`email:${email.toLowerCase()}`)
+        if (!success) {
+          return NextResponse.json(
+            { error: 'Too many magic link requests. Please try again in an hour.' },
+            {
+              status: 429,
+              headers: {
+                'X-RateLimit-Limit': String(limit),
+                'X-RateLimit-Remaining': String(remaining),
+                'X-RateLimit-Reset': String(reset),
+                'Retry-After': String(Math.ceil((reset - Date.now()) / 1000)),
+              },
+            }
+          )
+        }
+        return NextResponse.next({
+          request: new Request(req.url, { method: req.method, headers: req.headers, body }),
+        })
+      }
+    }
+  } catch (err) {
+    // Rate limiting unavailable — log but don't block the request
+    console.warn('[middleware] Rate limiting error (skipping):', err instanceof Error ? err.message : err)
   }
 
   // ── Auth routing ───────────────────────────────────────────────────────────

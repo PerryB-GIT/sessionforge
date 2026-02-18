@@ -1,3 +1,5 @@
+const { withSentryConfig } = require('@sentry/nextjs')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
@@ -13,4 +15,10 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig
+module.exports = withSentryConfig(nextConfig, {
+  silent: true,
+  disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+  disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+  hideSourceMaps: true,
+  widenClientFileUpload: true,
+})

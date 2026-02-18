@@ -4,10 +4,9 @@ import Credentials from 'next-auth/providers/credentials'
 import Google from 'next-auth/providers/google'
 import GitHub from 'next-auth/providers/github'
 import Resend from 'next-auth/providers/resend'
-import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
-import { db, getRealDb, users } from '@/db'
+import { db, users } from '@/db'
 import { z } from 'zod'
 
 // ─── Credential Validation Schema ─────────────────────────────────────────────
@@ -20,7 +19,6 @@ const credentialsSchema = z.object({
 // ─── Auth Config ──────────────────────────────────────────────────────────────
 
 export const authConfig: NextAuthConfig = {
-  adapter: process.env.DATABASE_URL ? DrizzleAdapter(getRealDb()) : undefined,
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   trustHost: true,
 
@@ -98,8 +96,7 @@ export const authConfig: NextAuthConfig = {
     }),
 
     Resend({
-      // STUB: AUTH_RESEND_KEY must be set in environment
-      apiKey: process.env.AUTH_RESEND_KEY,
+      apiKey: process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY,
       from: process.env.EMAIL_FROM ?? 'noreply@sessionforge.dev',
     }),
   ],

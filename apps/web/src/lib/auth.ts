@@ -3,7 +3,6 @@ import type { NextAuthConfig } from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import Google from 'next-auth/providers/google'
 import GitHub from 'next-auth/providers/github'
-import Resend from 'next-auth/providers/resend'
 import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { db, users } from '@/db'
@@ -30,7 +29,6 @@ export const authConfig: NextAuthConfig = {
   pages: {
     signIn: '/login',
     error: '/login',
-    verifyRequest: '/verify-email?magic=1',
   },
 
   providers: [
@@ -76,11 +74,6 @@ export const authConfig: NextAuthConfig = {
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
       allowDangerousEmailAccountLinking: true,
-    }),
-
-    Resend({
-      apiKey: process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY,
-      from: process.env.EMAIL_FROM ?? 'noreply@sessionforge.dev',
     }),
   ],
 

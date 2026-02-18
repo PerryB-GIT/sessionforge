@@ -101,14 +101,19 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
   const session = await auth()
 
-  if (isProtected && !session) {
-    const loginUrl = new URL('/login', req.nextUrl.origin)
+  // Build base URL from forwarded headers (Cloud Run sets these correctly)
+  const proto = req.headers.get('x-forwarded-proto') ?? 'https'
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? 'sessionforge.dev'
+  const baseUrl = `${proto}://${host}`
+
+  if (isProtected && !session?.user?.id) {
+    const loginUrl = new URL('/login', baseUrl)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  if (isAuthRoute && session) {
-    return NextResponse.redirect(new URL('/dashboard', req.nextUrl.origin))
+  if (isAuthRoute && session?.user?.id) {
+    return NextResponse.redirect(new URL('/dashboard', baseUrl))
   }
 
   return NextResponse.next()

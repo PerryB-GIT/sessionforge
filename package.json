@@ -1,0 +1,31 @@
+{
+  "name": "sessionforge",
+  "private": true,
+  "packageManager": "npm@10.9.3",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "type-check": "turbo run type-check",
+    "db:generate": "cd apps/web && npx drizzle-kit generate",
+    "db:push": "cd apps/web && npx drizzle-kit push",
+    "db:studio": "cd apps/web && npx drizzle-kit studio",
+    "docker:dev": "docker-compose up -d",
+    "docker:dev:tools": "docker-compose --profile tools up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  }
+}

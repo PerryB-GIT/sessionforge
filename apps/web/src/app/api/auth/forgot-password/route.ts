@@ -1,8 +1,11 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, users, passwordResetTokens } from '@/db'
+import { sendPasswordResetEmail } from '@/lib/email'
 import type { ApiResponse, ApiError } from '@sessionforge/shared-types'
 
 const forgotSchema = z.object({
@@ -49,14 +52,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<{
         expiresAt,
       })
 
-      // STUB: Send password reset email via Resend
-      // const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${token}`
-      // await resend.emails.send({
-      //   from: process.env.EMAIL_FROM,
-      //   to: user.email,
-      //   subject: 'Reset your SessionForge password',
-      //   html: buildPasswordResetTemplate(user.name, resetUrl),
-      // })
+      await sendPasswordResetEmail(user.email, user.name, token)
     }
 
     return NextResponse.json(

@@ -7,7 +7,7 @@ import Resend from 'next-auth/providers/resend'
 import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
-import { db, users } from '@/db'
+import { db, getRealDb, users } from '@/db'
 import { z } from 'zod'
 
 // ─── Credential Validation Schema ─────────────────────────────────────────────
@@ -20,8 +20,9 @@ const credentialsSchema = z.object({
 // ─── Auth Config ──────────────────────────────────────────────────────────────
 
 export const authConfig: NextAuthConfig = {
-  adapter: DrizzleAdapter(db),
+  adapter: process.env.DATABASE_URL ? DrizzleAdapter(getRealDb()) : undefined,
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
+  trustHost: true,
 
   session: {
     strategy: 'jwt',
@@ -44,9 +45,9 @@ export const authConfig: NextAuthConfig = {
   },
 
   pages: {
-    signIn: '/auth/login',
-    error: '/auth/error',
-    verifyRequest: '/auth/verify',
+    signIn: '/login',
+    error: '/login',
+    verifyRequest: '/verify-email',
   },
 
   providers: [

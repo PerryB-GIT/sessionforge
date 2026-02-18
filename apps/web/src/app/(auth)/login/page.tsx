@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { signIn } from 'next-auth/react'
 import { Mail, Lock, Eye, EyeOff, Github, Chrome } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +20,23 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
-export default function LoginPage() {
+function SearchParamsToasts() {
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('verified') === '1') {
+      toast.success('Email verified! You can now sign in.')
+    }
+    if (searchParams.get('error') === 'expired-token') {
+      toast.error('Verification link expired. Please sign up again.')
+    }
+    if (searchParams.get('error') === 'invalid-token') {
+      toast.error('Invalid verification link.')
+    }
+  }, [searchParams])
+  return null
+}
+
+function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isMagicLoading, setIsMagicLoading] = useState(false)
@@ -37,12 +54,19 @@ export default function LoginPage() {
   async function onSubmit(data: FormData) {
     setIsLoading(true)
     try {
-      // STUB: Replace with tRPC or NextAuth signIn('credentials', ...)
-      await new Promise((r) => setTimeout(r, 1000))
+      const result = await signIn('credentials', {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      })
+      if (result?.error) {
+        toast.error('Invalid email or password')
+        return
+      }
       toast.success('Signed in successfully!')
       router.push('/dashboard')
     } catch {
-      toast.error('Invalid email or password')
+      toast.error('Sign in failed. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -56,19 +80,18 @@ export default function LoginPage() {
     }
     setIsMagicLoading(true)
     try {
-      // STUB: POST /api/auth/magic-link { email }
-      await new Promise((r) => setTimeout(r, 800))
+      await signIn('resend', { email, redirect: false })
       toast.success(`Magic link sent to ${email}`)
       router.push('/verify-email')
+    } catch {
+      toast.error('Failed to send magic link')
     } finally {
       setIsMagicLoading(false)
     }
   }
 
   function handleOAuth(provider: 'google' | 'github') {
-    // STUB: NextAuth signIn(provider)
-    toast.info(`Redirecting to ${provider}...`)
-    window.location.href = `/api/auth/${provider}`
+    signIn(provider, { callbackUrl: '/dashboard' })
   }
 
   return (
@@ -178,5 +201,16 @@ export default function LoginPage() {
         </Link>
       </p>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <>
+      <Suspense>
+        <SearchParamsToasts />
+      </Suspense>
+      <LoginForm />
+    </>
   )
 }

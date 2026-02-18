@@ -264,7 +264,7 @@ function Footer() {
   return (
     <footer className="border-t border-[#1e1e2e] mt-24 py-8">
       <div className="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-        <p>© {new Date().getFullYear()} SupportForge LLC. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} SessionForge LLC. All rights reserved.</p>
         <div className="flex items-center gap-6">
           <Link href="/terms" className="hover:text-gray-300 transition-colors">Terms</Link>
           <Link href="/privacy" className="hover:text-gray-300 transition-colors">Privacy</Link>

@@ -28,8 +28,16 @@ export default function ForgotPasswordPage() {
   async function onSubmit(data: FormData) {
     setIsLoading(true)
     try {
-      // STUB: POST /api/auth/forgot-password { email: data.email }
-      await new Promise((r) => setTimeout(r, 800))
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.email }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        toast.error(json.error?.message ?? 'Something went wrong')
+        return
+      }
       setSubmitted(true)
     } finally {
       setIsLoading(false)

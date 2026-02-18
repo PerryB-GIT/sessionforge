@@ -48,12 +48,20 @@ export default function SignupPage() {
   async function onSubmit(data: FormData) {
     setIsLoading(true)
     try {
-      // STUB: POST /api/auth/register { name, email, password }
-      await new Promise((r) => setTimeout(r, 1200))
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.name, email: data.email, password: data.password }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Registration failed.')
+        return
+      }
       toast.success('Account created! Check your email to verify.')
       router.push('/verify-email')
     } catch {
-      toast.error('Registration failed. This email may already be in use.')
+      toast.error('Registration failed. Please try again.')
     } finally {
       setIsLoading(false)
     }

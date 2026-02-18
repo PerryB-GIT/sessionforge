@@ -39,7 +39,7 @@ export default function PrivacyPage() {
 
           <Section title="1. Who We Are">
             <p>
-              SessionForge is operated by SupportForge LLC, a company registered in the
+              SessionForge is operated by SessionForge LLC, a company registered in the
               Commonwealth of Massachusetts, USA. We are the data controller for personal data
               collected through our platform.
             </p>
@@ -246,7 +246,7 @@ export default function PrivacyPage() {
           <Section title="11. Contact">
             <p>For privacy questions, rights requests, or to report a concern:</p>
             <address className="not-italic mt-3 p-4 bg-[#111118] border border-[#1e1e2e] rounded-lg text-sm">
-              SupportForge LLC — Privacy<br />
+              SessionForge LLC — Privacy<br />
               Email: <EmailLink email={CONTACT_EMAIL} /><br />
               Response time: Within 5 business days for general questions; within 30 days for formal rights requests.
             </address>
@@ -308,7 +308,7 @@ function Footer() {
   return (
     <footer className="border-t border-[#1e1e2e] mt-24 py-8">
       <div className="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-        <p>© {new Date().getFullYear()} SupportForge LLC. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} SessionForge LLC. All rights reserved.</p>
         <div className="flex items-center gap-6">
           <Link href="/terms" className="hover:text-gray-300 transition-colors">Terms</Link>
           <Link href="/privacy" className="hover:text-gray-300 transition-colors">Privacy</Link>

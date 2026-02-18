@@ -3,58 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useStore, type Session } from '@/store'
 
-// STUB: Mock data for development — replace with tRPC or fetch to /api/sessions
-const MOCK_SESSIONS: Session[] = [
-  {
-    id: 'ses_01abc',
-    machineId: 'mch_01',
-    pid: 12345,
-    processName: 'claude',
-    workdir: '/Users/perry/projects/sessionforge',
-    startedAt: new Date(Date.now() - 7200000),
-    stoppedAt: null,
-    status: 'running',
-    peakMemoryMb: 512,
-    avgCpuPercent: 28,
-  },
-  {
-    id: 'ses_02def',
-    machineId: 'mch_02',
-    pid: 23456,
-    processName: 'claude',
-    workdir: '/home/perry/api-server',
-    startedAt: new Date(Date.now() - 3600000),
-    stoppedAt: null,
-    status: 'running',
-    peakMemoryMb: 768,
-    avgCpuPercent: 45,
-  },
-  {
-    id: 'ses_03ghi',
-    machineId: 'mch_02',
-    pid: 34567,
-    processName: 'claude',
-    workdir: '/home/perry/data-pipeline',
-    startedAt: new Date(Date.now() - 1800000),
-    stoppedAt: new Date(Date.now() - 900000),
-    status: 'stopped',
-    peakMemoryMb: 256,
-    avgCpuPercent: 12,
-  },
-  {
-    id: 'ses_04jkl',
-    machineId: 'mch_01',
-    pid: 45678,
-    processName: 'node',
-    workdir: '/Users/perry/projects/frontend',
-    startedAt: new Date(Date.now() - 600000),
-    stoppedAt: new Date(Date.now() - 60000),
-    status: 'crashed',
-    peakMemoryMb: 1024,
-    avgCpuPercent: 89,
-  },
-]
-
 export function useSessions(machineId?: string) {
   const { sessions, setSessions } = useStore()
   const [isLoading, setIsLoading] = useState(true)
@@ -64,12 +12,38 @@ export function useSessions(machineId?: string) {
     async function fetchSessions() {
       setIsLoading(true)
       try {
-        // STUB: Replace with tRPC call: trpc.sessions.list.query({ machineId })
-        // const url = machineId ? `/api/sessions?machineId=${machineId}` : '/api/sessions'
-        // const res = await fetch(url)
-        // const data = await res.json()
-        await new Promise((resolve) => setTimeout(resolve, 300))
-        setSessions(MOCK_SESSIONS)
+        const url = machineId ? `/api/sessions?machineId=${machineId}` : '/api/sessions'
+        const res = await fetch(url)
+        if (!res.ok) throw new Error('Failed to load sessions')
+        const json = await res.json()
+        if (json.data?.items) {
+          const sessions: Session[] = json.data.items.map((s: {
+            id: string
+            machineId: string
+            pid: number | null
+            processName: string | null
+            workdir: string | null
+            status: string
+            exitCode: number | null
+            peakMemoryMb: number | null
+            avgCpuPercent: number | null
+            startedAt: string | null
+            stoppedAt: string | null
+            createdAt: string
+          }) => ({
+            id: s.id,
+            machineId: s.machineId,
+            pid: s.pid,
+            processName: s.processName ?? 'unknown',
+            workdir: s.workdir,
+            status: s.status,
+            peakMemoryMb: s.peakMemoryMb,
+            avgCpuPercent: s.avgCpuPercent,
+            startedAt: s.startedAt ? new Date(s.startedAt) : new Date(s.createdAt),
+            stoppedAt: s.stoppedAt ? new Date(s.stoppedAt) : null,
+          }))
+          setSessions(sessions)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load sessions')
       } finally {
@@ -86,15 +60,42 @@ export function useSessions(machineId?: string) {
 }
 
 export function useSession(id: string) {
-  const sessions = useStore((s) => s.sessions)
+  const { sessions, addSession } = useStore()
   const session = sessions.find((s) => s.id === id)
   const [isLoading, setIsLoading] = useState(!session)
 
   useEffect(() => {
-    if (!session) {
+    if (session) {
       setIsLoading(false)
+      return
     }
-  }, [session])
+    // Not in store (direct navigation) — fetch individually
+    async function fetchSession() {
+      try {
+        const res = await fetch(`/api/sessions/${id}`)
+        if (!res.ok) return
+        const json = await res.json()
+        if (json.data) {
+          const s = json.data
+          addSession({
+            id: s.id,
+            machineId: s.machineId,
+            pid: s.pid,
+            processName: s.processName ?? 'unknown',
+            workdir: s.workdir,
+            status: s.status,
+            peakMemoryMb: s.peakMemoryMb,
+            avgCpuPercent: s.avgCpuPercent,
+            startedAt: s.startedAt ? new Date(s.startedAt) : new Date(s.createdAt),
+            stoppedAt: s.stoppedAt ? new Date(s.stoppedAt) : null,
+          })
+        }
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchSession()
+  }, [id, session, addSession])
 
   return { session, isLoading }
 }

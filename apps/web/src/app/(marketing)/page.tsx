@@ -428,7 +428,7 @@ export default function LandingPage() {
                 Docs
               </a>
             </div>
-            <p className="text-xs text-gray-600">&copy; 2026 SupportForge LLC. All rights reserved.</p>
+            <p className="text-xs text-gray-600">&copy; 2026 SessionForge LLC. All rights reserved.</p>
           </div>
         </div>
       </footer>

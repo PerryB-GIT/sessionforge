@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { User, Mail, Lock, Eye, EyeOff, Save, Bell } from 'lucide-react'
+import { User, Mail, Lock, Eye, EyeOff, Save, Bell, Bug, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -40,6 +40,12 @@ export default function SettingsPage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [hasPassword, setHasPassword] = useState(true)
+
+  // Support & Debug state
+  const [debugMode, setDebugMode] = useState(false)
+  const [supportSubject, setSupportSubject] = useState('')
+  const [supportMessage, setSupportMessage] = useState('')
+  const [isSubmittingSupport, setIsSubmittingSupport] = useState(false)
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -90,6 +96,107 @@ export default function SettingsPage() {
       toast.success('Profile updated!')
     } finally {
       setIsSavingProfile(false)
+    }
+  }
+
+  // Initialise debug mode from localStorage + intercept console.error
+  useEffect(() => {
+    const stored = localStorage.getItem('sf_debug_mode') === 'true'
+    setDebugMode(stored)
+    if (stored) startDebugCapture()
+    return () => stopDebugCapture()
+  }, [])
+
+  function startDebugCapture() {
+    if (typeof window === 'undefined') return
+    if (!(window as any).__sfDebugOrig) {
+      ;(window as any).__sfDebugLogs = []
+      ;(window as any).__sfDebugOrig = console.error
+      console.error = (...args: unknown[]) => {
+        ;(window as any).__sfDebugLogs.push(new Date().toISOString() + ' ' + args.map(String).join(' '))
+        ;(window as any).__sfDebugOrig(...args)
+      }
+    }
+  }
+
+  function stopDebugCapture() {
+    if (typeof window === 'undefined') return
+    if ((window as any).__sfDebugOrig) {
+      console.error = (window as any).__sfDebugOrig
+      delete (window as any).__sfDebugOrig
+    }
+  }
+
+  function toggleDebugMode(enabled: boolean) {
+    setDebugMode(enabled)
+    localStorage.setItem('sf_debug_mode', String(enabled))
+    if (enabled) {
+      startDebugCapture()
+      toast.success('Debug logging enabled — errors will be captured')
+    } else {
+      stopDebugCapture()
+      ;(window as any).__sfDebugLogs = []
+      toast.success('Debug logging disabled')
+    }
+  }
+
+  async function submitSupportRequest(e: React.FormEvent) {
+    e.preventDefault()
+    if (!supportSubject.trim() || !supportMessage.trim()) {
+      toast.error('Please fill in subject and message')
+      return
+    }
+    setIsSubmittingSupport(true)
+    try {
+      const browserLogs = debugMode
+        ? ((window as any).__sfDebugLogs ?? []).join('\n')
+        : undefined
+
+      // Fetch latest agent logs if debug mode is on
+      let agentLogs: string | undefined
+      if (debugMode) {
+        try {
+          const logsRes = await fetch('/api/sessions?limit=1')
+          if (logsRes.ok) {
+            const logsJson = await logsRes.json()
+            const latestSessionId = logsJson.data?.[0]?.id
+            if (latestSessionId) {
+              const sessionLogsRes = await fetch(`/api/sessions/${latestSessionId}/logs`)
+              if (sessionLogsRes.ok) {
+                const sessionLogsJson = await sessionLogsRes.json()
+                agentLogs = Array.isArray(sessionLogsJson.logs)
+                  ? sessionLogsJson.logs.join('\n')
+                  : String(sessionLogsJson.logs ?? '')
+              }
+            }
+          }
+        } catch {
+          // Non-fatal — proceed without agent logs
+        }
+      }
+
+      const res = await fetch('/api/support/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: supportSubject.trim(),
+          message: supportMessage.trim(),
+          browserLogs: browserLogs || undefined,
+          agentLogs,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error ?? 'Failed to submit support request')
+        return
+      }
+      toast.success('Support request submitted! We\'ll get back to you soon.')
+      setSupportSubject('')
+      setSupportMessage('')
+    } catch {
+      toast.error('Failed to submit. Please try again.')
+    } finally {
+      setIsSubmittingSupport(false)
     }
   }
 
@@ -269,6 +376,75 @@ export default function SettingsPage() {
             <Save className="h-4 w-4" />
             Save Preferences
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Support & Debug */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Bug className="h-4 w-4 text-purple-400" />
+            <CardTitle className="text-base">Support &amp; Debug</CardTitle>
+          </div>
+          <CardDescription>Enable debug logging and contact our team for help</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Debug toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Debug Logging</p>
+              <p className="text-xs text-gray-500">Captures browser errors and agent logs with support requests</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleDebugMode(!debugMode)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                debugMode ? 'bg-purple-600' : 'bg-[#1e1e2e]'
+              }`}
+              role="switch"
+              aria-checked={debugMode}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  debugMode ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {debugMode && (
+            <p className="text-xs text-purple-400 bg-purple-500/10 border border-purple-500/20 rounded-lg px-3 py-2">
+              Debug mode active — browser errors and agent logs will be attached to your next support request.
+            </p>
+          )}
+
+          {/* Support form */}
+          <form onSubmit={submitSupportRequest} className="space-y-3 pt-1 border-t border-[#1e1e2e]">
+            <div className="space-y-1.5">
+              <Label htmlFor="support-subject">Subject</Label>
+              <Input
+                id="support-subject"
+                placeholder="e.g. Agent not connecting, session stuck..."
+                value={supportSubject}
+                onChange={(e) => setSupportSubject(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="support-message">Describe your issue</Label>
+              <textarea
+                id="support-message"
+                rows={4}
+                placeholder="What were you trying to do? What happened instead? Any error messages?"
+                value={supportMessage}
+                onChange={(e) => setSupportMessage(e.target.value)}
+                className="w-full rounded-md border border-[#1e1e2e] bg-[#0a0a0f] px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none"
+              />
+            </div>
+            <Button type="submit" size="sm" isLoading={isSubmittingSupport}>
+              <Send className="h-4 w-4" />
+              Submit Support Request
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

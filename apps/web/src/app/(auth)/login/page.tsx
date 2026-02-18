@@ -199,7 +199,7 @@ function LoginForm() {
 
       {/* Sign up link */}
       <p className="mt-6 text-center text-sm text-gray-500">
-        Don't have an account?{' '}
+        Don&apos;t have an account?{' '}
         <Link href="/signup" className="text-purple-400 hover:text-purple-300 transition-colors">
           Sign up free
         </Link>

@@ -129,7 +129,7 @@ function TerminalDemo() {
           <span className="text-gray-500">&gt; </span>
           What would you like to build today?
         </div>
-        <div className="text-gray-300">Let's add authentication to the API.</div>
+        <div className="text-gray-300">Let&apos;s add authentication to the API.</div>
         <div className="mt-1 text-gray-500">&gt; Planning authentication implementation...</div>
         <div className="text-gray-400">- POST /auth/register</div>
         <div className="text-gray-400">- POST /auth/login (JWT)</div>
@@ -269,7 +269,7 @@ export default function LandingPage() {
             </h2>
             <p className="text-gray-400 max-w-2xl mx-auto">
               Built for developers who run Claude Code on multiple machines and need visibility into
-              what's happening across their fleet.
+              what&apos;s happening across their fleet.
             </p>
           </div>
 

@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
         </div>
         <h1 className="text-xl font-bold text-white mb-2">Check your email</h1>
         <p className="text-sm text-gray-400 mb-6">
-          If an account exists for <span className="text-white">{getValues('email')}</span>, we've
+          If an account exists for <span className="text-white">{getValues('email')}</span>, we&apos;ve
           sent a password reset link.
         </p>
         <Link href="/login" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-white">Reset your password</h1>
         <p className="text-sm text-gray-400 mt-1">
-          Enter your email and we'll send you a reset link.
+          Enter your email and we&apos;ll send you a reset link.
         </p>
       </div>
 

@@ -198,7 +198,7 @@ export function OnboardingWizard() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">Welcome to SessionForge</h2>
-                <p className="text-sm text-gray-400">Let's get you set up in about 2 minutes.</p>
+                <p className="text-sm text-gray-400">Let&apos;s get you set up in about 2 minutes.</p>
               </div>
             </div>
 
@@ -275,7 +275,7 @@ export function OnboardingWizard() {
                 </div>
 
                 <Button onClick={() => setStep(3)} disabled={!apiKeyCopied} className="w-full sm:w-auto">
-                  I've saved my key
+                  I&apos;ve saved my key
                   <ArrowRight className="h-4 w-4" />
                 </Button>
                 {!apiKeyCopied && (
@@ -342,7 +342,7 @@ export function OnboardingWizard() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">Verify Connection</h2>
-                <p className="text-sm text-gray-400">Let's confirm your machine is connected.</p>
+                <p className="text-sm text-gray-400">Let&apos;s confirm your machine is connected.</p>
               </div>
             </div>
 
@@ -351,7 +351,7 @@ export function OnboardingWizard() {
                 <Monitor className="h-8 w-8 text-gray-500" />
               </div>
               <p className="text-sm text-gray-400 mb-6 max-w-sm">
-                Once the agent is running on your machine, click below. We'll check for the connection.
+                Once the agent is running on your machine, click below. We&apos;ll check for the connection.
               </p>
               <Button onClick={verifyConnection} isLoading={isVerifying}>
                 <RefreshCw className="h-4 w-4" />
@@ -376,7 +376,7 @@ export function OnboardingWizard() {
               Your first machine is connected!
             </h2>
             <p className="text-sm text-gray-400 mb-8 max-w-sm mx-auto">
-              You're all set. Head to your dashboard to start managing sessions, monitor metrics, and more.
+              You&apos;re all set. Head to your dashboard to start managing sessions, monitor metrics, and more.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Button onClick={() => router.push('/dashboard')} size="lg">

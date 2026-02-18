@@ -61,7 +61,7 @@ function VerifyEmailContent() {
       <div className="rounded-lg bg-[#0a0a0f] border border-[#1e1e2e] p-4 mb-6 text-left space-y-2">
         <div className="flex items-start gap-2.5">
           <div className="h-1.5 w-1.5 rounded-full bg-purple-400 mt-1.5 shrink-0" />
-          <p className="text-xs text-gray-400">Check your spam or junk folder if you don't see it</p>
+          <p className="text-xs text-gray-400">Check your spam or junk folder if you don&apos;t see it</p>
         </div>
         <div className="flex items-start gap-2.5">
           <div className="h-1.5 w-1.5 rounded-full bg-purple-400 mt-1.5 shrink-0" />

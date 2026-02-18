@@ -1,7 +1,10 @@
-import { auth } from '@/lib/auth'
+import NextAuth from 'next-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
+import { authConfig } from '@/lib/auth.config'
+
+const { auth } = NextAuth(authConfig)
 
 // ─── Rate Limiters (lazy — initialized per-request so env vars are available) ──
 

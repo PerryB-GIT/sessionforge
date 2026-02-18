@@ -1,5 +1,4 @@
 import NextAuth from 'next-auth'
-import type { NextAuthConfig } from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import Google from 'next-auth/providers/google'
 import GitHub from 'next-auth/providers/github'
@@ -8,6 +7,7 @@ import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { db, users } from '@/db'
 import { z } from 'zod'
+import { authConfig } from './auth.config'
 
 // ─── Credential Validation Schema ─────────────────────────────────────────────
 
@@ -16,37 +16,10 @@ const credentialsSchema = z.object({
   password: z.string().min(8),
 })
 
-// ─── Auth Config ──────────────────────────────────────────────────────────────
+// ─── Full Auth Config (Node.js only — not Edge-safe) ──────────────────────────
 
-export const authConfig: NextAuthConfig = {
-  secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
-  trustHost: true,
-
-  session: {
-    strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-
-  cookies: {
-    sessionToken: {
-      name:
-        process.env.NODE_ENV === 'production'
-          ? '__Secure-next-auth.session-token'
-          : 'next-auth.session-token',
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-      },
-    },
-  },
-
-  pages: {
-    signIn: '/login',
-    error: '/login',
-    verifyRequest: '/verify-email?magic=1',
-  },
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
 
   providers: [
     Credentials({
@@ -163,7 +136,5 @@ export const authConfig: NextAuthConfig = {
   },
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig)
-
-// Named export for use in tRPC context and middleware
+// Named export for backwards compatibility
 export const authOptions = authConfig

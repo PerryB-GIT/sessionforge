@@ -19,8 +19,8 @@ const credentialsSchema = z.object({
 // ─── Auth Config ──────────────────────────────────────────────────────────────
 
 export const authConfig: NextAuthConfig = {
-  // STUB: AUTH_SECRET must be set in environment (openssl rand -base64 32)
-  secret: process.env.AUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
+  trustHost: true,
 
   session: {
     strategy: 'jwt',
@@ -96,8 +96,7 @@ export const authConfig: NextAuthConfig = {
     }),
 
     Resend({
-      // STUB: AUTH_RESEND_KEY must be set in environment
-      apiKey: process.env.AUTH_RESEND_KEY,
+      apiKey: process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY,
       from: process.env.EMAIL_FROM ?? 'noreply@sessionforge.dev',
     }),
   ],

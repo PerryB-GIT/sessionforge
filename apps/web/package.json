@@ -31,6 +31,8 @@
     "stripe": "^15.0.0",
     "resend": "^3.2.0",
     "@upstash/redis": "^1.31.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@sentry/nextjs": "^10.39.0",
     "ws": "^8.17.0",
     "bcryptjs": "^2.4.3",
     "jose": "^5.2.0"

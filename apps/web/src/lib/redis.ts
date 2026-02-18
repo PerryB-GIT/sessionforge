@@ -16,18 +16,23 @@ function createRedisClient(): Redis {
   })
 }
 
-let redis: Redis
-
-if (process.env.NODE_ENV === 'production') {
-  redis = createRedisClient()
-} else {
+function getRedisInstance(): Redis {
+  if (process.env.NODE_ENV === 'production') {
+    return createRedisClient()
+  }
   if (!global.__redisClient) {
     global.__redisClient = createRedisClient()
   }
-  redis = global.__redisClient
+  return global.__redisClient
 }
 
-export { redis }
+// Lazy proxy — no Redis client created at module load time.
+// Initialization happens on first property access (first actual use).
+export const redis = new Proxy({} as Redis, {
+  get(_target, prop) {
+    return getRedisInstance()[prop as keyof Redis]
+  },
+})
 
 // ─── Key Helpers ───────────────────────────────────────────────────────────────
 

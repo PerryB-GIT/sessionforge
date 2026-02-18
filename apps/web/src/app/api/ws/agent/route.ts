@@ -46,10 +46,9 @@ export async function GET(req: NextRequest) {
   }
 
   // WebSocket upgrade — works with next-ws or a custom Node.js server
-  // eslint-disable-next-line
-  const reqRaw = req as Record<string, unknown>
+  const reqRaw = req as unknown as Record<string, unknown>
   const ws = reqRaw['socket'] as WebSocket | undefined
-  const upgradeResponse = reqRaw['upgradeResponse'] as Response | undefined ?? response
+  const upgradeResponse = (reqRaw['upgradeResponse'] as Response | undefined) ?? response
 
   if (!ws) {
     return new Response('WebSocket upgrade failed', { status: 500 })

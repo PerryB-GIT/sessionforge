@@ -60,8 +60,16 @@ export function OnboardingWizard() {
   async function handleOrgSubmit(data: OrgFormData) {
     setIsCreatingOrg(true)
     try {
-      // STUB: POST /api/orgs { name: data.orgName }
-      await new Promise((r) => setTimeout(r, 800))
+      const res = await fetch('/api/orgs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.orgName }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to create organization')
+        return
+      }
       toast.success(`Organization "${data.orgName}" created!`)
       setStep(2)
     } finally {
@@ -72,12 +80,17 @@ export function OnboardingWizard() {
   async function createApiKey() {
     setIsCreatingKey(true)
     try {
-      // STUB: POST /api/keys { name: 'Onboarding Key', scopes: ['agent:connect'] }
-      await new Promise((r) => setTimeout(r, 1000))
-      const stubKey = `sf_live_${Array.from({ length: 32 }, () =>
-        '0123456789abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 36)]
-      ).join('')}`
-      setApiKey(stubKey)
+      const res = await fetch('/api/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Onboarding Key', scopes: ['agent:connect'] }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to create API key')
+        return
+      }
+      setApiKey(json.data.key)
       toast.success('API key created! Copy it now — you won\'t see it again.')
     } finally {
       setIsCreatingKey(false)
@@ -101,10 +114,23 @@ export function OnboardingWizard() {
 
   async function verifyConnection() {
     setIsVerifying(true)
-    // STUB: Poll GET /api/machines until count > 0
-    await new Promise((r) => setTimeout(r, 3000))
-    setIsVerifying(false)
-    setStep(5)
+    try {
+      // Poll /api/machines up to 12 times (30s total) waiting for a machine to appear
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 2500))
+        const res = await fetch('/api/machines')
+        if (res.ok) {
+          const json = await res.json()
+          if ((json.data?.total ?? 0) > 0) {
+            setStep(5)
+            return
+          }
+        }
+      }
+      toast.error('No machine detected. Make sure the agent is running, then try again.')
+    } finally {
+      setIsVerifying(false)
+    }
   }
 
   return (

@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -38,9 +40,12 @@ export default function SessionDetailPage() {
     if (!session) return
     setIsStopping(true)
     try {
-      // STUB: Send stop command via WS or tRPC
-      sendMessage({ type: 'stop_session', sessionId: id })
-      await new Promise((r) => setTimeout(r, 500))
+      const res = await fetch(`/api/sessions/${id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to stop session')
+        return
+      }
       updateSession(id, { status: 'stopped', stoppedAt: new Date() })
       toast.success('Session stopped')
     } catch {

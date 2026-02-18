@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+export const dynamic = 'force-dynamic'
+
+import { useState, useEffect } from 'react'
 import { Plus, Trash2, Copy, Check, Key, AlertTriangle, Clock, Shield } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -8,7 +10,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -27,26 +29,6 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
-// STUB: Mock API keys for development
-const MOCK_KEYS: ApiKey[] = [
-  {
-    id: 'key_01',
-    name: 'Production Agent',
-    prefix: 'sf_live_a1b2',
-    lastUsed: new Date(Date.now() - 300000),
-    createdAt: new Date('2024-01-15'),
-    scopes: ['agent:connect', 'session:read', 'session:write'],
-  },
-  {
-    id: 'key_02',
-    name: 'CI/CD Pipeline',
-    prefix: 'sf_live_c3d4',
-    lastUsed: new Date(Date.now() - 86400000),
-    createdAt: new Date('2024-02-01'),
-    scopes: ['session:read'],
-  },
-]
-
 export default function ApiKeysPage() {
   const { apiKeys, setApiKeys, addApiKey, removeApiKey } = useStore()
   const [createOpen, setCreateOpen] = useState(false)
@@ -55,37 +37,70 @@ export default function ApiKeysPage() {
   const [isCreating, setIsCreating] = useState(false)
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [isRevoking, setIsRevoking] = useState(false)
-
-  // Load mock keys on first render
-  useState(() => {
-    if (apiKeys.length === 0) setApiKeys(MOCK_KEYS)
-  })
+  const [isLoading, setIsLoading] = useState(true)
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
+  // Fetch real keys from API on mount
+  useEffect(() => {
+    async function fetchKeys() {
+      try {
+        const res = await fetch('/api/keys')
+        if (!res.ok) throw new Error('Failed to fetch keys')
+        const json = await res.json()
+        if (json.data) {
+          const keys: ApiKey[] = json.data.map((k: {
+            id: string
+            name: string
+            keyPrefix: string
+            scopes: string[]
+            lastUsedAt: string | null
+            createdAt: string
+          }) => ({
+            id: k.id,
+            name: k.name,
+            prefix: k.keyPrefix,
+            scopes: k.scopes,
+            lastUsed: k.lastUsedAt ? new Date(k.lastUsedAt) : null,
+            createdAt: new Date(k.createdAt),
+          }))
+          setApiKeys(keys)
+        }
+      } catch {
+        toast.error('Failed to load API keys')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchKeys()
+  }, [setApiKeys])
+
   async function onCreateKey(data: FormData) {
     setIsCreating(true)
     try {
-      // STUB: POST /api/keys { name: data.name, scopes: [...] }
-      await new Promise((r) => setTimeout(r, 800))
-      const fullKey = `sf_live_${Array.from({ length: 32 }, () =>
-        '0123456789abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 36)]
-      ).join('')}`
-      const prefix = fullKey.slice(0, 14)
-
-      const newApiKey: ApiKey = {
-        id: `key_${Date.now()}`,
-        name: data.name,
-        prefix,
-        lastUsed: null,
-        createdAt: new Date(),
-        scopes: ['agent:connect', 'session:read', 'session:write'],
+      const res = await fetch('/api/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.name, scopes: ['agent:connect', 'session:read', 'session:write'] }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to create API key')
+        return
       }
-
+      const created = json.data
+      const newApiKey: ApiKey = {
+        id: created.id,
+        name: created.name,
+        prefix: created.keyPrefix,
+        scopes: created.scopes,
+        lastUsed: null,
+        createdAt: new Date(created.createdAt),
+      }
       addApiKey(newApiKey)
-      setNewKey(fullKey)
+      setNewKey(created.key)
       reset()
     } finally {
       setIsCreating(false)
@@ -110,8 +125,12 @@ export default function ApiKeysPage() {
   async function revokeKey(id: string) {
     setIsRevoking(true)
     try {
-      // STUB: DELETE /api/keys/:id
-      await new Promise((r) => setTimeout(r, 600))
+      const res = await fetch(`/api/keys/${id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to revoke key')
+        return
+      }
       removeApiKey(id)
       toast.success('API key revoked')
       setRevokeId(null)
@@ -126,7 +145,9 @@ export default function ApiKeysPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-white">API Keys</h2>
-          <p className="text-sm text-gray-400">{apiKeys.length} key{apiKeys.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-gray-400">
+            {isLoading ? 'Loading…' : `${apiKeys.length} key${apiKeys.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
@@ -144,7 +165,11 @@ export default function ApiKeysPage() {
       </div>
 
       {/* Keys table */}
-      {apiKeys.length === 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+        </div>
+      ) : apiKeys.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[#1e1e2e] py-16">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#1e1e2e] mb-3">
             <Key className="h-5 w-5 text-gray-600" />
@@ -194,7 +219,7 @@ export default function ApiKeysPage() {
                 {/* Prefix */}
                 <div className="flex items-center gap-1.5">
                   <Shield className="h-3 w-3 text-gray-600 shrink-0" />
-                  <span className="font-mono text-xs text-gray-400">{key.prefix}***</span>
+                  <span className="font-mono text-xs text-gray-400">sf_live_{key.prefix}…</span>
                 </div>
 
                 {/* Last used */}
@@ -284,7 +309,7 @@ export default function ApiKeysPage() {
               </div>
               <DialogFooter>
                 <Button onClick={closeCreateDialog} variant={copied ? 'default' : 'outline'}>
-                  {copied ? 'Done' : 'Close (key won\'t be shown again)'}
+                  {copied ? 'Done' : "Close (key won't be shown again)"}
                 </Button>
               </DialogFooter>
             </div>

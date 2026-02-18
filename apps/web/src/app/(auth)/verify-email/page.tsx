@@ -12,8 +12,12 @@ export default function VerifyEmailPage() {
   async function resendEmail() {
     setIsResending(true)
     try {
-      // STUB: POST /api/auth/resend-verification
-      await new Promise((r) => setTimeout(r, 800))
+      const res = await fetch('/api/auth/resend-verification', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to resend email')
+        return
+      }
       setResent(true)
       toast.success('Verification email resent!')
     } finally {

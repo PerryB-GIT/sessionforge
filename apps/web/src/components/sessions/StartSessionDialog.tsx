@@ -61,24 +61,33 @@ export function StartSessionDialog({ open, onOpenChange, defaultMachineId }: Sta
   async function onSubmit(data: FormData) {
     setIsLoading(true)
     try {
-      // STUB: Replace with tRPC call: trpc.sessions.start.mutate(data)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Add optimistic session to store
-      const newSession = {
-        id: `ses_${Math.random().toString(36).slice(2, 8)}`,
-        machineId: data.machineId,
-        pid: Math.floor(Math.random() * 50000),
-        processName: data.command.split(' ')[0],
-        workdir: data.workdir || null,
-        startedAt: new Date(),
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          machineId: data.machineId,
+          command: data.command,
+          workdir: data.workdir || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to start session')
+        return
+      }
+      const s = json.data
+      addSession({
+        id: s.id,
+        machineId: s.machineId,
+        pid: s.pid ?? null,
+        processName: s.processName ?? data.command.split(' ')[0],
+        workdir: s.workdir ?? null,
+        startedAt: s.startedAt ? new Date(s.startedAt) : new Date(),
         stoppedAt: null,
-        status: 'running' as const,
+        status: 'running',
         peakMemoryMb: null,
         avgCpuPercent: null,
-      }
-      addSession(newSession)
-
+      })
       toast.success(`Session started on ${machines.find((m) => m.id === data.machineId)?.name}`)
       reset()
       onOpenChange(false)

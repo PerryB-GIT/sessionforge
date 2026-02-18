@@ -36,15 +36,28 @@ export function MachineSetupWizard({ apiKey = 'sf_live_xxxxxxxxxxxxxxxxxxxx', on
 
   async function verifyConnection() {
     setIsVerifying(true)
-    // STUB: Poll /api/machines for new machine
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-    setIsVerifying(false)
-    setVerified(true)
-    toast.success('Machine connected successfully!')
-    setTimeout(() => {
-      setStep(3)
-      onComplete?.()
-    }, 1000)
+    try {
+      // Poll /api/machines up to 12 times (30s total) waiting for a machine to appear
+      for (let i = 0; i < 12; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 2500))
+        const res = await fetch('/api/machines')
+        if (res.ok) {
+          const json = await res.json()
+          if ((json.data?.total ?? 0) > 0) {
+            setVerified(true)
+            toast.success('Machine connected successfully!')
+            setTimeout(() => {
+              setStep(3)
+              onComplete?.()
+            }, 1000)
+            return
+          }
+        }
+      }
+      toast.error('No machine detected. Make sure the agent is running, then try again.')
+    } finally {
+      setIsVerifying(false)
+    }
   }
 
   const tabs: { label: string; value: TabType }[] = [

@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Trash2, Monitor, Apple, Terminal, Cpu, MemoryStick, HardDrive, Clock } from 'lucide-react'
@@ -43,13 +45,18 @@ export default function MachineDetailPage() {
   async function handleDelete() {
     setIsDeleting(true)
     try {
-      // STUB: DELETE /api/machines/:id
-      await new Promise((r) => setTimeout(r, 800))
+      const res = await fetch(`/api/machines/${id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to delete machine')
+        return
+      }
       removeMachine(id)
-      toast.success(`Machine deleted`)
+      toast.success('Machine deleted')
       router.push('/machines')
     } catch {
       toast.error('Failed to delete machine')
+    } finally {
       setIsDeleting(false)
       setDeleteOpen(false)
     }

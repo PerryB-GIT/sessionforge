@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { Monitor, Terminal, Activity, TrendingUp, ArrowRight, Plus } from 'lucide-react'

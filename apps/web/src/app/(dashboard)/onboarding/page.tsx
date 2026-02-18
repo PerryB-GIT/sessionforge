@@ -1,5 +1,7 @@
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 
+export const dynamic = 'force-dynamic'
+
 export default function OnboardingPage() {
   return (
     <div className="min-h-full flex flex-col items-center justify-center py-8">

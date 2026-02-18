@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { Bell, Search, User, LogOut, Settings, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
+import { useSession, signOut } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -26,6 +27,9 @@ export function Header({ onCommandPalette }: { onCommandPalette?: () => void }) 
   const pathname = usePathname()
   const { title } = getBreadcrumb(pathname)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const { data: session } = useSession()
+  const userName = session?.user?.name ?? session?.user?.email?.split('@')[0] ?? 'Account'
+  const userEmail = session?.user?.email ?? ''
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-[#1e1e2e] bg-[#0a0a0f] px-4 lg:px-6">
@@ -62,7 +66,7 @@ export function Header({ onCommandPalette }: { onCommandPalette?: () => void }) 
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-500/20 border border-purple-500/30">
               <User className="h-4 w-4 text-purple-400" />
             </div>
-            <span className="hidden text-sm text-gray-300 sm:block">Perry</span>
+            <span className="hidden text-sm text-gray-300 sm:block">{userName}</span>
             <ChevronDown className="h-3 w-3 text-gray-500" />
           </button>
 
@@ -74,8 +78,8 @@ export function Header({ onCommandPalette }: { onCommandPalette?: () => void }) 
               />
               <div className="absolute right-0 top-10 z-20 w-48 rounded-xl border border-[#1e1e2e] bg-[#111118] py-1 shadow-2xl shadow-black/50">
                 <div className="border-b border-[#1e1e2e] px-3 py-2">
-                  <p className="text-sm font-medium text-white">Perry Bailes</p>
-                  <p className="text-xs text-gray-500">perry@example.com</p>
+                  <p className="text-sm font-medium text-white">{userName}</p>
+                  <p className="text-xs text-gray-500">{userEmail}</p>
                 </div>
                 <a
                   href="/settings"
@@ -86,10 +90,7 @@ export function Header({ onCommandPalette }: { onCommandPalette?: () => void }) 
                 </a>
                 <button
                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
-                  onClick={() => {
-                    // STUB: Implement logout
-                    window.location.href = '/login'
-                  }}
+                  onClick={() => signOut({ callbackUrl: '/login' })}
                 >
                   <LogOut className="h-4 w-4" />
                   Sign out

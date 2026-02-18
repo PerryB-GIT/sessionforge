@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+export const dynamic = 'force-dynamic'
+
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -36,21 +38,55 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+  const [hasPassword, setHasPassword] = useState(true)
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { name: 'Perry Bailes', email: 'perry@example.com' },
+    defaultValues: { name: '', email: '' },
   })
 
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
   })
 
+  // Load real user data on mount
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const res = await fetch('/api/user')
+        if (!res.ok) throw new Error('Failed to load profile')
+        const json = await res.json()
+        if (json.data) {
+          profileForm.reset({
+            name: json.data.name ?? '',
+            email: json.data.email ?? '',
+          })
+          // OAuth users (no image from password flow) may have no password
+          // We'll detect this when they try to change password
+        }
+      } catch {
+        toast.error('Failed to load profile')
+      } finally {
+        setIsLoadingProfile(false)
+      }
+    }
+    fetchUser()
+  }, [profileForm])
+
   async function saveProfile(data: ProfileForm) {
     setIsSavingProfile(true)
     try {
-      // STUB: PATCH /api/user { name: data.name, email: data.email }
-      await new Promise((r) => setTimeout(r, 800))
+      const res = await fetch('/api/user', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.name, email: data.email }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to update profile')
+        return
+      }
       toast.success('Profile updated!')
     } finally {
       setIsSavingProfile(false)
@@ -60,12 +96,24 @@ export default function SettingsPage() {
   async function changePassword(data: PasswordForm) {
     setIsChangingPassword(true)
     try {
-      // STUB: POST /api/auth/change-password { currentPassword, newPassword }
-      await new Promise((r) => setTimeout(r, 800))
+      const res = await fetch('/api/user/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: data.currentPassword,
+          newPassword: data.newPassword,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        if (json.error?.message?.includes('social login')) {
+          setHasPassword(false)
+        }
+        toast.error(json.error?.message ?? 'Failed to change password')
+        return
+      }
       toast.success('Password changed!')
       passwordForm.reset()
-    } catch {
-      toast.error('Current password is incorrect')
     } finally {
       setIsChangingPassword(false)
     }
@@ -88,33 +136,40 @@ export default function SettingsPage() {
           <CardDescription>Update your name and email address</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={profileForm.handleSubmit(saveProfile)} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                error={profileForm.formState.errors.name?.message}
-                {...profileForm.register('name')}
-              />
+          {isLoadingProfile ? (
+            <div className="flex items-center gap-2 py-4">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+              <span className="text-sm text-gray-500">Loading profile…</span>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email Address</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+          ) : (
+            <form onSubmit={profileForm.handleSubmit(saveProfile)} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="name">Full Name</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  className="pl-9"
-                  error={profileForm.formState.errors.email?.message}
-                  {...profileForm.register('email')}
+                  id="name"
+                  error={profileForm.formState.errors.name?.message}
+                  {...profileForm.register('name')}
                 />
               </div>
-            </div>
-            <Button type="submit" size="sm" isLoading={isSavingProfile}>
-              <Save className="h-4 w-4" />
-              Save Changes
-            </Button>
-          </form>
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email Address</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Input
+                    id="email"
+                    type="email"
+                    className="pl-9"
+                    error={profileForm.formState.errors.email?.message}
+                    {...profileForm.register('email')}
+                  />
+                </div>
+              </div>
+              <Button type="submit" size="sm" isLoading={isSavingProfile}>
+                <Save className="h-4 w-4" />
+                Save Changes
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
 
@@ -128,49 +183,55 @@ export default function SettingsPage() {
           <CardDescription>Change your account password</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={passwordForm.handleSubmit(changePassword)} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="currentPassword">Current Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                <Input
-                  id="currentPassword"
-                  type={showPassword ? 'text' : 'password'}
-                  className="pl-9 pr-9"
-                  error={passwordForm.formState.errors.currentPassword?.message}
-                  {...passwordForm.register('currentPassword')}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+          {!hasPassword ? (
+            <p className="text-sm text-gray-400">
+              Your account uses social login (Google or GitHub). Password changes are not available.
+            </p>
+          ) : (
+            <form onSubmit={passwordForm.handleSubmit(changePassword)} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="currentPassword">Current Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Input
+                    id="currentPassword"
+                    type={showPassword ? 'text' : 'password'}
+                    className="pl-9 pr-9"
+                    error={passwordForm.formState.errors.currentPassword?.message}
+                    {...passwordForm.register('currentPassword')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input
-                id="newPassword"
-                type={showPassword ? 'text' : 'password'}
-                error={passwordForm.formState.errors.newPassword?.message}
-                {...passwordForm.register('newPassword')}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
-              <Input
-                id="confirmPassword"
-                type={showPassword ? 'text' : 'password'}
-                error={passwordForm.formState.errors.confirmPassword?.message}
-                {...passwordForm.register('confirmPassword')}
-              />
-            </div>
-            <Button type="submit" size="sm" isLoading={isChangingPassword}>
-              Update Password
-            </Button>
-          </form>
+              <div className="space-y-1.5">
+                <Label htmlFor="newPassword">New Password</Label>
+                <Input
+                  id="newPassword"
+                  type={showPassword ? 'text' : 'password'}
+                  error={passwordForm.formState.errors.newPassword?.message}
+                  {...passwordForm.register('newPassword')}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type={showPassword ? 'text' : 'password'}
+                  error={passwordForm.formState.errors.confirmPassword?.message}
+                  {...passwordForm.register('confirmPassword')}
+                />
+              </div>
+              <Button type="submit" size="sm" isLoading={isChangingPassword}>
+                Update Password
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
 

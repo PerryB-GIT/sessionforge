@@ -104,11 +104,34 @@ jobs:
             --memory 512Mi \
             --cpu 1 \
             --port 3000 \
+            --vpc-connector sessionforge-connector \
+            --vpc-egress all-traffic \
             --set-env-vars "NODE_ENV=production" \
-            --set-secrets "DATABASE_URL=sessionforge-db-url:latest,REDIS_URL=sessionforge-redis-url:latest,NEXTAUTH_SECRET=sessionforge-nextauth-secret:latest" \
+            --set-secrets "\
+DATABASE_URL=sessionforge-db-url:latest,\
+NEXTAUTH_SECRET=sessionforge-nextauth-secret:latest,\
+NEXTAUTH_URL=sessionforge-nextauth-url:latest,\
+GOOGLE_CLIENT_ID=sessionforge-google-client-id:latest,\
+GOOGLE_CLIENT_SECRET=sessionforge-google-client-secret:latest,\
+GITHUB_CLIENT_ID=sessionforge-github-client-id:latest,\
+GITHUB_CLIENT_SECRET=sessionforge-github-client-secret:latest,\
+RESEND_API_KEY=sessionforge-resend-api-key:latest,\
+UPSTASH_REDIS_REST_URL=sessionforge-upstash-redis-url:latest,\
+UPSTASH_REDIS_REST_TOKEN=sessionforge-upstash-redis-token:latest,\
+STRIPE_SECRET_KEY=sessionforge-stripe-secret-key:latest,\
+STRIPE_WEBHOOK_SECRET=sessionforge-stripe-webhook-secret:latest,\
+STRIPE_PRO_PRICE_ID=sessionforge-stripe-pro-price-id:latest,\
+STRIPE_TEAM_PRICE_ID=sessionforge-stripe-team-price-id:latest,\
+STRIPE_ENTERPRISE_PRICE_ID=sessionforge-stripe-enterprise-price-id:latest,\
+SENTRY_DSN=sessionforge-sentry-dsn:latest\
+" \
             --quiet
 
       - name: Output production URL
         run: |
-          URL=$(gcloud run services describe sessionforge-production --region us-central1 --project "${{ secrets.GCP_PROJECT_ID }}" --format "value(status.url)")
+          URL=$(gcloud run services describe sessionforge-production \
+            --region us-central1 \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --format "value(status.url)")
           echo "Production URL: $URL"
+          echo "::notice title=Production URL::$URL"

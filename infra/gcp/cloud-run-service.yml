@@ -15,6 +15,9 @@ spec:
         autoscaling.knative.dev/maxScale: "10"
         # Use Cloud SQL via connection string, not Cloud SQL proxy sidecar
         run.googleapis.com/execution-environment: gen2
+        # VPC connector so Cloud Run can reach Cloud SQL private IP
+        run.googleapis.com/vpc-access-connector: sessionforge-connector
+        run.googleapis.com/vpc-access-egress: all-traffic
     spec:
       containerConcurrency: 80
       timeoutSeconds: 300
@@ -40,10 +43,15 @@ spec:
                 secretKeyRef:
                   name: sessionforge-db-url
                   key: latest
-            - name: REDIS_URL
+            - name: UPSTASH_REDIS_REST_URL
               valueFrom:
                 secretKeyRef:
-                  name: sessionforge-redis-url
+                  name: sessionforge-upstash-redis-url
+                  key: latest
+            - name: UPSTASH_REDIS_REST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-upstash-redis-token
                   key: latest
             - name: NEXTAUTH_SECRET
               valueFrom:
@@ -79,6 +87,11 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: sessionforge-resend-api-key
+                  key: latest
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-sentry-dsn
                   key: latest
             - name: STRIPE_SECRET_KEY
               valueFrom:

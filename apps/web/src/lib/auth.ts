@@ -134,7 +134,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session
     },
   },
-}
-
-// Named export for backwards compatibility
-export const authOptions = authConfig
+})

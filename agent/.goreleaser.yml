@@ -44,8 +44,8 @@ checksum:
 
 release:
   github:
-    owner: sessionforge
-    name: agent
+    owner: PerryB-GIT
+    name: sessionforge
   draft: false
   prerelease: auto
   name_template: "SessionForge Agent {{.Tag}}"
@@ -56,12 +56,12 @@ release:
 
     **Linux / macOS:**
     ```sh
-    curl -sSL https://sessionforge.dev/install.sh | sh
+    curl -sSL https://raw.githubusercontent.com/PerryB-GIT/sessionforge/main/agent/scripts/install.sh | sh
     ```
 
     **Windows:**
     ```powershell
-    irm https://sessionforge.dev/install.ps1 | iex
+    irm https://raw.githubusercontent.com/PerryB-GIT/sessionforge/main/agent/scripts/install.ps1 | iex
     ```
 
 changelog:

@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
+import { STORAGE_STATE } from './global-setup'
 
 const isCI = Boolean(process.env.CI)
+const isPostDeploy = Boolean(process.env.POST_DEPLOY)
 
 export default defineConfig({
   // Root directory where test files are located
@@ -17,7 +19,9 @@ export default defineConfig({
 
   // Base URL for all page.goto() calls
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+    baseURL: isPostDeploy
+      ? (process.env.PLAYWRIGHT_BASE_URL ?? 'https://sessionforge.dev')
+      : (process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'),
 
     // Collect traces on first retry of a failing test
     trace: 'on-first-retry',
@@ -48,24 +52,46 @@ export default defineConfig({
   // Output directory for screenshots, videos, traces
   outputDir: 'test-results',
 
-  // Global setup / teardown run once for the whole test suite
-  // globalSetup: './global-setup.ts',
-  // globalTeardown: './global-teardown.ts',
+  // Global setup runs once before all tests.
+  // In post-deploy mode it seeds a test user and saves storage state.
+  globalSetup: isPostDeploy ? './global-setup.ts' : undefined,
 
-  projects: [
-    // Use Chromium only for CI speed. Local devs can add Firefox/WebKit as needed.
-    {
-      name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        // Use a persistent auth state file so login is performed once
-        // storageState: 'tests/setup/.auth/user.json',
-      },
-    },
-  ],
+  projects: isPostDeploy
+    ? [
+        // --- Post-deploy projects ---
+        // "setup" project runs global-setup-like login; actual setup is in globalSetup above.
+        // "unauthenticated" — no stored session (for redirect tests, OAuth checks)
+        {
+          name: 'post-deploy-unauthenticated',
+          testMatch: '**/auth-post-deploy.spec.ts',
+          use: {
+            ...devices['Desktop Chrome'],
+            baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'https://sessionforge.dev',
+          },
+        },
+        // "authenticated" — reuses session from global-setup.ts
+        {
+          name: 'post-deploy-authenticated',
+          testMatch: '**/auth-post-deploy.spec.ts',
+          use: {
+            ...devices['Desktop Chrome'],
+            baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'https://sessionforge.dev',
+            storageState: STORAGE_STATE,
+          },
+        },
+      ]
+    : [
+        // --- Local / CI dev projects ---
+        {
+          name: 'chromium',
+          use: {
+            ...devices['Desktop Chrome'],
+          },
+        },
+      ],
 
-  // Start the dev server automatically when running tests locally
-  webServer: isCI
+  // Start the dev server automatically when running tests locally (not post-deploy)
+  webServer: isCI || isPostDeploy
     ? undefined
     : {
         command: 'npm run dev --workspace=@sessionforge/web',

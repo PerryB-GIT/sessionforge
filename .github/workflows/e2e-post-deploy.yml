@@ -1,0 +1,81 @@
+name: E2E Post-Deploy Tests
+
+# Triggered automatically after a successful production deployment,
+# or manually for ad-hoc smoke testing.
+on:
+  workflow_run:
+    workflows: ["Deploy Production"]
+    types: [completed]
+    branches: [main]
+
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Target URL to test (defaults to https://sessionforge.dev)"
+        required: false
+        default: "https://sessionforge.dev"
+
+# Only run post-deploy tests when the triggering deploy succeeded.
+# workflow_dispatch always runs.
+jobs:
+  e2e:
+    name: Playwright E2E (post-deploy)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout QA branch
+        uses: actions/checkout@v4
+        with:
+          ref: dev/qa
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run post-deploy E2E tests
+        env:
+          CI: "true"
+          POST_DEPLOY: "true"
+          PLAYWRIGHT_BASE_URL: ${{ github.event.inputs.base_url || 'https://sessionforge.dev' }}
+          # These secrets must be set in the repo / environment settings
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+        run: >
+          npx playwright test
+          --config=tests/setup/playwright.config.ts
+          --grep "auth-post-deploy"
+          --reporter=github,html
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7
+
+      - name: Post summary to job
+        if: always()
+        run: |
+          echo "## E2E Post-Deploy Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** ${{ github.event.inputs.base_url || 'https://sessionforge.dev' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f test-results/results.json ]; then
+            PASSED=$(jq '.stats.expected' test-results/results.json 2>/dev/null || echo "?")
+            FAILED=$(jq '.stats.unexpected' test-results/results.json 2>/dev/null || echo "?")
+            echo "**Passed:** $PASSED | **Failed:** $FAILED" >> $GITHUB_STEP_SUMMARY
+          fi

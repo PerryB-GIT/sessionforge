@@ -82,36 +82,37 @@ npx playwright test oauth-redirect-uri --config tests/setup/playwright.config.ts
 | Task | Agent | Blocker | Escalated? |
 |------|-------|---------|------------|
 | GitHub Release publish (goreleaser) | Perry | No release exists — install scripts 404. goreleaser targets wrong org. | ✅ Escalated below |
-| Full WS connect test (Step 4) | Agent 3 | Waiting: Agent 1 WS route confirm + Overwatch approval | Pending |
+| Full WS connect test (Step 4) | Agent 3 | ✅ UNBLOCKED — WS server live as of 2026-02-19, revision 00060-66d | Pending Overwatch approval |
 
 ---
 
 ## AGENT 1 STATUS (Backend)
 **Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-backend`
-**Branch:** `dev/backend`
+**Branch:** `dev/backend` → merged to `dev/integration`
 **Domain:** `apps/web/src/server/`, `apps/web/src/db/`, `apps/web/src/app/api/`, `apps/web/src/lib/`
-**Current Task:** 🔴 Custom server.ts WebSocket server + /api/health route
-**Status:** ✅ COMPLETE — commit fcec2df on dev/backend. Ready for integration + redeploy.
+**Current Task:** ✅ ALL TASKS COMPLETE — merged + redeployed 2026-02-19
+**Status:** ✅ DEPLOYED — revision `sessionforge-00060-66d` live. Health check passing.
 **Last Update:** 2026-02-19
 
-**All commits on dev/backend:**
+**All commits on dev/backend (all merged to dev/integration):**
 - `3e7f907` — feat: add supportTickets schema + support API routes + email helpers
 - `31233f9` — feat: add support approve route (GET /api/support/approve/[token])
-- `fcec2df` — feat: custom WebSocket server + /api/health route ← NEW
+- `fcec2df` — feat: custom WebSocket server + /api/health route
+- `6598e4e` — fix: convert server.ts to server.js for Dockerfile compatibility
 
-**What was built:**
-- `apps/web/server.ts` — `http.Server` wrapping Next.js + `WebSocketServer({ noServer: true })`. Upgrade handler intercepts `/api/ws/agent`, validates API key against DB before accepting. Full message handler (register/heartbeat/session_started/stopped/crashed/output). 30s ping, 90s timeout watchdog. Reads `PORT` env for Cloud Run.
-- `apps/web/src/app/api/health/route.ts` — `GET /api/health` → 200 `{ status: 'ok' }`. Fixes Cloud Run liveness/startup probes + sessionforge status CLI.
-- `apps/web/src/app/api/ws/agent/route.ts` — replaced broken stub with clean placeholder.
-- `apps/web/package.json` — `start: "tsx server.ts"`, added `tsx ^4.7.0` to devDeps.
-- `apps/web/tsconfig.server.json` — separate tsconfig for server.ts (CommonJS + node moduleResolution).
+**What was deployed:**
+- `apps/web/server.js` — CommonJS custom server. `http.Server` wrapping Next.js via `startServer`. WebSocket upgrade handler for `/api/ws/agent` + `/api/ws/dashboard`. Auth: API key (agent) + session cookie (dashboard). Full agent message handler (register/heartbeat/session events). 30s ping, 90s watchdog.
+- `apps/web/src/app/api/health/route.ts` — `GET /api/health` → 200 `{ status: 'ok' }` ✅ VERIFIED LIVE
+- `apps/web/src/app/api/ws/agent/route.ts` — clean placeholder (426 upgrade required)
+- `apps/web/package.json` — `start: "node server.js"` (Dockerfile-compatible)
 
-**⏳ ACTIONS NEEDED FROM OVERWATCH:**
-1. Merge dev/backend → dev/integration (or master after review)
-2. `npm install` in apps/web after merge (installs tsx)
-3. Redeploy to Cloud Run
-4. Verify: `curl https://sessionforge.dev/api/health` → `{ "status": "ok" }`
-5. Then approve Agent 3 Step 4 (full WS connect test)
+**✅ DEPLOY VERIFIED:**
+```
+GET https://sessionforge-730654522335.us-central1.run.app/api/health
+→ 200 {"status":"ok"}
+```
+
+**✅ Agent 3 Step 4 (full WS connect test) is now UNBLOCKED — WS server is live.**
 
 ---
 

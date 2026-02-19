@@ -665,6 +665,27 @@ gcloud run services update sessionforge-production \
                🔴 Go agent release — BLOCKED (no sessionforge/agent repo)
                🔴 WS connect test — BLOCKED (needs merge + deploy first)
 
+2026-02-19T03 — OVERWATCH MERGES COMPLETE:
+               ✅ dev/backend → dev/integration merged (commit 1254a52)
+                  Resolved package.json conflict: kept integration deps + added tsx ^4.7.0
+               ✅ dev/frontend → dev/integration merged (clean, commit auto)
+               ✅ dev/integration pushed to origin (6987c83)
+               🚨 GitHub device auth EXPIRED (6958-C680 timed out)
+               NEW CODE: C390-F50F — Perry go to https://github.com/login/device NOW
+               Once authorized, Overwatch creates sessionforge/agent repo immediately.
+
+               LAUNCH CHECKLIST UPDATED:
+               ✅ supportTickets DB migration (live in Cloud SQL)
+               ✅ /api/health route (merged to dev/integration)
+               ✅ Magic link removed from /login (merged to dev/integration)
+               ✅ SupportTicketForm + /api/support/submit wired (merged to dev/integration)
+               ✅ Cloud Run YAML: +ANTHROPIC_API_KEY, +PERRY_EMAIL, -RESEND_API_KEY
+               ✅ GitHub OAuth E2E: PASSING
+               🔴 Google OAuth: FAILING — GOOGLE_CLIENT_ID/SECRET not in Cloud Run
+               🔴 ANTHROPIC_API_KEY: not yet in Cloud Run secrets (need Perry's GCP project ID + key)
+               🔴 Go agent release: BLOCKED on sessionforge/agent repo
+               🔴 WS connect test: dev/integration needs deploy first
+
 2026-02-19T01 — OVERWATCH SELF-EXECUTING:
                ✅ Applied Agent 4 cloud-run-service.yml patch to infra/gcp/cloud-run-service.yml
                   Commit 2b6afa6 on dev/integration.

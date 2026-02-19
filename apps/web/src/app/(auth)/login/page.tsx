@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { signIn } from 'next-auth/react'
 import { Mail, Lock, Eye, EyeOff, Github, Chrome } from 'lucide-react'
+import { signIn } from 'next-auth/react'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,33 +21,15 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
-function SearchParamsToasts() {
-  const searchParams = useSearchParams()
-  useEffect(() => {
-    if (searchParams.get('verified') === '1') {
-      toast.success('Email verified! You can now sign in.')
-    }
-    if (searchParams.get('error') === 'expired-token') {
-      toast.error('Verification link expired. Please sign up again.')
-    }
-    if (searchParams.get('error') === 'invalid-token') {
-      toast.error('Invalid verification link.')
-    }
-  }, [searchParams])
-  return null
-}
-
-function LoginForm() {
+export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [isMagicLoading, setIsMagicLoading] = useState(false)
   const router = useRouter()
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-    getValues,
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
@@ -59,38 +42,17 @@ function LoginForm() {
         password: data.password,
         redirect: false,
       })
+
       if (result?.error) {
         toast.error('Invalid email or password')
         return
       }
-      toast.success('Signed in successfully!')
+
       router.push('/dashboard')
     } catch {
-      toast.error('Sign in failed. Please try again.')
+      toast.error('Something went wrong. Please try again.')
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  async function sendMagicLink() {
-    const email = getValues('email')
-    if (!email) {
-      toast.error('Enter your email address first')
-      return
-    }
-    setIsMagicLoading(true)
-    try {
-      const result = await signIn('resend', { email, redirect: false, callbackUrl: '/dashboard' })
-      if (result?.error) {
-        toast.error('Failed to send magic link. Please try again.')
-        return
-      }
-      toast.success(`Magic link sent to ${email} — click it to sign in`)
-      router.push(`/verify-email?magic=1&email=${encodeURIComponent(email)}`)
-    } catch {
-      toast.error('Failed to send magic link')
-    } finally {
-      setIsMagicLoading(false)
     }
   }
 
@@ -184,37 +146,13 @@ function LoginForm() {
         </Button>
       </form>
 
-      {/* Magic link */}
-      <div className="mt-4">
-        <button
-          type="button"
-          onClick={sendMagicLink}
-          disabled={isMagicLoading}
-          className="flex w-full items-center justify-center gap-2 text-xs text-gray-400 hover:text-white transition-colors py-2"
-        >
-          <Mail className="h-3.5 w-3.5" />
-          {isMagicLoading ? 'Sending...' : 'Send me a magic link instead'}
-        </button>
-      </div>
-
       {/* Sign up link */}
       <p className="mt-6 text-center text-sm text-gray-500">
-        Don&apos;t have an account?{' '}
+        Don't have an account?{' '}
         <Link href="/signup" className="text-purple-400 hover:text-purple-300 transition-colors">
           Sign up free
         </Link>
       </p>
     </div>
-  )
-}
-
-export default function LoginPage() {
-  return (
-    <>
-      <Suspense>
-        <SearchParamsToasts />
-      </Suspense>
-      <LoginForm />
-    </>
   )
 }

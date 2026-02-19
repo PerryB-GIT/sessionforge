@@ -1,8 +1,22 @@
+<<<<<<< HEAD
+# GoReleaser configuration for SessionForge Agent
+# https://goreleaser.com
+=======
+>>>>>>> dev/desktop
 version: 2
 
 before:
   hooks:
     - go mod tidy
+<<<<<<< HEAD
+    - go generate ./...
+
+builds:
+  - id: sessionforge-agent
+    binary: sessionforge-agent
+    main: ./cmd/agent
+=======
+    - go vet ./...
 
 builds:
   - id: sessionforge
@@ -13,6 +27,9 @@ builds:
       - -X main.Version={{.Version}}
       - -X main.BuildDate={{.Date}}
       - -X main.GitCommit={{.Commit}}
+>>>>>>> dev/desktop
+    env:
+      - CGO_ENABLED=0
     goos:
       - linux
       - darwin
@@ -20,28 +37,99 @@ builds:
     goarch:
       - amd64
       - arm64
+<<<<<<< HEAD
+    # Windows arm64 is excluded (not commonly needed)
     ignore:
       - goos: windows
         goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+=======
+    ignore:
+      - goos: windows
+        goarch: arm64
+>>>>>>> dev/desktop
 
 archives:
-  - format: tar.gz
+  - id: default
+    format: tar.gz
+<<<<<<< HEAD
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "linux" }}Linux
+      {{- else if eq .Os "darwin" }}Darwin
+      {{- else if eq .Os "windows" }}Windows
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    # Windows gets zip, everything else tar.gz
+=======
     name_template: "sessionforge_{{ .Os }}_{{ .Arch }}"
+>>>>>>> dev/desktop
     format_overrides:
       - goos: windows
         format: zip
+    files:
+      - README.md
+      - LICENSE
 
 checksum:
   name_template: "checksums.txt"
+  algorithm: sha256
 
+<<<<<<< HEAD
+changelog:
+  sort: asc
+=======
 release:
   github:
     owner: sessionforge
     name: agent
+  draft: false
+  prerelease: auto
+  name_template: "SessionForge Agent {{.Tag}}"
+  header: |
+    ## SessionForge Agent {{.Tag}}
+
+    Download the appropriate binary for your platform below, or use the one-liner installer:
+
+    **Linux / macOS:**
+    ```sh
+    curl -sSL https://sessionforge.dev/install.sh | sh
+    ```
+
+    **Windows:**
+    ```powershell
+    irm https://sessionforge.dev/install.ps1 | iex
+    ```
 
 changelog:
   sort: asc
+  use: github
+>>>>>>> dev/desktop
   filters:
     exclude:
       - "^docs:"
       - "^test:"
+<<<<<<< HEAD
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: sessionforge
+    name: sessionforge
+  draft: false
+  prerelease: auto
+  name_template: "SessionForge Agent {{.Version}}"
+=======
+      - "^ci:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+>>>>>>> dev/desktop

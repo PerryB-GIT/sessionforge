@@ -3,7 +3,7 @@
 # Usage: curl -sSL https://sessionforge.dev/install.sh | sh
 set -e
 
-REPO="PerryB-GIT/sessionforge"
+REPO="sessionforge/agent"
 BINARY="sessionforge"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="${HOME}/.sessionforge"

@@ -8,7 +8,7 @@
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 
-$REPO        = "PerryB-GIT/sessionforge"
+$REPO        = "sessionforge/agent"
 $BINARY      = "sessionforge.exe"
 $INSTALL_DIR = "$env:LOCALAPPDATA\SessionForge"
 $SERVICE_KEY = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"

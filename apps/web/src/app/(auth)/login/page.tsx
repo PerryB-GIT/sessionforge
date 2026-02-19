@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Mail, Lock, Eye, EyeOff, Github, Chrome } from 'lucide-react'
 import { signIn } from 'next-auth/react'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,14 +24,12 @@ type FormData = z.infer<typeof schema>
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [isMagicLoading, setIsMagicLoading] = useState(false)
   const router = useRouter()
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-    getValues,
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
@@ -54,26 +53,6 @@ export default function LoginPage() {
       toast.error('Something went wrong. Please try again.')
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  async function sendMagicLink() {
-    const email = getValues('email')
-    if (!email) {
-      toast.error('Enter your email address first')
-      return
-    }
-    setIsMagicLoading(true)
-    try {
-      const result = await signIn('resend', { email, redirect: false })
-      if (result?.error) {
-        toast.error('Failed to send magic link. Please try again.')
-        return
-      }
-      toast.success(`Magic link sent to ${email}`)
-      router.push('/verify-email')
-    } finally {
-      setIsMagicLoading(false)
     }
   }
 
@@ -166,19 +145,6 @@ export default function LoginPage() {
           Sign in
         </Button>
       </form>
-
-      {/* Magic link */}
-      <div className="mt-4">
-        <button
-          type="button"
-          onClick={sendMagicLink}
-          disabled={isMagicLoading}
-          className="flex w-full items-center justify-center gap-2 text-xs text-gray-400 hover:text-white transition-colors py-2"
-        >
-          <Mail className="h-3.5 w-3.5" />
-          {isMagicLoading ? 'Sending...' : 'Send me a magic link instead'}
-        </button>
-      </div>
 
       {/* Sign up link */}
       <p className="mt-6 text-center text-sm text-gray-500">

@@ -29,7 +29,7 @@ Live launch: all 🔴 critical checklist items green
 | Custom server.ts + /api/health route | Agent 1 | 2026-02-19 | 🔴 PRIORITY assigned |
 | Wire SupportTicketForm URL fix (/api/support/submit) | Agent 2 | 2026-02-19 | ✅ COMPLETE — commit f574646 |
 | Fix goreleaser + push agent source to sessionforge/agent | Agent 3 | 2026-02-19 | BLOCKED — awaiting repo creation |
-| Run OAuth E2E tests against sessionforge.dev | Agent 4 | 2026-02-19 | ✅ APPROVED — run now |
+| Run OAuth E2E tests against sessionforge.dev | Agent 4 | 2026-02-19 | ✅ COMPLETE — 9/13 passed, 4 failed (OAuth config error) |
 
 ## 🚨 AGENT 4 ESCALATION — APPROVAL NEEDED TO RUN OAUTH E2E TESTS (2026-02-18)
 
@@ -376,12 +376,14 @@ go build -ldflags "-X main.Version=v0.0.1-test" -o sessionforge-test.exe ./cmd/s
 **Branch:** `dev/qa`
 **Domain:** `tests/`, `infra/`, Dockerfiles, CI/CD, Cloud Run config
 **Current Task:** OAuth E2E + ANTHROPIC_API_KEY Cloud Run audit
-**Status:** ✅ COMPLETE — 2 commits pushed to dev/qa
-**Last Update:** 2026-02-18 (sprint evening)
+**Status:** ✅ COMPLETE — 4 commits pushed to dev/qa
+**Last Update:** 2026-02-19
 
 **Commits:**
 - `1736fb7` — test(qa): OAuth redirect URI E2E tests + Cloud Run env audit
 - `f133b61` — chore(infra): add Cloud Run service patch with ANTHROPIC_API_KEY + cleanup
+- `74deda0` — test(qa): OAuth E2E results — 9/13 passed
+- `65a1322` — chore(qa): remove accidentally committed node_modules from index ✅ CLEANED
 
 ---
 
@@ -591,6 +593,97 @@ gcloud run services update sessionforge-production \
                Agent 3: BLOCKED — awaiting sessionforge/agent repo creation (Perry running gh auth refresh)
                Agent 4: OAuth E2E tests APPROVED — run now against sessionforge.dev
                Overwatch approved Agent 4 OAuth E2E test run (read-only, no writes).
+
+2026-02-19T02 — AGENT EXECUTION RESULTS:
+
+               Agent 1 (Backend) — custom server.ts + /api/health:
+               ✅ COMPLETE. Commit fcec2df on dev/backend.
+               - apps/web/server.ts: full custom Node.js HTTP+WS server (production-quality)
+                 wraps Next.js, intercepts /api/ws/agent upgrades, validates ?key= before accepting
+                 HEARTBEAT_INTERVAL_MS=30s, AGENT_TIMEOUT_MS=90s watchdog
+                 handles: register, heartbeat, session_started/stopped/crashed, session_output
+                 publishes all events to Redis pubsub → dashboard LiveUpdate channel
+               - apps/web/src/app/api/ws/agent/route.ts: cleaned up to placeholder (returns 426)
+               - apps/web/src/app/api/health/route.ts: returns { status:'ok' } HTTP 200
+               - apps/web/package.json start script: "tsx server.ts" (tsx already in devDeps)
+               🟡 NOTE: server.ts is on dev/backend — needs merge to dev/integration before deploy
+
+               Agent 2 (Frontend) — SupportTicketForm URL fix:
+               ✅ COMPLETE. Commit f574646 on dev/frontend, pushed.
+               - Fixed /api/support/ticket → /api/support/submit (wrong URL from original stub)
+               - Category field removed (not in Agent 1's backend contract)
+               - Schema: { subject: string (min 5), message: string (min 20) }
+               - All form validation, loading states, toast feedback intact
+
+               Agent 3 (Desktop) — goreleaser fix:
+               🔴 STILL BLOCKED — sessionforge/agent repo does not exist
+               Perry's GitHub device auth (6958-C680) status unknown — not confirmed by Perry
+               Cannot proceed until either:
+               (a) Perry creates sessionforge/agent org repo, OR
+               (b) Perry approves Option A (update goreleaser → PerryB-GIT/sessionforge)
+
+               Agent 4 (QA) — OAuth E2E tests:
+               ✅ COMPLETE. Results:
+               PASSED (9/13):
+               - Login page renders Google sign-in button ✅
+               - Login page renders GitHub sign-in button ✅
+               - /api/auth/providers returns google + github (not resend) ✅
+               - /api/auth/csrf returns CSRF token ✅
+               - /api/auth/session returns 200 ✅
+               - GitHub OAuth redirect URI format correct ✅
+               - GitHub OAuth button navigation toward github.com ✅
+               - GitHub OAuth redirect_uri matches expected ✅
+               - NextAuth discovery endpoint correct ✅
+
+               FAILED (4/13) — ALL due to OAuth credentials not set in Cloud Run:
+               - Google OAuth initiation: Expected redirect to accounts.google.com
+                 Got: https://sessionforge.dev/login?error=Configuration
+               - Google OAuth redirect_uri assertion: SKIP (no redirect happened)
+               - Google OAuth button navigation: got /login?error=Configuration
+               - Google OAuth DOCS assertion: blocked by auth error
+
+               ROOT CAUSE: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing or invalid
+               in Cloud Run env vars. GitHub works; Google does not.
+
+               ACTION REQUIRED FROM PERRY:
+               1. Add GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET to Cloud Run env vars
+               2. Add https://sessionforge.dev to Google Cloud Console Authorized JavaScript Origins
+               3. Add https://sessionforge.dev/api/auth/callback/google to Authorized Redirect URIs
+               After Perry completes: re-run OAuth tests (all 13 should pass)
+
+               ⚠️ CLEANUP NEEDED: dev/qa commit 74deda0 accidentally includes node_modules
+               Will add .gitignore + cleanup commit to dev/qa now.
+
+               LAUNCH CHECKLIST UPDATES:
+               ✅ supportTickets DB migration — DONE (2026-02-18)
+               ✅ /api/health route — DONE (Agent 1, fcec2df)
+               ✅ Magic link removal — DONE (Agent 2, 7d3d58f)
+               ✅ SupportTicketForm + URL fix — DONE (Agent 2, f574646)
+               ✅ GitHub OAuth E2E — PASSING (9/13 pass, GitHub flow works)
+               🔴 Google OAuth E2E — FAILING (GOOGLE_CLIENT_ID/SECRET not set in Cloud Run)
+               🔴 ANTHROPIC_API_KEY — MISSING from Cloud Run
+               🔴 Go agent release — BLOCKED (no sessionforge/agent repo)
+               🔴 WS connect test — BLOCKED (needs merge + deploy first)
+
+2026-02-19T01 — OVERWATCH SELF-EXECUTING:
+               ✅ Applied Agent 4 cloud-run-service.yml patch to infra/gcp/cloud-run-service.yml
+                  Commit 2b6afa6 on dev/integration.
+                  +ANTHROPIC_API_KEY (Secret Manager), +PERRY_EMAIL (Secret Manager),
+                  +SUPPORT_PERRY_REVIEW=true, -RESEND_API_KEY (stale/removed)
+                  PROJECT_ID placeholders still present — need Perry's real GCP project ID.
+
+               SPRINT STATE SNAPSHOT (2026-02-19):
+               Agent 1 dev/backend HEAD: 19107fc — custom server.ts NOT YET committed, agent working
+               Agent 2 dev/frontend HEAD: b3b63be — URL fix NOT YET committed, agent working
+               Agent 3 dev/desktop HEAD: faca725 — BLOCKED on repo creation
+               Agent 4 dev/qa HEAD:     f133b61 — COMPLETE, OAuth E2E approved to run
+
+               OUTSTANDING PERRY ACTIONS (nothing can proceed without these):
+               1. https://github.com/login/device → code 6958-C680 → grants write:org → unblocks Agent 3
+               2. GCP project ID + region → unblocks ANTHROPIC_API_KEY Cloud Run secret creation
+               3. Real Anthropic API key → needed for gcloud secret create command
+               4. Google Cloud Console OAuth redirect URI → https://sessionforge.dev/api/auth/callback/google
+               5. GitHub OAuth App callback URL → https://sessionforge.dev/api/auth/callback/github
 ```
 
 ---

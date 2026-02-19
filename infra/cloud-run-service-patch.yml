@@ -1,0 +1,152 @@
+# cloud-run-service-patch.yml
+# Agent 4 — proposed changes to infra/gcp/cloud-run-service.yml
+#
+# AWAITING OVERWATCH APPROVAL before applying
+# Apply with: gcloud run services replace infra/gcp/cloud-run-service.yml
+#             (after merging these changes into the file)
+#
+# Changes vs current file:
+#   1. ADD: ANTHROPIC_API_KEY from Secret Manager (sessionforge-anthropic-api-key)
+#   2. ADD: PERRY_EMAIL from Secret Manager (sessionforge-perry-email)
+#   3. ADD: SUPPORT_PERRY_REVIEW=true (enable review emails in production)
+#   4. REMOVE: RESEND_API_KEY (Resend removed from codebase in revision 00054-fd6)
+#   5. FIX: GOOGLE_CLOUD_PROJECT placeholder — replace PROJECT_ID with real project ID
+#   6. FIX: serviceAccountName placeholder — replace PROJECT_ID with real project ID
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: sessionforge-production
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      # CHANGE 5/6: Replace PROJECT_ID with real GCP project ID
+      serviceAccountName: sessionforge-cloudrun-sa@REAL_PROJECT_ID.iam.gserviceaccount.com
+      containers:
+        - name: sessionforge
+          image: ghcr.io/sessionforge/sessionforge:production-latest
+          ports:
+            - name: http1
+              containerPort: 3000
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: "1"
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            # All sensitive values come from Secret Manager
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-db-url
+                  key: latest
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-redis-url
+                  key: latest
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-nextauth-secret
+                  key: latest
+            - name: NEXTAUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-nextauth-url
+                  key: latest
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-google-client-id
+                  key: latest
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-google-client-secret
+                  key: latest
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-github-client-id
+                  key: latest
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-github-client-secret
+                  key: latest
+            # CHANGE 1: ADD ANTHROPIC_API_KEY (was missing — required for support AI draft)
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-anthropic-api-key
+                  key: latest
+            # CHANGE 2: ADD PERRY_EMAIL (support review email destination)
+            - name: PERRY_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-perry-email
+                  key: latest
+            # CHANGE 3: ADD SUPPORT_PERRY_REVIEW=true (enable review emails in prod)
+            - name: SUPPORT_PERRY_REVIEW
+              value: "true"
+            # CHANGE 4: REMOVED RESEND_API_KEY — Resend removed from codebase (revision 00054-fd6)
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-secret-key
+                  key: latest
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-webhook-secret
+                  key: latest
+            - name: STRIPE_PRO_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-pro-price-id
+                  key: latest
+            - name: STRIPE_TEAM_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-team-price-id
+                  key: latest
+            - name: STRIPE_ENTERPRISE_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-enterprise-price-id
+                  key: latest
+            - name: GCS_BUCKET_NAME
+              value: sessionforge-session-logs-prod
+            # CHANGE 5: Replace PROJECT_ID placeholder with real GCP project ID
+            - name: GOOGLE_CLOUD_PROJECT
+              value: REAL_PROJECT_ID
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            failureThreshold: 10
+            periodSeconds: 5
+  traffic:
+    - percent: 100
+      latestRevision: true

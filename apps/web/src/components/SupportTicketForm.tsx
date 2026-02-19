@@ -9,31 +9,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { toast } from 'sonner'
 
 const schema = z.object({
   subject: z.string().min(5, 'Subject must be at least 5 characters'),
-  category: z.enum(['bug', 'billing', 'feature', 'other'], {
-    required_error: 'Please select a category',
-  }),
   message: z.string().min(20, 'Please describe your issue in at least 20 characters'),
 })
 
 type FormData = z.infer<typeof schema>
-
-const CATEGORIES = [
-  { value: 'bug', label: 'Bug / Issue' },
-  { value: 'billing', label: 'Billing' },
-  { value: 'feature', label: 'Feature Request' },
-  { value: 'other', label: 'Other' },
-] as const
 
 export function SupportTicketForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -41,7 +24,6 @@ export function SupportTicketForm() {
   const {
     register,
     handleSubmit,
-    setValue,
     reset,
     formState: { errors },
   } = useForm<FormData>({
@@ -51,7 +33,7 @@ export function SupportTicketForm() {
   async function onSubmit(data: FormData) {
     setIsSubmitting(true)
     try {
-      const res = await fetch('/api/support/ticket', {
+      const res = await fetch('/api/support/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -90,25 +72,6 @@ export function SupportTicketForm() {
               error={errors.subject?.message}
               {...register('subject')}
             />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="category">Category</Label>
-            <Select onValueChange={(val) => setValue('category', val as FormData['category'])}>
-              <SelectTrigger id="category">
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map(({ value, label }) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.category && (
-              <p className="text-xs text-red-400">{errors.category.message}</p>
-            )}
           </div>
 
           <div className="space-y-1.5">

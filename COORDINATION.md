@@ -755,6 +755,41 @@ gcloud run services update sessionforge-production \
                3. Real Anthropic API key → needed for gcloud secret create command
                4. Google Cloud Console OAuth redirect URI → https://sessionforge.dev/api/auth/callback/google
                5. GitHub OAuth App callback URL → https://sessionforge.dev/api/auth/callback/github
+
+2026-02-19T05 — OVERWATCH SELF-EXECUTING (new session — full audit):
+               All 4 agents confirmed COMPLETE. GCP project = sessionforge-487719 confirmed.
+               ANTHROPIC_API_KEY already in Cloud Run ✅
+               GitHub Actions secrets (GCP_PROJECT_ID, GCP_SA_KEY, GHCR_TOKEN) all set ✅
+
+               BUGS FOUND AND FIXED:
+               1. ci.yml: <<<<<<< HEAD conflict markers in YAML → GitHub rejected workflow file
+                  Fix: cleaned all 4 markers. Commit d45f06a.
+               2. agent-release.yml: duplicate of release-agent.yml → deleted. Commit d45f06a.
+               3. cloud-run-service.yml: PROJECT_ID placeholder → sessionforge-487719. Commit d45f06a.
+               4. schema/index.ts: supportTickets declared twice → TS2451 typecheck failure
+                  Fix: removed first/simple duplicate, kept Agent 1 enum version. Commit 3ccca8b.
+
+               CI RESULT: ✅ ALL GREEN (3ccca8b) — Lint ✅ TypeCheck ✅ Test ✅ Build ✅
+
+               UPDATED LAUNCH CHECKLIST:
+               ✅ supportTickets DB migration
+               ✅ /api/health route
+               ✅ Magic link removed
+               ✅ SupportTicketForm + /api/support/submit
+               ✅ Cloud Run YAML: correct env vars + real project ID
+               ✅ GitHub OAuth E2E: PASSING
+               ✅ Go agent v0.1.0 RELEASED
+               ✅ install.sh + install.ps1 served
+               ✅ ANTHROPIC_API_KEY in Cloud Run secrets
+               ✅ CI: ALL GREEN on dev/integration (sha 3ccca8b)
+               🔴 Google OAuth: redirect URI not yet added to Google Cloud Console
+               🔴 Deploy: Perry must trigger deploy-production workflow (workflow_dispatch)
+               🔴 WS connect test: pending deploy
+
+               NEXT PERRY ACTION — ONE THING: trigger the deploy
+               1. Google Console: add https://sessionforge.dev/api/auth/callback/google to OAuth redirect URIs
+               2. GitHub Actions → deploy-production → Run workflow → confirm "deploy-production"
+               3. After deploy: Overwatch will run WS connect test
 ```
 
 ---

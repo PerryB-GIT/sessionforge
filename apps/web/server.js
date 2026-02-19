@@ -6,19 +6,25 @@
  * App Router). All non-upgrade requests are forwarded to Next.js unchanged.
  *
  * WebSocket path: /api/ws/agent?key=sf_live_xxx
+ *
+ * NOTE: This file is plain CommonJS JavaScript (not TypeScript) so it can be
+ * copied directly into the Next.js standalone output and run with `node`.
+ * See Dockerfile lines 55 + 90.
  */
 
-import http from 'http'
-import { parse } from 'url'
-import next from 'next'
-import { WebSocketServer, WebSocket } from 'ws'
-import { eq } from 'drizzle-orm'
+'use strict'
 
-// Use relative paths — path aliases (@/*) don't work outside Next.js bundler
-import { db, machines, sessions } from './src/db/index'
-import { validateApiKey } from './src/lib/api-keys'
-import { redis, RedisKeys, SESSION_LOG_MAX_LINES, SESSION_LOG_TTL_SECONDS } from './src/lib/redis'
-import type { AgentMessage, CloudToAgentMessage, CloudToBrowserMessage } from '../../packages/shared-types/src/index'
+const http = require('http')
+const { parse } = require('url')
+const next = require('next')
+const { WebSocketServer, WebSocket } = require('ws')
+const { eq } = require('drizzle-orm')
+
+// Use relative paths — path aliases (@/*) don't work outside Next.js bundler.
+// In the standalone image these resolve relative to apps/web/.next/standalone/apps/web/
+const { db, machines, sessions } = require('./src/db/index')
+const { validateApiKey } = require('./src/lib/api-keys')
+const { redis, RedisKeys, SESSION_LOG_MAX_LINES, SESSION_LOG_TTL_SECONDS } = require('./src/lib/redis')
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10)
 const dev = process.env.NODE_ENV !== 'production'
@@ -61,7 +67,7 @@ app.prepare().then(() => {
     }
 
     // Validate API key against DB before upgrading
-    let validKey: Awaited<ReturnType<typeof validateApiKey>>
+    let validKey
     try {
       validKey = await validateApiKey(apiKey)
     } catch (err) {
@@ -84,8 +90,8 @@ app.prepare().then(() => {
 
   // ─── WebSocket Connection Handler ────────────────────────────────────────────
 
-  wss.on('connection', (ws: WebSocket, _req: http.IncomingMessage, validKey: NonNullable<Awaited<ReturnType<typeof validateApiKey>>>) => {
-    let machineId: string | null = null
+  wss.on('connection', (ws, _req, validKey) => {
+    let machineId = null
     let lastHeartbeatAt = Date.now()
 
     // Watchdog: mark machine offline after 3 missed heartbeats
@@ -98,15 +104,14 @@ app.prepare().then(() => {
     // Server → agent keepalive ping
     const pingTimer = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        const ping: CloudToAgentMessage = { type: 'ping' }
-        ws.send(JSON.stringify(ping))
+        ws.send(JSON.stringify({ type: 'ping' }))
       }
     }, HEARTBEAT_INTERVAL_MS)
 
     ws.on('message', async (data) => {
-      let msg: AgentMessage
+      let msg
       try {
-        msg = JSON.parse(data.toString()) as AgentMessage
+        msg = JSON.parse(data.toString())
       } catch {
         console.warn('[ws/agent] failed to parse message')
         return
@@ -122,7 +127,7 @@ app.prepare().then(() => {
           lastHeartbeatAt = Date.now()
         }
       } catch (err) {
-        console.error('[ws/agent] error handling message:', (msg as AgentMessage).type, err)
+        console.error('[ws/agent] error handling message:', msg.type, err)
       }
     })
 
@@ -148,12 +153,7 @@ app.prepare().then(() => {
 
 // ─── Agent Message Handler ───────────────────────────────────────────────────
 
-async function handleAgentMessage(
-  msg: AgentMessage,
-  ws: WebSocket,
-  userId: string,
-  onMachineId: (id: string) => void,
-) {
+async function handleAgentMessage(msg, ws, userId, onMachineId) {
   switch (msg.type) {
     case 'register': {
       const { machineId, name, os, hostname, version } = msg
@@ -170,7 +170,7 @@ async function handleAgentMessage(
           id: machineId,
           userId,
           name,
-          os: os as 'windows' | 'macos' | 'linux',
+          os,
           hostname,
           agentVersion: version,
           status: 'online',
@@ -322,7 +322,7 @@ async function handleAgentMessage(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function markMachineOffline(machineId: string) {
+async function markMachineOffline(machineId) {
   try {
     await db
       .update(machines)
@@ -333,7 +333,7 @@ async function markMachineOffline(machineId: string) {
   }
 }
 
-async function publishDashboardUpdate(userId: string, message: CloudToBrowserMessage) {
+async function publishDashboardUpdate(userId, message) {
   try {
     await redis.publish(RedisKeys.dashboardChannel(userId), JSON.stringify(message))
   } catch (err) {

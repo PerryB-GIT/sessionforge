@@ -91,53 +91,27 @@ npx playwright test oauth-redirect-uri --config tests/setup/playwright.config.ts
 **Branch:** `dev/backend`
 **Domain:** `apps/web/src/server/`, `apps/web/src/db/`, `apps/web/src/app/api/`, `apps/web/src/lib/`
 **Current Task:** 🔴 Custom server.ts WebSocket server + /api/health route
-**Status:** assigned 2026-02-19
+**Status:** ✅ COMPLETE — commit fcec2df on dev/backend. Ready for integration + redeploy.
 **Last Update:** 2026-02-19
 
-### AGENT 1 NEW TASK — Custom server.ts + /api/health (🔴 PRIORITY)
-
-**Context:**
-- `apps/web` already has `ws` and `@types/ws` in package.json
-- The existing `apps/web/src/app/api/ws/agent/route.ts` stub CANNOT work — Next.js App Router does not support WebSocket upgrades. `req.socket` is undefined on Cloud Run.
-- Cloud Run itself supports WebSocket natively (HTTP/2 with upgrade). The problem is purely Next.js.
-- `apps/web/package.json` currently has `"start": "next start"` — this needs to become the custom server.
-
-**Deliverables:**
-
-**1. `apps/web/server.ts`** — Custom Node.js HTTP server that:
-- Creates a standard `http.Server` wrapping the Next.js request handler
-- Creates a `ws.WebSocketServer({ noServer: true })`
-- On `server.on('upgrade', ...)`: checks `req.url` starts with `/api/ws/agent`, then upgrades to WS and hands off to the existing WS handler logic
-- Passes all other requests to the Next.js handler normally
-- Reads `PORT` from env (Cloud Run sets this), defaults to 3000
-- Must work with `ts-node` or compile to JS — check how apps/web is set up (likely needs `tsx` or `ts-node` since it's TypeScript)
-
-**2. `apps/web/src/app/api/ws/agent/route.ts`** — Gut the broken Next.js route stub. Replace with a comment: `// WebSocket handled by server.ts — this route file intentionally left as placeholder`
-
-**3. `apps/web/src/app/api/health/route.ts`** — New file:
-```typescript
-import { NextResponse } from 'next/server'
-export async function GET() {
-  return NextResponse.json({ status: 'ok' }, { status: 200 })
-}
-```
-
-**4. `apps/web/package.json`** — Update the `start` script:
-- Old: `"start": "next start"`
-- New: `"start": "node server.js"` (if compiled) OR `"start": "tsx server.ts"` (if using tsx)
-- Check if `tsx` is already a dep. If not, add it. Do NOT add a new bundler.
-
-**5. Move the WebSocket auth + handler logic** from the broken route stub into `server.ts` upgrade handler. The auth logic (validate `?key=` query param against the DB) must run synchronously before accepting the WS upgrade.
-
-**Rules:**
-- Keep it as simple as possible — no new frameworks, no socket.io, just raw `ws` package
-- The upgrade handler must reject with HTTP 401 if the API key is invalid
-- Commit to `dev/backend` with prefix `feat: custom WebSocket server + health route`
-- Write your status below when done or if blocked
-
-**Commits:**
+**All commits on dev/backend:**
 - `3e7f907` — feat: add supportTickets schema + support API routes + email helpers
 - `31233f9` — feat: add support approve route (GET /api/support/approve/[token])
+- `fcec2df` — feat: custom WebSocket server + /api/health route ← NEW
+
+**What was built:**
+- `apps/web/server.ts` — `http.Server` wrapping Next.js + `WebSocketServer({ noServer: true })`. Upgrade handler intercepts `/api/ws/agent`, validates API key against DB before accepting. Full message handler (register/heartbeat/session_started/stopped/crashed/output). 30s ping, 90s timeout watchdog. Reads `PORT` env for Cloud Run.
+- `apps/web/src/app/api/health/route.ts` — `GET /api/health` → 200 `{ status: 'ok' }`. Fixes Cloud Run liveness/startup probes + sessionforge status CLI.
+- `apps/web/src/app/api/ws/agent/route.ts` — replaced broken stub with clean placeholder.
+- `apps/web/package.json` — `start: "tsx server.ts"`, added `tsx ^4.7.0` to devDeps.
+- `apps/web/tsconfig.server.json` — separate tsconfig for server.ts (CommonJS + node moduleResolution).
+
+**⏳ ACTIONS NEEDED FROM OVERWATCH:**
+1. Merge dev/backend → dev/integration (or master after review)
+2. `npm install` in apps/web after merge (installs tsx)
+3. Redeploy to Cloud Run
+4. Verify: `curl https://sessionforge.dev/api/health` → `{ "status": "ok" }`
+5. Then approve Agent 3 Step 4 (full WS connect test)
 
 ---
 

@@ -22,7 +22,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-<<<<<<< HEAD
           cache: "npm"
           cache-dependency-path: "**/package-lock.json"
 
@@ -53,7 +52,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-<<<<<<< HEAD
           cache: "npm"
           cache-dependency-path: "**/package-lock.json"
 
@@ -84,7 +82,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-<<<<<<< HEAD
           cache: "npm"
           cache-dependency-path: "**/package-lock.json"
 
@@ -118,7 +115,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-<<<<<<< HEAD
           cache: "npm"
           cache-dependency-path: "**/package-lock.json"
 

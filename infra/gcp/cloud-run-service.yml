@@ -18,8 +18,7 @@ spec:
     spec:
       containerConcurrency: 80
       timeoutSeconds: 300
-      # TODO: replace PROJECT_ID with real GCP project ID before deploying
-      serviceAccountName: sessionforge-cloudrun-sa@PROJECT_ID.iam.gserviceaccount.com
+      serviceAccountName: sessionforge-cloudrun-sa@sessionforge-487719.iam.gserviceaccount.com
       containers:
         - name: sessionforge
           image: ghcr.io/sessionforge/sessionforge:production-latest
@@ -123,9 +122,8 @@ spec:
                   key: latest
             - name: GCS_BUCKET_NAME
               value: sessionforge-session-logs-prod
-            # TODO: replace PROJECT_ID with real GCP project ID before deploying
             - name: GOOGLE_CLOUD_PROJECT
-              value: PROJECT_ID
+              value: sessionforge-487719
           livenessProbe:
             httpGet:
               path: /api/health

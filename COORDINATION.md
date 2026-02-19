@@ -715,8 +715,10 @@ gcloud run services update sessionforge-production \
                ✅ GitHub OAuth E2E: PASSING
                ✅ Go agent v0.1.0 RELEASED (PerryB-GIT/sessionforge/releases/tag/v0.1.0)
                ✅ install.sh + install.ps1 served from sessionforge.dev/install.sh
-               🔴 Google OAuth: FAILING — GOOGLE_CLIENT_ID/SECRET not in Cloud Run
-               🔴 ANTHROPIC_API_KEY: not yet in Cloud Run secrets (need Perry's GCP project ID + key)
+               ✅ Google OAuth: GOOGLE_CLIENT_ID/SECRET confirmed present in Cloud Run (already set)
+               ✅ ANTHROPIC_API_KEY: LIVE in Cloud Run (revision sessionforge-00054-fd6)
+                  Secret: sessionforge-anthropic-api-key, project: sessionforge-487719
+                  Key name: sessionforge (sk-ant-api03-FhStn...)
                🔴 WS connect test: Go not installed locally — need Perry to build binary or
                   deploy dev/integration to Cloud Run first, then run from a machine with Go
 
@@ -724,6 +726,41 @@ gcloud run services update sessionforge-production \
                Build agent binary locally (requires Go 1.22 install) OR test install.sh
                against the new v0.1.0 release to verify the download + install flow works.
                Then run the full WS connect test (Step 4) if Overwatch approves.
+
+2026-02-19T05 — PERRY PROVIDED ANTHROPIC_API_KEY:
+               Key: sk-ant-api03-FhStn... (name: sessionforge)
+               ✅ gcloud secrets create sessionforge-anthropic-api-key (project sessionforge-487719)
+               ✅ gcloud secrets versions add (version 1 created)
+               ✅ IAM: secretAccessor granted to 730654522335-compute@developer.gserviceaccount.com
+               ✅ gcloud run services update — mounted as ANTHROPIC_API_KEY env var
+               ✅ New revision LIVE: sessionforge-00054-fd6 (100% traffic)
+               ✅ Verified in env dump — all secrets confirmed:
+                  ANTHROPIC_API_KEY: from secret manager ✅
+                  GOOGLE_CLIENT_ID: already set (unexpected — was thought missing) ✅
+                  GOOGLE_CLIENT_SECRET: already set ✅
+                  GITHUB_CLIENT_ID + SECRET: already set ✅
+                  PERRY_EMAIL: perry.bailes@gmail.com ✅
+                  SUPPORT_PERRY_REVIEW: true ✅
+
+               IMPORTANT DISCOVERY: Google/GitHub OAuth credentials ARE in Cloud Run.
+               The 4 OAuth E2E test failures (error=Configuration) were NOT due to missing
+               creds — they were already there. Root cause may be:
+               - Authorized redirect URIs not configured in Google Cloud Console
+               - OAuth app not verified / consent screen not configured
+               - GOOGLE_CLIENT_ID matches project 730654522335 but redirect URI mismatch
+               Perry: check https://console.cloud.google.com/apis/credentials
+               Ensure authorized redirect URI: https://sessionforge.dev/api/auth/callback/google
+
+               LAUNCH CHECKLIST — CURRENT STATE:
+               ✅ supportTickets DB migration
+               ✅ /api/health route
+               ✅ Magic link removed
+               ✅ SupportTicketForm wired (/api/support/submit)
+               ✅ Go agent v0.1.0 released
+               ✅ ANTHROPIC_API_KEY in Cloud Run (NEW — just added)
+               ✅ GOOGLE/GITHUB OAuth creds in Cloud Run (already were present)
+               ⚠️ Google OAuth E2E still failing — likely Google Console redirect URI config
+               🔴 WS connect test — blocked on deploy or local Go install
 
 2026-02-19T01 — OVERWATCH SELF-EXECUTING:
                ✅ Applied Agent 4 cloud-run-service.yml patch to infra/gcp/cloud-run-service.yml

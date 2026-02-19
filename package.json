@@ -2,7 +2,10 @@
   "name": "sessionforge",
   "private": true,
   "packageManager": "npm@10.9.3",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
@@ -18,8 +21,11 @@
     "docker:logs": "docker-compose logs -f"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.4.0",
-    "@types/node": "^20.0.0"
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
   }
 }

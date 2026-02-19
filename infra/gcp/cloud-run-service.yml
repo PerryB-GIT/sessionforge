@@ -18,6 +18,7 @@ spec:
     spec:
       containerConcurrency: 80
       timeoutSeconds: 300
+      # TODO: replace PROJECT_ID with real GCP project ID before deploying
       serviceAccountName: sessionforge-cloudrun-sa@PROJECT_ID.iam.gserviceaccount.com
       containers:
         - name: sessionforge
@@ -75,11 +76,26 @@ spec:
                 secretKeyRef:
                   name: sessionforge-github-client-secret
                   key: latest
-            - name: RESEND_API_KEY
+            # Added: ANTHROPIC_API_KEY — required for support ticket AI draft (Claude Haiku)
+            # Secret must be created in Secret Manager before deploying:
+            #   gcloud secrets create sessionforge-anthropic-api-key --replication-policy=automatic
+            #   echo -n "sk-ant-xxxx" | gcloud secrets versions add sessionforge-anthropic-api-key --data-file=-
+            - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: sessionforge-resend-api-key
+                  name: sessionforge-anthropic-api-key
                   key: latest
+            # Added: PERRY_EMAIL — support review email destination
+            # Secret must be created: gcloud secrets create sessionforge-perry-email
+            - name: PERRY_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-perry-email
+                  key: latest
+            # Added: SUPPORT_PERRY_REVIEW — enable review emails in production
+            - name: SUPPORT_PERRY_REVIEW
+              value: "true"
+            # Removed: RESEND_API_KEY — Resend provider removed in revision 00054-fd6
             - name: STRIPE_SECRET_KEY
               valueFrom:
                 secretKeyRef:
@@ -107,6 +123,7 @@ spec:
                   key: latest
             - name: GCS_BUCKET_NAME
               value: sessionforge-session-logs-prod
+            # TODO: replace PROJECT_ID with real GCP project ID before deploying
             - name: GOOGLE_CLOUD_PROJECT
               value: PROJECT_ID
           livenessProbe:

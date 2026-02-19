@@ -26,10 +26,10 @@ Live launch: all 🔴 critical checklist items green
 ## ACTIVE TASKS
 | Task | Agent | Started | Status |
 |------|-------|---------|--------|
-| Custom server.ts + /api/health route | Agent 1 | 2026-02-19 | 🔴 PRIORITY assigned |
+| Custom server.ts + /api/health route | Agent 1 | 2026-02-19 | ✅ COMPLETE — commit fcec2df |
 | Wire SupportTicketForm URL fix (/api/support/submit) | Agent 2 | 2026-02-19 | ✅ COMPLETE — commit f574646 |
-| Fix goreleaser + push agent source to sessionforge/agent | Agent 3 | 2026-02-19 | BLOCKED — awaiting repo creation |
-| Run OAuth E2E tests against sessionforge.dev | Agent 4 | 2026-02-19 | ✅ COMPLETE — 9/13 passed, 4 failed (OAuth config error) |
+| Fix goreleaser + push agent source (Option A) | Agent 3 | 2026-02-19 | ✅ COMPLETE — v0.1.0 released to PerryB-GIT/sessionforge |
+| Run OAuth E2E tests against sessionforge.dev | Agent 4 | 2026-02-19 | ✅ COMPLETE — 9/13 passed, 4 failed (Google OAuth config) |
 
 ## 🚨 AGENT 4 ESCALATION — APPROVAL NEEDED TO RUN OAUTH E2E TESTS (2026-02-18)
 
@@ -683,8 +683,47 @@ gcloud run services update sessionforge-production \
                ✅ GitHub OAuth E2E: PASSING
                🔴 Google OAuth: FAILING — GOOGLE_CLIENT_ID/SECRET not in Cloud Run
                🔴 ANTHROPIC_API_KEY: not yet in Cloud Run secrets (need Perry's GCP project ID + key)
+               🔴 Google OAuth: FAILING — GOOGLE_CLIENT_ID/SECRET not in Cloud Run
+               🔴 ANTHROPIC_API_KEY: not yet in Cloud Run secrets (need Perry's GCP project ID + key)
                🔴 Go agent release: BLOCKED on sessionforge/agent repo
                🔴 WS connect test: dev/integration needs deploy first
+
+2026-02-19T04 — AGENT 3 UNBLOCKED + v0.1.0 RELEASE COMPLETE:
+               APPROACH: Option A — PerryB-GIT/sessionforge (no org admin needed)
+               - sessionforge org exists but PerryB-GIT is NOT a member (403 on repo create)
+               - Option A: redirect goreleaser + install scripts to PerryB-GIT/sessionforge
+               ACTIONS COMPLETED:
+               ✅ .goreleaser.yml: owner: PerryB-GIT, name: sessionforge (ad03ca8)
+               ✅ agent/scripts/install.sh + install.ps1: REPO=PerryB-GIT/sessionforge (ad03ca8)
+               ✅ apps/web/public/install.sh + install.ps1: synced same fix (f356f4e)
+               ✅ Resolved goreleaser.yml merge conflict (05d3c32)
+               ✅ Pinned goreleaser-action@v6 with version:~> v2 (67e1af2)
+               ✅ dev/desktop merged to dev/integration (0f24a04)
+               ✅ All pushed to origin
+               ✅ TAG v0.1.0 pushed — goreleaser CI triggered
+               ✅ RELEASE LIVE: https://github.com/PerryB-GIT/sessionforge/releases/tag/v0.1.0
+                  Assets: sessionforge_linux_amd64.tar.gz, sessionforge_linux_arm64.tar.gz,
+                          sessionforge_darwin_amd64.tar.gz, sessionforge_darwin_arm64.tar.gz,
+                          sessionforge_windows_amd64.zip, checksums.txt
+
+               LAUNCH CHECKLIST UPDATED:
+               ✅ supportTickets DB migration (live in Cloud SQL)
+               ✅ /api/health route (merged to dev/integration)
+               ✅ Magic link removed from /login (merged to dev/integration)
+               ✅ SupportTicketForm + /api/support/submit wired (merged to dev/integration)
+               ✅ Cloud Run YAML: +ANTHROPIC_API_KEY, +PERRY_EMAIL, -RESEND_API_KEY
+               ✅ GitHub OAuth E2E: PASSING
+               ✅ Go agent v0.1.0 RELEASED (PerryB-GIT/sessionforge/releases/tag/v0.1.0)
+               ✅ install.sh + install.ps1 served from sessionforge.dev/install.sh
+               🔴 Google OAuth: FAILING — GOOGLE_CLIENT_ID/SECRET not in Cloud Run
+               🔴 ANTHROPIC_API_KEY: not yet in Cloud Run secrets (need Perry's GCP project ID + key)
+               🔴 WS connect test: Go not installed locally — need Perry to build binary or
+                  deploy dev/integration to Cloud Run first, then run from a machine with Go
+
+               NEXT AGENT 3 TASK (pending Overwatch approval):
+               Build agent binary locally (requires Go 1.22 install) OR test install.sh
+               against the new v0.1.0 release to verify the download + install flow works.
+               Then run the full WS connect test (Step 4) if Overwatch approves.
 
 2026-02-19T01 — OVERWATCH SELF-EXECUTING:
                ✅ Applied Agent 4 cloud-run-service.yml patch to infra/gcp/cloud-run-service.yml

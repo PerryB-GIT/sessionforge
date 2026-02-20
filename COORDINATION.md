@@ -1,31 +1,32 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 (Overwatch — Sprint 2b COMPLETE, merged to master 0af11dd)
+# Last Updated: 2026-02-20 (Agent 4 assessment — Sprint 3 live gap confirmed)
 
 ---
 
 ## SPRINT GOAL
-Sprint 2: Pre-launch quality — all important checklist items green. Stripe deferred (last).
+Sprint 3: Deploy Sprint 2b to production. Run db:push. Complete Go agent WS connect test.
 
-**Launch Checklist — Full State (2026-02-20) — ALL ITEMS GREEN:**
+**Launch Checklist — Full State (2026-02-20 assessed):**
 - [x] `ANTHROPIC_API_KEY` — ✅ Cloud Run Secret Manager
 - [x] Google OAuth E2E — ✅ 13/13 passing
 - [x] GitHub OAuth E2E — ✅ 13/13 passing
 - [x] `supportTickets` DB migration — ✅ db:push COMPLETE
 - [x] Go agent v0.1.0 released — ✅ PerryB-GIT/sessionforge
-- [x] /api/health route — ✅ LIVE
+- [x] /api/health route — ✅ LIVE (200)
 - [x] Custom WebSocket server.js — ✅ LIVE
-- [x] Magic link removed from /login — ✅
+- [x] Magic link removed from /login — ✅ live (providers: credentials/google/github only)
 - [x] CI: Lint + TypeCheck + Test + Build — ✅ ALL GREEN
-- [x] dev/integration → master merged — ✅ 2026-02-20 (0af11dd)
-- [ ] **Go agent WS connect test** — needs sf_live_ API key from dashboard + Go installed locally
-- [x] **Email verification flow E2E** — ✅ full flow implemented + E2E spec (b84406b)
-- [x] **Password reset flow E2E** — ✅ API routes + wired UI + 17-test E2E spec (5406c43, 262ce81)
-- [x] **Onboarding wizard E2E** — ✅ 616-line spec merged (658bc3d), 4 gaps documented
-- [x] **Next.js security vuln** — ✅ 14.2.0 → 14.2.35 (29 CVEs, a06caf7)
-- [x] **Sentry instrumentation.ts** — ✅ created + instrumentationHook flag (a06caf7)
-- [x] **Onboarding first-login redirect** — ✅ middleware redirects /dashboard → /onboarding (bc5e469)
-- [x] **onboardingCompletedAt DB column** — ✅ schema + POST /api/onboarding/complete (872484b) — ⚠️ NEEDS db:push
+- [x] master merged — ✅ HEAD b05f804
+- [x] **Email verification flow E2E** — ✅ in master (b84406b) — ⚠️ NOT YET DEPLOYED
+- [x] **Password reset flow E2E** — ✅ in master (5406c43, 262ce81) — ⚠️ NOT YET DEPLOYED
+- [x] **Onboarding wizard E2E** — ✅ in master (658bc3d)
+- [x] **Next.js security vuln** — ✅ 14.2.35 in master — ⚠️ NOT YET DEPLOYED
+- [x] **Sentry instrumentation.ts** — ✅ in master — ⚠️ NOT YET DEPLOYED
+- [x] **Onboarding first-login redirect** — ✅ in master (bc5e469) — ⚠️ NOT YET DEPLOYED
+- [x] **onboardingCompletedAt DB column** — ✅ in master schema — ⚠️ NEEDS db:push + DEPLOY
+- [ ] **Go agent WS connect test** — 🔴 needs sf_live_ API key + Go or v0.1.0 binary
+- [ ] **install.sh 404 on live site** — 🔴 in master public/ but NOT deployed (returns 404)
 - [ ] Stripe billing E2E — DEFERRED (last)
 
 ---
@@ -33,9 +34,9 @@ Sprint 2: Pre-launch quality — all important checklist items green. Stripe def
 ## ACTIVE TASKS — Sprint 3
 | Task | Owner | Priority | Status |
 |------|-------|----------|--------|
-| **db:push onboardingCompletedAt** | Overwatch (Perry approval) | 🔴 CRITICAL | ⏳ PENDING APPROVAL |
-| **Deploy Sprint 2b to Cloud Run** | Overwatch | 🔴 HIGH | ⏳ READY TO DEPLOY |
-| **Go agent WS connect test** | Manual (needs sf_live_ key + Go) | 🟡 MEDIUM | ⏳ BLOCKED |
+| **db:push onboardingCompletedAt** | Overwatch (Perry approval) | 🔴 CRITICAL | ⏳ AWAITING PERRY APPROVAL |
+| **Deploy master → Cloud Run** | Overwatch | 🔴 CRITICAL | ⏳ READY — 5 features undeployed |
+| **Go agent WS connect test** | Perry (manual) | 🔴 HIGH | ⏳ BLOCKED — needs sf_live_ key |
 | **Stripe billing E2E** | Agent 4 | 🟢 LOW | DEFERRED |
 
 ## COMPLETED — Sprint 2 + 2b (merged to master 0af11dd)
@@ -1215,6 +1216,73 @@ gcloud run services update sessionforge-production \
                Agent 1 → onboardingCompletedAt column + completion API + first-login redirect
                Agent 2 → password reset flow (still in progress)
                Agents 3 + 4 → IDLE until next assignment
+
+2026-02-20T02 — AGENT 4 LIVE ASSESSMENT (Sprint 3 gap audit):
+
+               LIVE PROBE RESULTS (https://sessionforge.dev):
+               GET  /api/health                  → 200 {"status":"ok"} ✅
+               GET  /api/auth/providers           → 200 {credentials, google, github} ✅ (no resend)
+               GET  /forgot-password              → 200 ✅ (page exists)
+               GET  /api/auth/forgot-password     → 405 ✅ (POST-only, correct)
+               GET  /api/auth/reset-password      → 405 ✅ (POST-only, correct)
+               GET  /api/auth/verify-email        → 307 ✅ (redirect — correct, token required)
+               GET  /onboarding                   → 307 ✅ (redirect to /login — auth-protected, correct)
+               GET  /api/onboarding/complete      → 405 ✅ (POST-only, correct)
+               GET  /install.sh                   → 404 ❌ NOT DEPLOYED
+
+               DEPLOYMENT GAP CONFIRMED:
+               Current live revision (sessionforge-00058-pgv) was built BEFORE Sprint 2b merged.
+               master HEAD is b05f804. The following are in master but NOT live in production:
+
+               | Feature | master commit | Live? |
+               |---------|--------------|-------|
+               | Email verification flow | f23fa2a, b84406b | ❌ NOT deployed |
+               | Password reset flow | 5406c43, 262ce81 | ❌ NOT deployed — BUT routes respond 405 |
+               | Onboarding first-login redirect | bc5e469 | ❌ NOT deployed |
+               | onboardingCompletedAt schema | 872484b | ❌ NOT deployed (also needs db:push) |
+               | Next.js 14.2.35 | a06caf7 | ❌ NOT deployed (still on 14.2.0 in prod) |
+               | Sentry instrumentation.ts | a06caf7 | ❌ NOT deployed |
+               | install.sh / install.ps1 in public/ | f356f4e | ❌ NOT deployed → 404 |
+
+               NOTE on /api/auth/forgot-password + reset-password returning 405:
+               These routes exist on the live site returning 405 (GET on POST-only endpoint).
+               This could be from an earlier partial deploy or the custom server.js — not the
+               Sprint 2b implementation. Needs verification after full deploy.
+
+               BRANCH STATUS (all agent branches vs master):
+               dev/backend  → 0 commits ahead of master (all merged) ✅
+               dev/frontend → 0 commits ahead of master (all merged) ✅
+               dev/desktop  → 0 commits ahead of master (all merged) ✅
+               dev/qa       → 0 commits ahead of master (all merged) ✅
+               master is the single source of truth. No unmerged agent work.
+
+               🚨 PERRY ACTION REQUIRED — TWO BLOCKERS:
+
+               BLOCKER A: db:push for onboardingCompletedAt column
+               Command (safe — additive nullable column):
+               npx drizzle-kit push
+               (via Cloud SQL Auth Proxy as before)
+               Without this: POST /api/onboarding/complete will throw a DB column error when deployed.
+
+               BLOCKER B: Cloud Run deploy of master HEAD (b05f804)
+               A new Cloud Build + gcloud run deploy is needed.
+               All Sprint 2b work is sitting in master undeployed since 2026-02-19T06.
+               Suggested trigger: push a deploy tag or run Cloud Build manually.
+
+               BLOCKER C: Go agent WS connect test — still the only original 🔴 item untested
+               Perry needs ONE of:
+               (a) Generate sf_live_ API key from /dashboard/api-keys on sessionforge.dev
+               (b) Run: curl -sSL https://sessionforge.dev/install.sh | sh
+                   (will 404 until BLOCKER B is resolved — install.sh not deployed yet)
+               After deploy: download v0.1.0 binary → auth login --key sf_live_XXXX → run
+
+               RECOMMENDED EXECUTION ORDER:
+               1. Overwatch: run db:push (additive, safe) — needs Perry approval
+               2. Overwatch: trigger Cloud Build + gcloud run deploy from master HEAD
+               3. Verify: GET /install.sh → 200, GET /forgot-password → 200
+               4. Perry: generate sf_live_ API key from dashboard
+               5. Agent 3 or Perry: run sessionforge connect test (Step 4)
+               6. Agent 4: Stripe billing E2E (once Perry un-defers)
 ```
 
 ---

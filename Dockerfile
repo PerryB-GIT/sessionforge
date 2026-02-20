@@ -76,6 +76,8 @@ RUN addgroup --system --gid 1001 nodejs \
 RUN mkdir -p ./public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+# Copy public/ so static files (install.sh, install.ps1, etc.) are served by Next.js
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
 # Drop to non-root user
 USER nextjs

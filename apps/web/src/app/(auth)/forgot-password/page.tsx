@@ -33,12 +33,10 @@ export default function ForgotPasswordPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: data.email }),
       })
-      if (!res.ok) {
-        const json = await res.json()
-        toast.error(json.error?.message ?? 'Something went wrong')
-        return
-      }
+      if (!res.ok) throw new Error('Request failed')
       setSubmitted(true)
+    } catch {
+      toast.error('Something went wrong. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -52,7 +50,7 @@ export default function ForgotPasswordPage() {
         </div>
         <h1 className="text-xl font-bold text-white mb-2">Check your email</h1>
         <p className="text-sm text-gray-400 mb-6">
-          If an account exists for <span className="text-white">{getValues('email')}</span>, we&apos;ve
+          If an account exists for <span className="text-white">{getValues('email')}</span>, we've
           sent a password reset link.
         </p>
         <Link href="/login" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
@@ -67,7 +65,7 @@ export default function ForgotPasswordPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-white">Reset your password</h1>
         <p className="text-sm text-gray-400 mt-1">
-          Enter your email and we&apos;ll send you a reset link.
+          Enter your email and we'll send you a reset link.
         </p>
       </div>
 

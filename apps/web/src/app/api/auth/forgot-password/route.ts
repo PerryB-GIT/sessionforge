@@ -1,79 +1,42 @@
-export const dynamic = 'force-dynamic'
-
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
+import { db } from '@/db'
+import { users, passwordResetTokens } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { z } from 'zod'
-import { db, users, passwordResetTokens } from '@/db'
+import crypto from 'crypto'
 import { sendPasswordResetEmail } from '@/lib/email'
-import type { ApiResponse, ApiError } from '@sessionforge/shared-types'
 
-const forgotSchema = z.object({
-  email: z.string().email('Invalid email address'),
-})
-
-const RESET_TOKEN_TTL_MINUTES = 60
-
-export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<{ message: string }> | ApiError>> {
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const parsed = forgotSchema.safeParse(body)
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          data: null,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: parsed.error.errors[0]?.message ?? 'Invalid input',
-            statusCode: 400,
-          },
-        } satisfies ApiError,
-        { status: 400 }
-      )
+    const { email } = await req.json()
+    if (!email || typeof email !== 'string') {
+      return NextResponse.json({ error: 'Email required' }, { status: 400 })
     }
 
-    const normalizedEmail = parsed.data.email.toLowerCase()
-
-    // Always return success to prevent email enumeration
-    const [user] = await db
-      .select({ id: users.id, email: users.email, name: users.name })
-      .from(users)
-      .where(eq(users.email, normalizedEmail))
-      .limit(1)
-
-    if (user) {
-      const token = randomBytes(32).toString('hex')
-      const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000)
-
-      await db.insert(passwordResetTokens).values({
-        userId: user.id,
-        token,
-        expiresAt,
-      })
-
-      await sendPasswordResetEmail(user.email, user.name, token)
+    // Always return 200 to prevent email enumeration
+    const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1)
+    if (!user) {
+      return NextResponse.json({ ok: true })
     }
 
-    return NextResponse.json(
-      {
-        data: { message: 'If an account exists with this email, a reset link has been sent.' },
-        error: null,
-      } satisfies ApiResponse<{ message: string }>,
-      { status: 200 }
-    )
+    // Users who signed up via OAuth have no password — skip reset for them
+    if (!user.passwordHash) {
+      return NextResponse.json({ ok: true })
+    }
+
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+
+    await db.insert(passwordResetTokens).values({
+      userId: user.id,
+      token,
+      expiresAt,
+    })
+
+    await sendPasswordResetEmail(email, user.name, token)
+
+    return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error('[forgot-password] unexpected error:', err)
-    return NextResponse.json(
-      {
-        data: null,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred',
-          statusCode: 500,
-        },
-      } satisfies ApiError,
-      { status: 500 }
-    )
+    console.error('[forgot-password]', err)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

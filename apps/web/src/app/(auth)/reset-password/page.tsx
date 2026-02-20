@@ -1,16 +1,18 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+export const dynamic = 'force-dynamic'
+
+import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Lock, Eye, EyeOff, AlertTriangle } from 'lucide-react'
+import { Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
+import Link from 'next/link'
 
 const schema = z
   .object({
@@ -28,7 +30,7 @@ const schema = z
 
 type FormData = z.infer<typeof schema>
 
-function ResetPasswordForm() {
+export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -42,7 +44,6 @@ function ResetPasswordForm() {
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
   async function onSubmit(data: FormData) {
-    if (!token) return
     setIsLoading(true)
     try {
       const res = await fetch('/api/auth/reset-password', {
@@ -50,13 +51,15 @@ function ResetPasswordForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password: data.password }),
       })
-      const json = await res.json()
       if (!res.ok) {
-        toast.error(json.error?.message ?? 'Reset link is invalid or has expired.')
-        return
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Reset failed')
       }
       toast.success('Password reset successfully!')
       router.push('/login')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Reset link is invalid or has expired.'
+      toast.error(message)
     } finally {
       setIsLoading(false)
     }
@@ -66,13 +69,16 @@ function ResetPasswordForm() {
     return (
       <div className="text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
-          <AlertTriangle className="h-6 w-6 text-red-400" />
+          <AlertCircle className="h-6 w-6 text-red-400" />
         </div>
         <h1 className="text-xl font-bold text-white mb-2">Invalid reset link</h1>
         <p className="text-sm text-gray-400 mb-6">
-          This password reset link is missing or malformed.
+          This reset link is invalid. Please request a new one.
         </p>
-        <Link href="/forgot-password" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
+        <Link
+          href="/forgot-password"
+          className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
+        >
           Request a new reset link
         </Link>
       </div>
@@ -134,13 +140,5 @@ function ResetPasswordForm() {
         </Button>
       </form>
     </div>
-  )
-}
-
-export default function ResetPasswordPage() {
-  return (
-    <Suspense fallback={<div className="h-48 flex items-center justify-center"><div className="h-5 w-5 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" /></div>}>
-      <ResetPasswordForm />
-    </Suspense>
   )
 }

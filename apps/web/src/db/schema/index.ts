@@ -39,6 +39,7 @@ export const users = pgTable('users', {
   plan: planEnum('plan').notNull().default('free'),
   stripeCustomerId: varchar('stripe_customer_id', { length: 255 }),
   emailVerified: timestamp('email_verified', { withTimezone: true }),
+  onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

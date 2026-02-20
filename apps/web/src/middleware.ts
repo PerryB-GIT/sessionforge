@@ -51,6 +51,13 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL('/dashboard', baseUrl))
   }
 
+  // ── First-login onboarding redirect ───────────────────────────────────────
+  // Authenticated users who haven't completed onboarding are sent to /onboarding
+  // Exclude /onboarding itself to avoid redirect loop
+  if (pathname.startsWith('/dashboard') && token && !token.onboardingCompletedAt) {
+    return NextResponse.redirect(new URL('/onboarding', baseUrl))
+  }
+
   return NextResponse.next()
 }
 

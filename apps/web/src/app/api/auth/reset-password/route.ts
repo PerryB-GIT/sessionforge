@@ -1,45 +1,23 @@
-export const dynamic = 'force-dynamic'
-
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
+import { db } from '@/db'
+import { users, passwordResetTokens } from '@/db/schema'
 import { eq, and, isNull, gt } from 'drizzle-orm'
-import { z } from 'zod'
-import { db, users, passwordResetTokens } from '@/db'
-import type { ApiResponse, ApiError } from '@sessionforge/shared-types'
+import bcrypt from 'bcryptjs'
 
-const resetSchema = z.object({
-  token: z.string().min(1),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-})
-
-export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<{ message: string }> | ApiError>> {
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const parsed = resetSchema.safeParse(body)
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          data: null,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: parsed.error.errors[0]?.message ?? 'Invalid input',
-            statusCode: 400,
-          },
-        } satisfies ApiError,
-        { status: 400 }
-      )
+    const { token, password } = await req.json()
+    if (!token || !password || typeof token !== 'string' || typeof password !== 'string') {
+      return NextResponse.json({ error: 'Token and password required' }, { status: 400 })
     }
 
-    const { token, password } = parsed.data
-    const now = new Date()
+    if (password.length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
+    }
 
-    // Find valid, unused, non-expired token
+    const now = new Date()
     const [resetRecord] = await db
-      .select({
-        id: passwordResetTokens.id,
-        userId: passwordResetTokens.userId,
-      })
+      .select()
       .from(passwordResetTokens)
       .where(
         and(
@@ -51,26 +29,15 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<{
       .limit(1)
 
     if (!resetRecord) {
-      return NextResponse.json(
-        {
-          data: null,
-          error: {
-            code: 'INVALID_TOKEN',
-            message: 'This reset link is invalid or has expired',
-            statusCode: 400,
-          },
-        } satisfies ApiError,
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid or expired reset link' }, { status: 400 })
     }
 
     const passwordHash = await bcrypt.hash(password, 12)
 
-    // Update password and mark token as used in a transaction
     await db.transaction(async (tx) => {
       await tx
         .update(users)
-        .set({ passwordHash, updatedAt: new Date() })
+        .set({ passwordHash, updatedAt: now })
         .where(eq(users.id, resetRecord.userId))
 
       await tx
@@ -79,25 +46,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<{
         .where(eq(passwordResetTokens.id, resetRecord.id))
     })
 
-    return NextResponse.json(
-      {
-        data: { message: 'Password has been reset successfully' },
-        error: null,
-      } satisfies ApiResponse<{ message: string }>,
-      { status: 200 }
-    )
+    return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error('[reset-password] unexpected error:', err)
-    return NextResponse.json(
-      {
-        data: null,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred',
-          statusCode: 500,
-        },
-      } satisfies ApiError,
-      { status: 500 }
-    )
+    console.error('[reset-password]', err)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

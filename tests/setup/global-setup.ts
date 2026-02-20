@@ -83,7 +83,8 @@ async function globalSetup(config: FullConfig) {
   // use it to verify the email immediately so credentials login works.
   if (registerRes.ok()) {
     const registerBody = await registerRes.json()
-    const verificationToken = registerBody?.data?.verificationToken as string | undefined
+    // Register response shape: { success, userId, verificationToken? }
+    const verificationToken = (registerBody?.verificationToken ?? registerBody?.data?.verificationToken) as string | undefined
     if (verificationToken) {
       console.log('[global-setup] Got verificationToken from register — verifying email...')
       // The verify-email endpoint does a redirect; we follow it and ignore the destination.

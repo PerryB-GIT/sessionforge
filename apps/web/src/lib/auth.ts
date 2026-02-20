@@ -133,7 +133,7 @@ export const authConfig: NextAuthConfig = {
       if (user) {
         // Initial sign in: enrich token from DB
         const [dbUser] = await db
-          .select({ id: users.id, plan: users.plan, email: users.email, name: users.name, emailVerified: users.emailVerified })
+          .select({ id: users.id, plan: users.plan, email: users.email, name: users.name, emailVerified: users.emailVerified, onboardingCompletedAt: users.onboardingCompletedAt })
           .from(users)
           .where(eq(users.email, user.email!.toLowerCase()))
           .limit(1)
@@ -144,12 +144,14 @@ export const authConfig: NextAuthConfig = {
           token.email = dbUser.email
           token.name = dbUser.name
           token.emailVerified = dbUser.emailVerified?.toISOString() ?? null
+          token.onboardingCompletedAt = dbUser.onboardingCompletedAt?.toISOString() ?? null
         }
       }
 
-      // Handle session update trigger (e.g. plan upgrade)
-      if (trigger === 'update' && session?.plan) {
-        token.plan = session.plan
+      // Handle session update trigger (e.g. plan upgrade, onboarding completion)
+      if (trigger === 'update') {
+        if (session?.plan) token.plan = session.plan
+        if (session?.onboardingCompletedAt) token.onboardingCompletedAt = session.onboardingCompletedAt
       }
 
       return token

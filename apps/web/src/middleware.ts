@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
+import { getToken } from 'next-auth/jwt'
 
 // ─── Rate Limiters ─────────────────────────────────────────────────────────────
 
@@ -32,10 +33,17 @@ const MAGIC_LINK_ROUTES = new Set([
   '/api/auth/callback/resend',
 ])
 
+// ─── Routes that require onboarding check ─────────────────────────────────────
+
+// Any dashboard route should redirect to /onboarding if user hasn't completed it
+const DASHBOARD_PREFIX = '/dashboard'
+
 // ─── Middleware ────────────────────────────────────────────────────────────────
 
 export async function middleware(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl
+
+  // ── Rate limiting ─────────────────────────────────────────────────────────
 
   if (LOGIN_ROUTES.has(pathname)) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -95,6 +103,21 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // ── First-login onboarding redirect ───────────────────────────────────────
+
+  if (pathname.startsWith(DASHBOARD_PREFIX)) {
+    const token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
+    })
+
+    // Authenticated user who hasn't completed onboarding → send to /onboarding
+    if (token && !token.onboardingCompletedAt) {
+      const onboardingUrl = new URL('/onboarding', req.nextUrl.origin)
+      return NextResponse.redirect(onboardingUrl)
+    }
+  }
+
   return NextResponse.next()
 }
 
@@ -104,5 +127,6 @@ export const config = {
     '/api/auth/register',
     '/api/auth/signin/resend',
     '/api/auth/callback/resend',
+    '/dashboard/:path*',
   ],
 }

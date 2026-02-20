@@ -21,26 +21,60 @@ Sprint 2: Pre-launch quality — all 🟡 important checklist items green. Strip
 - [ ] **Go agent WS connect test** — needs sf_live_ API key from dashboard + Go installed
 - [x] **Email verification flow E2E** — ✅ full flow confirmed + Playwright spec committed (b84406b)
 - [ ] **Password reset flow E2E** — request reset → click link → set new password
-- [ ] **Onboarding wizard E2E** — first-login wizard, step through all steps
-- [ ] **Next.js security vuln** — upgrade 14.2.0 → latest 14.x patch
-- [ ] **Sentry instrumentation.ts** — migrate to new init format (build warning)
+- [x] **Onboarding wizard E2E** — ✅ 616-line spec merged (658bc3d), 4 gaps documented
+- [x] **Next.js security vuln** — ✅ 14.2.0 → 14.2.35 (29 CVEs, a06caf7)
+- [x] **Sentry instrumentation.ts** — ✅ created + instrumentationHook flag (a06caf7)
+- [ ] **Onboarding first-login redirect** — new users not sent to /onboarding (Agent 1 Sprint 2b)
+- [ ] **onboardingCompletedAt DB column** — schema gap, needs migration (Agent 1 Sprint 2b)
 - [ ] Stripe billing E2E — DEFERRED (last)
 
 ---
 
-## ACTIVE TASKS (Sprint 2)
+## ACTIVE TASKS (Sprint 2b)
 | Task | Agent | Branch | Status |
 |------|-------|--------|--------|
-| Email verification flow — audit + E2E | Agent 1 | dev/backend | ✅ COMPLETE |
-| Password reset flow — audit + E2E | Agent 2 | dev/frontend | 🔵 ASSIGNED |
-| Onboarding wizard — audit + E2E | Agent 4 | dev/qa | 🔵 ASSIGNED |
-| Next.js upgrade + Sentry fix | Agent 3 | dev/desktop | 🔵 ASSIGNED |
+| Password reset flow — pages + API + E2E | Agent 2 | dev/frontend | 🔵 IN PROGRESS |
+| onboardingCompletedAt schema + first-login redirect | Agent 1 | dev/backend | 🔵 ASSIGNED |
+
+## COMPLETED — Sprint 2 (merged to master 12d3f14)
+| Task | Agent | Notes |
+|------|-------|-------|
+| Email verification flow — implement + E2E | Agent 1 | register route + verify-email API + /auth/verify UI + E2E spec |
+| Next.js 14.2.0 → 14.2.35 + Sentry instrumentation | Agent 3 | 29 CVEs resolved, instrumentation.ts + instrumentationHook flag |
+| Onboarding wizard E2E + gap audit | Agent 4 | 616-line spec (Groups A-G), 4 gaps documented |
+| Onboarding install URL fix | Overwatch | get.sessionforge.io → sessionforge.dev/install.sh |
 
 ---
 
 ## SPRINT 2 TASK DETAILS
 
-### Agent 1 — Email Verification Flow
+### Agent 1 — Sprint 2b: Onboarding Completion Wiring
+**Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-backend`
+**Branch:** `dev/backend`
+**Task:** Wire up onboarding completion — 3 gaps to fix.
+
+**Gap 1 — Schema: add `onboardingCompletedAt` to users table**
+- Edit `apps/web/src/db/schema/index.ts`
+- Add: `onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true })`
+- Run `npx drizzle-kit push` against Cloud SQL (additive column, safe)
+  → Write the exact command to COORDINATION.md, Overwatch will approve/run
+
+**Gap 2 — Step 5 completion API**
+- Create `POST /api/onboarding/complete` route
+- Sets `users.onboardingCompletedAt = new Date()` for the authenticated user
+- Returns 200 `{ ok: true }`
+
+**Gap 3 — First-login redirect**
+- In `apps/web/src/middleware.ts` (or dashboard page.tsx if simpler):
+- After auth check passes for `/dashboard`: if `token.onboardingCompletedAt` is null/undefined, redirect to `/onboarding`
+- In `auth.ts` jwt callback: include `onboardingCompletedAt` in the token (same pattern as `emailVerified`)
+
+Commit all to dev/backend. Small commits. Update AGENT 1 STATUS section.
+DO NOT run drizzle-kit push without Overwatch approval logged in COORDINATION.md.
+
+---
+
+### Agent 1 — Email Verification Flow (COMPLETE)
 **Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-backend`
 **Branch:** `dev/backend`
 **Task:** Audit and E2E test the email verification flow end-to-end.
@@ -1108,6 +1142,23 @@ gcloud run services update sessionforge-production \
                All task details in SPRINT 2 TASK DETAILS section above.
                Agents: read your task, report status in your STATUS section, commit to your branch.
                DO NOT push to master — branches only. Overwatch will merge on completion.
+
+2026-02-20T01 — SPRINT 2 MERGE + SPRINT 2b ASSIGNED
+               Assessment review complete. auth.ts on master CLEAN (no Resend regression).
+
+               MERGED TO MASTER (12d3f14):
+               ✅ Email verification flow (Agent 1 — b84406b, f23fa2a)
+               ✅ Next.js 14.2.35 + Sentry instrumentation (Agent 3 — a06caf7)
+               ✅ Onboarding E2E tests (Agent 4 — 658bc3d)
+               ✅ Onboarding install URL fix (Overwatch — 615e96d)
+
+               OVERWATCH SELF-EXECUTE:
+               ✅ OnboardingWizard.tsx: get.sessionforge.io → sessionforge.dev/install.sh
+
+               SPRINT 2b ASSIGNED:
+               Agent 1 → onboardingCompletedAt column + completion API + first-login redirect
+               Agent 2 → password reset flow (still in progress)
+               Agents 3 + 4 → IDLE until next assignment
 ```
 
 ---

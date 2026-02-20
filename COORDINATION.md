@@ -1,11 +1,11 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 (Overwatch — E2E global-setup FIXED ✅. register verificationToken + email verify via token. Secret 00075-x67.)
+# Last Updated: 2026-02-20 (Agent 4 — onboarding redirect VERIFIED LIVE ✅. Revision 00078-hzm — full secrets + E2E_TEST_SECRET.)
 
 ---
 
 ## SPRINT GOAL
-Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ (revision 00075-x67). Only remaining item: Stripe billing E2E (DEFERRED by Perry).
+Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ install.sh 200 ✅ onboarding redirect verified ✅ (revision 00078-hzm). Only remaining: Stripe billing E2E (DEFERRED).
 
 **Launch Checklist — Full State (2026-02-20 post-deploy revision 00075-x67):**
 - [x] `ANTHROPIC_API_KEY` — ✅ Cloud Run Secret Manager
@@ -23,7 +23,7 @@ Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ (re
 - [x] **Onboarding wizard E2E** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Next.js 14.2.35 security patch** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Sentry instrumentation.ts** — ✅ DEPLOYED (revision 00061-nts)
-- [x] **Onboarding first-login redirect** — ✅ DEPLOYED (revision 00061-nts)
+- [x] **Onboarding first-login redirect** — ✅ VERIFIED LIVE (2026-02-20). curl test: GET /dashboard w/ fresh user session → 307 → /onboarding ✅. POST /api/onboarding/complete → 200 ✅.
 - [x] **install.sh / install.ps1** — ✅ DEPLOYED + VERIFIED 200 (revision 00068-8qj). Root cause was missing COPY of public/ in Dockerfile runner stage. Fixed 2026-02-20.
 - [x] **onboardingCompletedAt DB column** — ✅ schema deployed + db:push ✅ LIVE in Cloud SQL (2026-02-20)
 - [x] **Go agent WS connect test** — ✅ CONNECTED + clean close (code 1000). 2 bugs found+fixed: (1) server.js used bcrypt vs SHA-256 stored by api-keys.ts; (2) DATABASE_URL not mounted in Cloud Run. Both fixed, revision 00075-x67 (2026-02-20)

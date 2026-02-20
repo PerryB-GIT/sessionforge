@@ -12,6 +12,15 @@ import {
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 
+// ─── Support Ticket Enums ─────────────────────────────────────────────────────
+
+export const supportTicketStatusEnum = pgEnum('support_ticket_status', [
+  'pending',
+  'approved',
+  'rejected',
+  'closed',
+])
+
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 export const planEnum = pgEnum('plan', ['free', 'pro', 'team', 'enterprise'])
@@ -177,15 +186,17 @@ export const supportTickets = pgTable('support_tickets', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   machineId: uuid('machine_id').references(() => machines.id, { onDelete: 'set null' }),
-  status: varchar('status', { length: 32 }).notNull().default('pending'),
   subject: varchar('subject', { length: 255 }).notNull(),
   message: text('message').notNull(),
   agentLogs: text('agent_logs'),
   browserLogs: text('browser_logs'),
   aiDraft: text('ai_draft'),
-  approvalToken: varchar('approval_token', { length: 128 }).unique(),
+  approvalToken: varchar('approval_token', { length: 255 }).unique(),
+  status: supportTicketStatusEnum('status').notNull().default('pending'),
   approvedAt: timestamp('approved_at', { withTimezone: true }),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 // ─── Relations ─────────────────────────────────────────────────────────────────
@@ -240,3 +251,4 @@ export const supportTicketsRelations = relations(supportTickets, ({ one }) => ({
   user: one(users, { fields: [supportTickets.userId], references: [users.id] }),
   machine: one(machines, { fields: [supportTickets.machineId], references: [machines.id] }),
 }))
+

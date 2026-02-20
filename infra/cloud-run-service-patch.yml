@@ -1,24 +1,37 @@
+# cloud-run-service-patch.yml
+# Agent 4 — proposed changes to infra/gcp/cloud-run-service.yml
+#
+# AWAITING OVERWATCH APPROVAL before applying
+# Apply with: gcloud run services replace infra/gcp/cloud-run-service.yml
+#             (after merging these changes into the file)
+#
+# Changes vs current file:
+#   1. ADD: ANTHROPIC_API_KEY from Secret Manager (sessionforge-anthropic-api-key)
+#   2. ADD: PERRY_EMAIL from Secret Manager (sessionforge-perry-email)
+#   3. ADD: SUPPORT_PERRY_REVIEW=true (enable review emails in production)
+#   4. REMOVE: RESEND_API_KEY (Resend removed from codebase in revision 00054-fd6)
+#   5. FIX: GOOGLE_CLOUD_PROJECT placeholder — replace PROJECT_ID with real project ID
+#   6. FIX: serviceAccountName placeholder — replace PROJECT_ID with real project ID
+
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: sessionforge-production
   annotations:
-    # Allow unauthenticated requests - auth handled by application layer
     run.googleapis.com/ingress: all
     run.googleapis.com/launch-stage: GA
 spec:
   template:
     metadata:
       annotations:
-        # Scaling: scale to zero when no traffic
         autoscaling.knative.dev/minScale: "0"
         autoscaling.knative.dev/maxScale: "10"
-        # Use Cloud SQL via connection string, not Cloud SQL proxy sidecar
         run.googleapis.com/execution-environment: gen2
     spec:
       containerConcurrency: 80
       timeoutSeconds: 300
-      serviceAccountName: sessionforge-cloudrun-sa@sessionforge-487719.iam.gserviceaccount.com
+      # CHANGE 5/6: Replace PROJECT_ID with real GCP project ID
+      serviceAccountName: sessionforge-cloudrun-sa@REAL_PROJECT_ID.iam.gserviceaccount.com
       containers:
         - name: sessionforge
           image: ghcr.io/sessionforge/sessionforge:production-latest
@@ -75,26 +88,22 @@ spec:
                 secretKeyRef:
                   name: sessionforge-github-client-secret
                   key: latest
-            # Added: ANTHROPIC_API_KEY — required for support ticket AI draft (Claude Haiku)
-            # Secret must be created in Secret Manager before deploying:
-            #   gcloud secrets create sessionforge-anthropic-api-key --replication-policy=automatic
-            #   echo -n "sk-ant-xxxx" | gcloud secrets versions add sessionforge-anthropic-api-key --data-file=-
+            # CHANGE 1: ADD ANTHROPIC_API_KEY (was missing — required for support AI draft)
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: sessionforge-anthropic-api-key
                   key: latest
-            # Added: PERRY_EMAIL — support review email destination
-            # Secret must be created: gcloud secrets create sessionforge-perry-email
+            # CHANGE 2: ADD PERRY_EMAIL (support review email destination)
             - name: PERRY_EMAIL
               valueFrom:
                 secretKeyRef:
                   name: sessionforge-perry-email
                   key: latest
-            # Added: SUPPORT_PERRY_REVIEW — enable review emails in production
+            # CHANGE 3: ADD SUPPORT_PERRY_REVIEW=true (enable review emails in prod)
             - name: SUPPORT_PERRY_REVIEW
               value: "true"
-            # Removed: RESEND_API_KEY — Resend provider removed in revision 00054-fd6
+            # CHANGE 4: REMOVED RESEND_API_KEY — Resend removed from codebase (revision 00054-fd6)
             - name: STRIPE_SECRET_KEY
               valueFrom:
                 secretKeyRef:
@@ -122,8 +131,9 @@ spec:
                   key: latest
             - name: GCS_BUCKET_NAME
               value: sessionforge-session-logs-prod
+            # CHANGE 5: Replace PROJECT_ID placeholder with real GCP project ID
             - name: GOOGLE_CLOUD_PROJECT
-              value: sessionforge-487719
+              value: REAL_PROJECT_ID
           livenessProbe:
             httpGet:
               path: /api/health

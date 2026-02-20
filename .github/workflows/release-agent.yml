@@ -1,0 +1,60 @@
+name: Release Agent
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# Required for creating GitHub Releases and uploading assets
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    name: Build & Release (${{ matrix.os }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history required for goreleaser changelog generation
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+          workdir: agent
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify-install-scripts:
+    name: Verify install scripts are reachable
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    steps:
+      - name: Check install.sh returns 200
+        run: |
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" https://sessionforge.dev/install.sh)
+          if [ "$STATUS" != "200" ]; then
+            echo "ERROR: install.sh returned HTTP $STATUS"
+            exit 1
+          fi
+          echo "install.sh OK (HTTP $STATUS)"
+
+      - name: Check install.ps1 returns 200
+        run: |
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" https://sessionforge.dev/install.ps1)
+          if [ "$STATUS" != "200" ]; then
+            echo "ERROR: install.ps1 returned HTTP $STATUS"
+            exit 1
+          fi
+          echo "install.ps1 OK (HTTP $STATUS)"

@@ -1,14 +1,12 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { Monitor, Terminal, Activity, TrendingUp, ArrowRight, Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { MachineStatusBadge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { SessionList } from '@/components/sessions/SessionList'
 import { useMachines } from '@/hooks/useMachines'
 import { useSessions } from '@/hooks/useSessions'
@@ -87,7 +85,7 @@ export default function DashboardPage() {
         </div>
         <Link
           href="/sessions"
-          className={buttonVariants({ size: 'sm' })}
+          className="inline-flex items-center justify-center gap-2 rounded-lg text-xs font-medium transition-all h-7 px-3 bg-purple-500 text-white hover:bg-purple-600 shadow-lg shadow-purple-500/20"
         >
           <Plus className="h-4 w-4" />
           New Session

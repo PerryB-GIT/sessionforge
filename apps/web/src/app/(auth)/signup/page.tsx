@@ -53,15 +53,18 @@ export default function SignupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: data.name, email: data.email, password: data.password }),
       })
-      const json = await res.json()
+
+      const body = await res.json()
+
       if (!res.ok) {
-        toast.error(json.error?.message ?? 'Registration failed.')
-        return
+        throw new Error(body.error ?? 'Registration failed')
       }
+
       toast.success('Account created! Check your email to verify.')
       router.push('/verify-email')
-    } catch {
-      toast.error('Registration failed. Please try again.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Registration failed. Please try again.'
+      toast.error(message)
     } finally {
       setIsLoading(false)
     }

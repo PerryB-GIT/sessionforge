@@ -1,11 +1,11 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 18:20 UTC (Agent 4 — Full assess complete. All Sprint 3 items green. Revision 00078-hzm serving 100%. Production STABLE.)
+# Last Updated: 2026-02-20 19:30 UTC (Overwatch — Billing E2E spec written + login URL fixed. global-setup.ts restored with verificationToken flow. Seed users required in DB for billing tests. All production services green. Revision 00078-hzm.)
 
 ---
 
 ## SPRINT GOAL
-Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ install.sh 200 ✅ onboarding redirect verified ✅ (revision 00078-hzm). Only remaining: Stripe billing E2E (DEFERRED).
+Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ install.sh 200 ✅ onboarding redirect verified ✅ (revision 00078-hzm). Billing E2E spec written — awaiting seed user seeding in Cloud SQL.
 
 **Launch Checklist — Full State (2026-02-20 18:20 UTC — revision 00078-hzm — PRODUCTION STABLE):**
 - [x] `ANTHROPIC_API_KEY` — ✅ Cloud Run Secret Manager
@@ -28,7 +28,7 @@ Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ ins
 - [x] **install.sh / install.ps1** — ✅ DEPLOYED + VERIFIED 200 (revision 00068-8qj). Root cause was missing COPY of public/ in Dockerfile runner stage. Fixed 2026-02-20.
 - [x] **onboardingCompletedAt DB column** — ✅ schema deployed + db:push ✅ LIVE in Cloud SQL (2026-02-20)
 - [x] **Go agent WS connect test** — ✅ CONNECTED + clean close (code 1000). 2 bugs found+fixed: (1) server.js used bcrypt vs SHA-256 stored by api-keys.ts; (2) DATABASE_URL not mounted in Cloud Run. Both fixed, revision 00075-x67 (2026-02-20)
-- [ ] Stripe billing E2E — DEFERRED (last)
+- [x] Stripe billing E2E — SPEC WRITTEN ✅. Login URL fixed (/auth/login → /login). global-setup.ts restored with verificationToken flow. **Perry action required: seed test@sessionforge.dev + pro@sessionforge.dev in Cloud SQL.**
 
 ---
 
@@ -37,7 +37,31 @@ Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ ins
 |------|-------|----------|--------|
 | **db:push onboardingCompletedAt** | Perry (manual — Cloud SQL proxy) | 🔴 CRITICAL | ✅ COMPLETE — live in Cloud SQL (2026-02-20) |
 | **Go agent WS connect test** | Overwatch | 🔴 HIGH | ✅ COMPLETE — WS CONNECTED (code 1000 clean close). Fixed bcrypt/SHA-256 mismatch + DATABASE_URL secret mount. Revision 00075-x67 (2026-02-20) |
-| **Stripe billing E2E** | Agent 4 | 🟢 LOW | DEFERRED |
+| **Stripe billing E2E** | Overwatch | 🟡 MEDIUM | ✅ Spec written (202 lines). **Blocked: seed users needed in Cloud SQL** — see seed SQL below. After seeding, run: `npx playwright test billing --config tests/setup/playwright.billing.config.ts` |
+| **Seed billing test users in Cloud SQL** | Perry (manual — Cloud SQL proxy) | 🟡 MEDIUM | ⏳ PENDING — see SQL below |
+
+### Billing test seed users (Perry — run via Cloud SQL Auth Proxy psql/pgcli):
+The billing E2E spec requires two pre-seeded users with known credentials and `email_verified` set.
+Password hash below is bcrypt(12) of `E2eTestPass123!`. Generate via:
+```bash
+node -e "const bcrypt = require('bcryptjs'); bcrypt.hash('E2eTestPass123!', 12).then(h => console.log(h));"
+```
+Then run (replace `<HASH>` with output):
+```sql
+INSERT INTO users (email, password_hash, name, plan, email_verified)
+VALUES
+  ('test@sessionforge.dev', '<HASH>', 'E2E Test User', 'free', NOW()),
+  ('pro@sessionforge.dev',  '<HASH>', 'E2E Pro User',  'pro',  NOW())
+ON CONFLICT (email) DO UPDATE
+  SET password_hash = EXCLUDED.password_hash,
+      plan = EXCLUDED.plan,
+      email_verified = COALESCE(users.email_verified, NOW());
+```
+After seeding: run billing E2E to verify.
+```bash
+cd C:\Users\Jakeb\sessionforge\tests\setup
+npx playwright test --config playwright.billing.config.ts
+```
 
 ### db:push command (Perry — run when Cloud SQL Auth Proxy is active):
 ```bash
@@ -1371,6 +1395,37 @@ gcloud run services update sessionforge-production \
                Session affinity: enabled ✅
 
                ALL SPRINT ITEMS DONE. Only Stripe E2E remains (deferred).
+
+2026-02-20T06 — OVERWATCH: BILLING E2E SPEC FIXED + FULL PRODUCTION ASSESSMENT
+
+               FULL PRODUCTION STATE (2026-02-20 ~19:30 UTC):
+               Live Revision: sessionforge-00078-hzm (100% traffic) — newer than T05's 00075-x67
+               Health:        200 {"status":"ok"} ✅
+               WS connect:    ✅ still working (SHA-256 auth + DATABASE_URL confirmed in 00078-hzm)
+               Secrets:       Full 14-secret complement mounted (DATABASE_URL, ANTHROPIC_API_KEY,
+                              all OAuth, all Stripe, NEXTAUTH_SECRET, E2E_TEST_SECRET, etc.)
+               Smoke tests:   /api/health 200, /login 200, /install.sh 200, /api/auth/providers 200,
+                              /forgot-password 200, /api/auth/reset-password 405 (POST-only ✅)
+
+               BILLING E2E SPEC — WRITTEN BY PREVIOUS AGENT, WAS BROKEN:
+               tests/e2e/billing.spec.ts (202 lines) — 12 tests across 5 describe blocks
+               tests/setup/playwright.billing.config.ts — separate billing Playwright config
+               ISSUE 1: login URL was /auth/login — FIXED → /login (correct Next.js route)
+               ISSUE 2: global-setup.ts was reverted to skip verificationToken flow — FIXED
+                        Restored x-e2e-test-secret header on /api/auth/register
+                        Restored GET /api/auth/verify-email?token=<token> step
+               ISSUE 3: billing spec uses pre-seeded users (test@sessionforge.dev / pro@sessionforge.dev)
+                        These do NOT exist in Cloud SQL — Perry must seed them (SQL in ACTIVE TASKS above)
+               ISSUE 4: /dashboard/settings/org page EXISTS in codebase ✅ (apps/web/src/app/(dashboard)/settings/org/page.tsx)
+                        404 in test results was caused by the login failure (wrong URL), not missing page
+
+               COMMITS THIS SESSION:
+               - fix: billing.spec.ts + global-setup.ts login URL /auth/login → /login
+               - fix: global-setup.ts restore verificationToken E2E flow (unverified users blocked by auth.ts)
+
+               REMAINING BLOCKER:
+               Perry: seed test@sessionforge.dev + pro@sessionforge.dev in Cloud SQL (SQL in active tasks).
+               After seeding: run npx playwright test --config tests/setup/playwright.billing.config.ts
 
 2026-02-20T04 — E2E GLOBAL-SETUP FIXED: ✅ COMPLETE
 

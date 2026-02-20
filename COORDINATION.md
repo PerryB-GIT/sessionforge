@@ -25,7 +25,7 @@ Sprint 3: Deploy Sprint 2b to production ✅ DONE. Run db:push (needs Cloud SQL 
 - [x] **Sentry instrumentation.ts** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Onboarding first-login redirect** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **install.sh / install.ps1** — ✅ DEPLOYED (public/ in 00061-nts)
-- [ ] **onboardingCompletedAt DB column** — ✅ schema deployed — ⚠️ NEEDS db:push (column not in Cloud SQL yet)
+- [x] **onboardingCompletedAt DB column** — ✅ schema deployed + db:push ✅ LIVE in Cloud SQL (2026-02-20)
 - [ ] **Go agent WS connect test** — 🔴 needs sf_live_ API key + Go or v0.1.0 binary
 - [ ] Stripe billing E2E — DEFERRED (last)
 
@@ -34,7 +34,7 @@ Sprint 3: Deploy Sprint 2b to production ✅ DONE. Run db:push (needs Cloud SQL 
 ## ACTIVE TASKS — Sprint 3
 | Task | Owner | Priority | Status |
 |------|-------|----------|--------|
-| **db:push onboardingCompletedAt** | Perry (manual — Cloud SQL proxy) | 🔴 CRITICAL | ⏳ AWAITING PERRY — see command below |
+| **db:push onboardingCompletedAt** | Perry (manual — Cloud SQL proxy) | 🔴 CRITICAL | ✅ COMPLETE — live in Cloud SQL (2026-02-20) |
 | **Go agent WS connect test** | Perry (manual) | 🔴 HIGH | ⏳ BLOCKED — needs sf_live_ API key |
 | **Stripe billing E2E** | Agent 4 | 🟢 LOW | DEFERRED |
 
@@ -233,7 +233,7 @@ npx playwright test oauth-redirect-uri --config tests/setup/playwright.config.ts
 **Branch:** `dev/backend`
 **Domain:** `apps/web/src/server/`, `apps/web/src/db/`, `apps/web/src/app/api/`, `apps/web/src/lib/`
 **Current Task:** ✅ Sprint 2b — Onboarding wiring COMPLETE (2026-02-20)
-**Status:** ✅ COMMITTED — 2 commits on dev/backend. Awaiting Overwatch db:push approval + merge.
+**Status:** ✅ COMPLETE — db:push executed 2026-02-20, onboarding_completed_at column live in Cloud SQL.
 **Last Update:** 2026-02-20
 
 **Sprint 2b commits on dev/backend:**

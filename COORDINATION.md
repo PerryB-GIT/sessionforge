@@ -504,15 +504,91 @@ go build -ldflags "-X main.Version=v0.0.1-test" -o sessionforge-test.exe ./cmd/s
 **Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-qa`
 **Branch:** `dev/qa`
 **Domain:** `tests/`, `infra/`, Dockerfiles, CI/CD, Cloud Run config
-**Current Task:** OAuth E2E + ANTHROPIC_API_KEY Cloud Run audit
-**Status:** ✅ COMPLETE — 4 commits pushed to dev/qa
-**Last Update:** 2026-02-19
+**Current Task:** Sprint 2 — Onboarding wizard audit + E2E
+**Status:** ✅ COMPLETE — tests written + gaps documented, commit pending
+**Last Update:** 2026-02-20
 
-**Commits:**
+**Sprint 2 Commits:**
+- (pending) — test(qa): onboarding wizard E2E tests + gap documentation
+
+**Sprint 1 Commits:**
+- `eb5d89f` — fix(qa): OAuth E2E tests fixed for NextAuth v5 POST+CSRF — 13/13 passing
+- `65a1322` — chore(qa): remove accidentally committed node_modules
+- `74deda0` — test(qa): OAuth E2E results — 9/13 passed (pre-fix)
+- `f133b61` — chore(infra): Cloud Run service patch with ANTHROPIC_API_KEY
 - `1736fb7` — test(qa): OAuth redirect URI E2E tests + Cloud Run env audit
-- `f133b61` — chore(infra): add Cloud Run service patch with ANTHROPIC_API_KEY + cleanup
-- `74deda0` — test(qa): OAuth E2E results — 9/13 passed
-- `65a1322` — chore(qa): remove accidentally committed node_modules from index ✅ CLEANED
+
+---
+
+### SPRINT 2 TASK FINDINGS — Agent 4 (Onboarding Wizard)
+
+#### Audit Results
+
+**WIZARD EXISTS: ✅**
+- Component: `apps/web/src/components/onboarding/OnboardingWizard.tsx` (400 lines)
+- Page: `apps/web/src/app/(dashboard)/onboarding/page.tsx`
+- Route `/onboarding` is auth-protected (middleware.ts PROTECTED_PREFIXES line 12)
+
+**5-STEP FLOW (all wired):**
+| Step | Label | API Call | Status |
+|------|-------|----------|--------|
+| 1 | Organization | `POST /api/orgs { name }` | ✅ wired |
+| 2 | API Key | `POST /api/keys { name: 'Onboarding Key', scopes: ['agent:connect'] }` | ✅ wired |
+| 3 | Install Agent | Displays install command with key substituted | ⚠️ WRONG URL (see gap-4) |
+| 4 | Verify | `GET /api/machines` polling 12×2.5s until total>0 | ✅ wired |
+| 5 | Done! | `router.push('/dashboard')` or `router.push('/sessions')` | ⚠️ no completion API |
+
+#### 🔴 GAPS IDENTIFIED (4 issues)
+
+| # | Gap | Severity | Fix Owner |
+|---|-----|----------|-----------|
+| gap-1 | `users` table missing `onboardingCompletedAt` column — no DB tracking of wizard completion | 🔴 HIGH | Agent 1 (schema + migration) |
+| gap-2 | No first-login redirect: new users land on empty `/dashboard` instead of `/onboarding` | 🔴 HIGH | Agent 2 (frontend) |
+| gap-3 | Step 5 does not call any API to mark onboarding complete | 🟡 MED | Agent 3 or Agent 2 (OnboardingWizard.tsx) |
+| gap-4 | Install command URL is `get.sessionforge.io/agent` (404) — should be `sessionforge.dev/install.sh` | 🔴 HIGH | Agent 3 (OnboardingWizard.tsx line 39) |
+
+#### E2E Tests Written
+
+**File:** `tests/e2e/onboarding.spec.ts`
+
+**Group A — Routing & auth protection (run against any env, no auth needed):**
+- `/onboarding` redirects unauthenticated users to `/login` ✅
+- `/onboarding` route exists (not 404) ✅
+- `/api/auth/providers` includes credentials provider ✅
+
+**Group B — Step 1 Organization (requires auth session):**
+- Org name input rendered ✅
+- Validation error for names < 2 chars ✅
+- Valid name advances to step 2 ✅
+- 5 step indicators visible ✅
+
+**Group C — Step 2 API Key (requires auth session):**
+- "Generate API Key" button rendered ✅
+- After generation: key displayed, copy button appears ✅
+- Continue button disabled until copy clicked ✅
+- After copy + continue: step 3 visible ✅
+
+**Group D — Step 3 Install Agent (requires auth session):**
+- Install command contains generated API key ✅
+- Copy command button present ✅
+- "I ran the command" advances to step 4 ✅
+
+**Group E — Step 4 Verify Connection (requires auth session):**
+- "Verify Connection" button visible ✅
+- Machine detected (mocked) → advances to step 5 ✅
+
+**Group F — Step 5 Done (requires auth session):**
+- "Go to Dashboard" + "Start a Session" buttons visible ✅
+- "Go to Dashboard" navigates to `/dashboard` ✅
+
+**Group G — Gap documentation (always pass, annotated):**
+- MISSING: `onboardingCompletedAt` field on users table
+- MISSING: first-login redirect to `/onboarding`
+- MISSING: step 5 completion API call
+- INSTALL COMMAND URL WRONG: `get.sessionforge.io/agent` should be `sessionforge.dev/install.sh`
+- DOCS: full wizard flow summary with all gaps
+
+**Test strategy:** API calls in Groups B-F are fully mocked via `page.route()` so tests run without a live backend. Groups B-F skip gracefully if not authenticated (no auth session seeded).
 
 ---
 

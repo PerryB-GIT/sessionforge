@@ -73,7 +73,21 @@ export async function POST(req: NextRequest) {
       console.error('[register] failed to send verification email:', err)
     })
 
-    return NextResponse.json({ success: true, userId: newUser.id }, { status: 201 })
+    // In E2E test mode: return the verification token so the test runner can
+    // verify the email without needing a real inbox. Gated by a secret header
+    // so this is safe to ship to production.
+    const testSecret = process.env.E2E_TEST_SECRET
+    const isTestRequest =
+      testSecret && req.headers.get('x-e2e-test-secret') === testSecret
+
+    return NextResponse.json(
+      {
+        success: true,
+        userId: newUser.id,
+        ...(isTestRequest ? { verificationToken: token } : {}),
+      },
+      { status: 201 }
+    )
   } catch (err) {
     console.error('[register] error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

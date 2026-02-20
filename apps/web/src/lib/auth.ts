@@ -72,11 +72,15 @@ export const authConfig: NextAuthConfig = {
         const passwordMatch = await bcrypt.compare(password, user.passwordHash)
         if (!passwordMatch) return null
 
+        // Block unverified credentials users
+        if (!user.emailVerified) return null
+
         return {
           id: user.id,
           email: user.email,
           name: user.name ?? undefined,
           plan: user.plan,
+          emailVerified: user.emailVerified,
         }
       },
     }),
@@ -129,7 +133,7 @@ export const authConfig: NextAuthConfig = {
       if (user) {
         // Initial sign in: enrich token from DB
         const [dbUser] = await db
-          .select({ id: users.id, plan: users.plan, email: users.email, name: users.name })
+          .select({ id: users.id, plan: users.plan, email: users.email, name: users.name, emailVerified: users.emailVerified })
           .from(users)
           .where(eq(users.email, user.email!.toLowerCase()))
           .limit(1)
@@ -139,6 +143,7 @@ export const authConfig: NextAuthConfig = {
           token.plan = dbUser.plan
           token.email = dbUser.email
           token.name = dbUser.name
+          token.emailVerified = dbUser.emailVerified?.toISOString() ?? null
         }
       }
 

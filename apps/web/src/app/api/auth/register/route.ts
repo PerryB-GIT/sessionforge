@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import { randomBytes } from 'crypto'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, users } from '@/db'
+import { verificationTokens } from '@/db/schema'
+import { sendVerificationEmail } from '@/lib/email'
 import type { ApiResponse, ApiError } from '@sessionforge/shared-types'
 
 const registerSchema = z.object({
@@ -70,13 +73,20 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<{
       throw new Error('Failed to create user')
     }
 
-    // STUB: Send verification email via Resend
-    // await resend.emails.send({
-    //   from: process.env.EMAIL_FROM,
-    //   to: normalizedEmail,
-    //   subject: 'Verify your SessionForge account',
-    //   html: buildVerifyEmailTemplate(verifyToken),
-    // })
+    // Generate and store email verification token
+    const token = randomBytes(32).toString('hex')
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+    await db.insert(verificationTokens).values({
+      identifier: normalizedEmail,
+      token,
+      expires,
+    })
+
+    // Send verification email — non-blocking, don't fail registration if this errors
+    sendVerificationEmail(normalizedEmail, name ?? null, token).catch((err) => {
+      console.error('[register] failed to send verification email:', err)
+    })
 
     return NextResponse.json(
       {

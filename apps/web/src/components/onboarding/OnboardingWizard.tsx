@@ -36,7 +36,7 @@ const orgSchema = z.object({
 
 type OrgFormData = z.infer<typeof orgSchema>
 
-const INSTALL_COMMAND = `curl -fsSL https://get.sessionforge.io/agent | bash -s -- --key SF_API_KEY_PLACEHOLDER`
+const INSTALL_COMMAND = `curl -fsSL https://sessionforge.dev/install.sh | sh`
 
 export function OnboardingWizard() {
   const [step, setStep] = useState(1)

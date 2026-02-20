@@ -1,32 +1,32 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 (Agent 4 assessment — Sprint 3 live gap confirmed)
+# Last Updated: 2026-02-20 (Overwatch — Sprint 3 deploy COMPLETE, db:push pending Perry)
 
 ---
 
 ## SPRINT GOAL
-Sprint 3: Deploy Sprint 2b to production. Run db:push. Complete Go agent WS connect test.
+Sprint 3: Deploy Sprint 2b to production ✅ DONE. Run db:push (needs Cloud SQL proxy). Complete Go agent WS connect test.
 
-**Launch Checklist — Full State (2026-02-20 assessed):**
+**Launch Checklist — Full State (2026-02-20 post-deploy revision 00061-nts):**
 - [x] `ANTHROPIC_API_KEY` — ✅ Cloud Run Secret Manager
 - [x] Google OAuth E2E — ✅ 13/13 passing
 - [x] GitHub OAuth E2E — ✅ 13/13 passing
 - [x] `supportTickets` DB migration — ✅ db:push COMPLETE
 - [x] Go agent v0.1.0 released — ✅ PerryB-GIT/sessionforge
-- [x] /api/health route — ✅ LIVE (200)
+- [x] /api/health route — ✅ LIVE (200) `{"status":"ok"}`
 - [x] Custom WebSocket server.js — ✅ LIVE
 - [x] Magic link removed from /login — ✅ live (providers: credentials/google/github only)
 - [x] CI: Lint + TypeCheck + Test + Build — ✅ ALL GREEN
 - [x] master merged — ✅ HEAD b05f804
-- [x] **Email verification flow E2E** — ✅ in master (b84406b) — ⚠️ NOT YET DEPLOYED
-- [x] **Password reset flow E2E** — ✅ in master (5406c43, 262ce81) — ⚠️ NOT YET DEPLOYED
-- [x] **Onboarding wizard E2E** — ✅ in master (658bc3d)
-- [x] **Next.js security vuln** — ✅ 14.2.35 in master — ⚠️ NOT YET DEPLOYED
-- [x] **Sentry instrumentation.ts** — ✅ in master — ⚠️ NOT YET DEPLOYED
-- [x] **Onboarding first-login redirect** — ✅ in master (bc5e469) — ⚠️ NOT YET DEPLOYED
-- [x] **onboardingCompletedAt DB column** — ✅ in master schema — ⚠️ NEEDS db:push + DEPLOY
+- [x] **Email verification flow E2E** — ✅ DEPLOYED (revision 00061-nts)
+- [x] **Password reset flow E2E** — ✅ DEPLOYED (revision 00061-nts)
+- [x] **Onboarding wizard E2E** — ✅ DEPLOYED (revision 00061-nts)
+- [x] **Next.js 14.2.35 security patch** — ✅ DEPLOYED (revision 00061-nts)
+- [x] **Sentry instrumentation.ts** — ✅ DEPLOYED (revision 00061-nts)
+- [x] **Onboarding first-login redirect** — ✅ DEPLOYED (revision 00061-nts)
+- [x] **install.sh / install.ps1** — ✅ DEPLOYED (public/ in 00061-nts)
+- [ ] **onboardingCompletedAt DB column** — ✅ schema deployed — ⚠️ NEEDS db:push (column not in Cloud SQL yet)
 - [ ] **Go agent WS connect test** — 🔴 needs sf_live_ API key + Go or v0.1.0 binary
-- [ ] **install.sh 404 on live site** — 🔴 in master public/ but NOT deployed (returns 404)
 - [ ] Stripe billing E2E — DEFERRED (last)
 
 ---
@@ -34,10 +34,16 @@ Sprint 3: Deploy Sprint 2b to production. Run db:push. Complete Go agent WS conn
 ## ACTIVE TASKS — Sprint 3
 | Task | Owner | Priority | Status |
 |------|-------|----------|--------|
-| **db:push onboardingCompletedAt** | Overwatch (Perry approval) | 🔴 CRITICAL | ⏳ AWAITING PERRY APPROVAL |
-| **Deploy master → Cloud Run** | Overwatch | 🔴 CRITICAL | ⏳ READY — 5 features undeployed |
-| **Go agent WS connect test** | Perry (manual) | 🔴 HIGH | ⏳ BLOCKED — needs sf_live_ key |
+| **db:push onboardingCompletedAt** | Perry (manual — Cloud SQL proxy) | 🔴 CRITICAL | ⏳ AWAITING PERRY — see command below |
+| **Go agent WS connect test** | Perry (manual) | 🔴 HIGH | ⏳ BLOCKED — needs sf_live_ API key |
 | **Stripe billing E2E** | Agent 4 | 🟢 LOW | DEFERRED |
+
+### db:push command (Perry — run when Cloud SQL Auth Proxy is active):
+```bash
+cd C:\Users\Jakeb\sessionforge\apps\web
+npx drizzle-kit push
+```
+Additive only — adds `onboarding_completed_at` nullable timestamp column to `users` table. Safe to run.
 
 ## COMPLETED — Sprint 2 + 2b (merged to master 0af11dd)
 | Task | Agent | Notes |
@@ -1216,6 +1222,47 @@ gcloud run services update sessionforge-production \
                Agent 1 → onboardingCompletedAt column + completion API + first-login redirect
                Agent 2 → password reset flow (still in progress)
                Agents 3 + 4 → IDLE until next assignment
+
+2026-02-20T02 — SPRINT 2b + SPRINT 3 DEPLOY COMPLETE
+               All Sprint 2 + 2b work deployed to production.
+
+               ROOT CAUSES FOUND AND FIXED DURING DEPLOY:
+               1. Windows CRLF line endings in Dockerfile (core.autocrlf=true)
+                  gcloud run deploy --source . tarballs from filesystem (CRLF),
+                  causing Docker RUN multiline continuations to fail silently.
+                  Fix: .gitattributes with eol=lf for Dockerfile + *.js + *.ts (commit 5d5c5b8)
+
+               2. package-lock.json out of sync with package.json
+                  Agent 3 upgraded next@14.2.0 → 14.2.35 in package.json but never ran npm install.
+                  npm ci requires exact lockfile sync → EUSAGE failure.
+                  Fix: npm install → lockfile regenerated (commit 8bef999)
+
+               3. useSearchParams() prerender error on /reset-password
+                  'use client' + dynamic='force-dynamic' insufficient — Next.js 14 still
+                  attempted static prerender. export const dynamic on a client component
+                  is not reliably respected.
+                  Fix: split page.tsx (server, Suspense wrapper) + reset-password-form.tsx
+                  (client, useSearchParams inside Suspense) (commit b05f804)
+
+               DEPLOYED:
+               ✅ Cloud Run revision sessionforge-00061-nts (100% traffic)
+               ✅ URL: https://sessionforge-730654522335.us-central1.run.app
+               ✅ GET /api/health → 200 {"status":"ok"} CONFIRMED LIVE
+
+               WHAT'S NOW LIVE (was NOT live before this session):
+               - Email verification flow (register → token → email → verify → login)
+               - Password reset flow (forgot-password → email → reset form → login)
+               - Onboarding first-login redirect (middleware redirects new users → /onboarding)
+               - onboardingCompletedAt in JWT + completion API (schema deployed; DB column pending db:push)
+               - Next.js 14.2.35 (29 CVEs resolved)
+               - Sentry instrumentation.ts + instrumentationHook
+               - install.sh + install.ps1 served from /install.sh and /install.ps1
+               - reset-password page Suspense fix
+
+               PERRY ACTION REQUIRED:
+               1. db:push — run with Cloud SQL Auth Proxy active (command above in ACTIVE TASKS)
+                  Without this: onboarding completion won't persist (column missing in DB)
+               2. Go agent WS connect test — needs a sf_live_ API key from dashboard
 
 2026-02-20T02 — AGENT 4 LIVE ASSESSMENT (Sprint 3 gap audit):
 

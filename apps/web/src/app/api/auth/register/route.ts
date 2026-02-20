@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import { randomBytes } from 'crypto'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, users } from '@/db'
+import { verificationTokens } from '@/db/schema'
+import { sendVerificationEmail } from '@/lib/email'
 
 const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -54,6 +57,21 @@ export async function POST(req: NextRequest) {
     if (!newUser) {
       throw new Error('Failed to create user')
     }
+
+    // Generate and store email verification token
+    const token = randomBytes(32).toString('hex')
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+    await db.insert(verificationTokens).values({
+      identifier: normalizedEmail,
+      token,
+      expires,
+    })
+
+    // Send verification email — non-blocking, don't fail registration if this errors
+    sendVerificationEmail(normalizedEmail, name ?? null, token).catch((err) => {
+      console.error('[register] failed to send verification email:', err)
+    })
 
     return NextResponse.json({ success: true, userId: newUser.id }, { status: 201 })
   } catch (err) {

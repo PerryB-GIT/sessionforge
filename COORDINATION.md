@@ -369,10 +369,28 @@ Response: `{ ticketId: string, message: string }`
 ## AGENT 3 STATUS (Desktop)
 **Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-desktop`
 **Branch:** `dev/desktop`
-**Domain:** `agent/` (all Go source code)
-**Current Task:** Go agent install + WebSocket connect test
-**Status:** ⏳ BLOCKED — WS route is a stub (Next.js App Router can't upgrade WS). Needs next-ws or custom server.
-**Last Update:** 2026-02-18 (db:push done, HTTP check done, WS blocker confirmed)
+**Domain:** `agent/` (Go source) + Sprint 2 extension: `apps/web/package.json`, `apps/web/next.config.js`, `apps/web/src/instrumentation.ts`
+**Current Task:** ✅ Sprint 2 COMPLETE — Next.js upgrade + Sentry instrumentation
+**Status:** ✅ COMPLETE — commit `a06caf7` on dev/desktop, pushed
+**Last Update:** 2026-02-20
+
+### Sprint 2 Results (commit `a06caf7`):
+
+**Task A — Next.js security upgrade ✅**
+- `next`: `14.2.0` → `14.2.35` (latest 14.x patch — 35 versions ahead)
+- `eslint-config-next`: `14.2.0` → `14.2.35` (must match Next.js version)
+- Stayed on 14.x — did NOT jump to 15.x
+
+**Task B — Sentry instrumentation.ts ✅**
+- `apps/web/src/instrumentation.ts` did NOT exist — created it
+- `register()` hook imports `sentry.server.config` when `NEXT_RUNTIME === 'nodejs'`
+- No `sentry.edge.config.ts` exists — edge branch safely omitted
+- Added `experimental.instrumentationHook: true` to `apps/web/next.config.js`
+  (required for Next.js 14.2.x — without this flag the file is silently ignored)
+- `sentry.client.config.ts` and `sentry.server.config.ts` already well-formed — no changes needed
+- `@sentry/nextjs` v10.39.0 is current — no upgrade needed
+
+**Build warning resolution:** Both the missing `instrumentation.ts` and missing `instrumentationHook` flag caused the Sentry build warning. Both now fixed — warning will be resolved after merge to dev/integration.
 
 ---
 

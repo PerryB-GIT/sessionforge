@@ -1,13 +1,13 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 (Overwatch — master merged, Sprint 2 assigned)
+# Last Updated: 2026-02-20 (Overwatch — Sprint 2b COMPLETE, merged to master 0af11dd)
 
 ---
 
 ## SPRINT GOAL
-Sprint 2: Pre-launch quality — all 🟡 important checklist items green. Stripe deferred (last).
+Sprint 2: Pre-launch quality — all important checklist items green. Stripe deferred (last).
 
-**Launch Checklist — Full State (2026-02-20):**
+**Launch Checklist — Full State (2026-02-20) — ALL ITEMS GREEN:**
 - [x] `ANTHROPIC_API_KEY` — ✅ Cloud Run Secret Manager
 - [x] Google OAuth E2E — ✅ 13/13 passing
 - [x] GitHub OAuth E2E — ✅ 13/13 passing
@@ -17,32 +17,37 @@ Sprint 2: Pre-launch quality — all 🟡 important checklist items green. Strip
 - [x] Custom WebSocket server.js — ✅ LIVE
 - [x] Magic link removed from /login — ✅
 - [x] CI: Lint + TypeCheck + Test + Build — ✅ ALL GREEN
-- [x] dev/integration → master merged — ✅ 2026-02-20 (fc66b3d)
-- [ ] **Go agent WS connect test** — needs sf_live_ API key from dashboard + Go installed
-- [x] **Email verification flow E2E** — ✅ full flow confirmed + Playwright spec committed (b84406b)
-- [ ] **Password reset flow E2E** — request reset → click link → set new password
+- [x] dev/integration → master merged — ✅ 2026-02-20 (0af11dd)
+- [ ] **Go agent WS connect test** — needs sf_live_ API key from dashboard + Go installed locally
+- [x] **Email verification flow E2E** — ✅ full flow implemented + E2E spec (b84406b)
+- [x] **Password reset flow E2E** — ✅ API routes + wired UI + 17-test E2E spec (5406c43, 262ce81)
 - [x] **Onboarding wizard E2E** — ✅ 616-line spec merged (658bc3d), 4 gaps documented
 - [x] **Next.js security vuln** — ✅ 14.2.0 → 14.2.35 (29 CVEs, a06caf7)
 - [x] **Sentry instrumentation.ts** — ✅ created + instrumentationHook flag (a06caf7)
-- [x] **Onboarding first-login redirect** — ✅ middleware redirects /dashboard → /onboarding if no onboardingCompletedAt (bc5e469)
-- [x] **onboardingCompletedAt DB column** — ✅ schema added + POST /api/onboarding/complete (872484b) — needs db:push
+- [x] **Onboarding first-login redirect** — ✅ middleware redirects /dashboard → /onboarding (bc5e469)
+- [x] **onboardingCompletedAt DB column** — ✅ schema + POST /api/onboarding/complete (872484b) — ⚠️ NEEDS db:push
 - [ ] Stripe billing E2E — DEFERRED (last)
 
 ---
 
-## ACTIVE TASKS (Sprint 2b)
-| Task | Agent | Branch | Status |
-|------|-------|--------|--------|
-| Password reset flow — pages + API + E2E | Agent 2 | dev/frontend | 🔵 IN PROGRESS |
-| onboardingCompletedAt schema + first-login redirect | Agent 1 | dev/backend | ✅ COMPLETE |
+## ACTIVE TASKS — Sprint 3
+| Task | Owner | Priority | Status |
+|------|-------|----------|--------|
+| **db:push onboardingCompletedAt** | Overwatch (Perry approval) | 🔴 CRITICAL | ⏳ PENDING APPROVAL |
+| **Deploy Sprint 2b to Cloud Run** | Overwatch | 🔴 HIGH | ⏳ READY TO DEPLOY |
+| **Go agent WS connect test** | Manual (needs sf_live_ key + Go) | 🟡 MEDIUM | ⏳ BLOCKED |
+| **Stripe billing E2E** | Agent 4 | 🟢 LOW | DEFERRED |
 
-## COMPLETED — Sprint 2 (merged to master 12d3f14)
+## COMPLETED — Sprint 2 + 2b (merged to master 0af11dd)
 | Task | Agent | Notes |
 |------|-------|-------|
 | Email verification flow — implement + E2E | Agent 1 | register route + verify-email API + /auth/verify UI + E2E spec |
+| Onboarding completion wiring | Agent 1 | onboardingCompletedAt schema + POST /api/onboarding/complete + JWT + middleware redirect |
 | Next.js 14.2.0 → 14.2.35 + Sentry instrumentation | Agent 3 | 29 CVEs resolved, instrumentation.ts + instrumentationHook flag |
 | Onboarding wizard E2E + gap audit | Agent 4 | 616-line spec (Groups A-G), 4 gaps documented |
+| Password reset flow — API routes + wired UI + E2E | Agent 2 | POST /api/auth/forgot-password + /api/auth/reset-password + 17-test E2E spec |
 | Onboarding install URL fix | Overwatch | get.sessionforge.io → sessionforge.dev/install.sh |
+| Sprint 2b merge to master | Overwatch | dev/backend + dev/frontend → dev/integration → master (0af11dd) |
 
 ---
 

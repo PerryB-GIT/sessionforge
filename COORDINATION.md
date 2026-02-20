@@ -1,11 +1,11 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 (Overwatch — Sprint 3 COMPLETE. Deploy ✅ db:push ✅)
+# Last Updated: 2026-02-20 (Agent 4 — Dockerfile fix + redeploy → revision 00068-8qj. install.sh 200 ✅)
 
 ---
 
 ## SPRINT GOAL
-Sprint 3: Deploy Sprint 2b to production ✅ DONE. db:push ✅ DONE. Go agent WS connect test ✅ DONE. ALL SPRINT 3 ITEMS COMPLETE.
+Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ install.sh 200 ✅ (revision 00068-8qj). Only remaining item: Stripe billing E2E (DEFERRED).
 
 **Launch Checklist — Full State (2026-02-20 post-deploy revision 00061-nts):**
 - [x] `ANTHROPIC_API_KEY` — ✅ Cloud Run Secret Manager
@@ -17,14 +17,14 @@ Sprint 3: Deploy Sprint 2b to production ✅ DONE. db:push ✅ DONE. Go agent WS
 - [x] Custom WebSocket server.js — ✅ LIVE
 - [x] Magic link removed from /login — ✅ live (providers: credentials/google/github only)
 - [x] CI: Lint + TypeCheck + Test + Build — ✅ ALL GREEN
-- [x] master merged — ✅ HEAD b05f804
+- [x] master merged — ✅ HEAD 2f36e3f (Dockerfile public/ fix)
 - [x] **Email verification flow E2E** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Password reset flow E2E** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Onboarding wizard E2E** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Next.js 14.2.35 security patch** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Sentry instrumentation.ts** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Onboarding first-login redirect** — ✅ DEPLOYED (revision 00061-nts)
-- [x] **install.sh / install.ps1** — ✅ DEPLOYED (public/ in 00061-nts)
+- [x] **install.sh / install.ps1** — ✅ DEPLOYED + VERIFIED 200 (revision 00068-8qj). Root cause was missing COPY of public/ in Dockerfile runner stage. Fixed 2026-02-20.
 - [x] **onboardingCompletedAt DB column** — ✅ schema deployed + db:push ✅ LIVE in Cloud SQL (2026-02-20)
 - [x] **Go agent WS connect test** — ✅ CONNECTED (255ms), v0.1.0 binary, sf_live_djERRpd6ia45C6Y2fcbRojBE0zx0gLc_, DESKTOP-2L1SN9D (2026-02-20)
 - [ ] Stripe billing E2E — DEFERRED (last)

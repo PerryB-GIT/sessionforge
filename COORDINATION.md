@@ -1,13 +1,13 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 (Agent 4 — onboarding redirect VERIFIED LIVE ✅. Revision 00078-hzm — full secrets + E2E_TEST_SECRET.)
+# Last Updated: 2026-02-20 18:20 UTC (Agent 4 — Full assess complete. All Sprint 3 items green. Revision 00078-hzm serving 100%. Production STABLE.)
 
 ---
 
 ## SPRINT GOAL
 Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ install.sh 200 ✅ onboarding redirect verified ✅ (revision 00078-hzm). Only remaining: Stripe billing E2E (DEFERRED).
 
-**Launch Checklist — Full State (2026-02-20 post-deploy revision 00075-x67):**
+**Launch Checklist — Full State (2026-02-20 18:20 UTC — revision 00078-hzm — PRODUCTION STABLE):**
 - [x] `ANTHROPIC_API_KEY` — ✅ Cloud Run Secret Manager
 - [x] Google OAuth E2E — ✅ 13/13 passing
 - [x] GitHub OAuth E2E — ✅ 13/13 passing
@@ -17,7 +17,8 @@ Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ ins
 - [x] Custom WebSocket server.js — ✅ LIVE
 - [x] Magic link removed from /login — ✅ live (providers: credentials/google/github only)
 - [x] CI: Lint + TypeCheck + Test + Build — ✅ ALL GREEN
-- [x] master merged — ✅ HEAD bb005f3 (pushed 2026-02-20)
+- [x] master merged — ✅ HEAD 12fd6d8 (pushed 2026-02-20)
+- [x] **Full secrets mounted** — ✅ revision 00078-hzm: 14 secrets + E2E_TEST_SECRET. IAM fixed (SecretAccessor on all secrets for compute SA). NEXTAUTH_URL confirmed set.
 - [x] **Email verification flow E2E** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Password reset flow E2E** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **Onboarding wizard E2E** — ✅ DEPLOYED (revision 00061-nts)

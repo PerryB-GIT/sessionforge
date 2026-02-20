@@ -389,27 +389,66 @@ Response: `{ ticketId: string, message: string }`
 ---
 
 ## AGENT 2 STATUS (Frontend)
-**Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-frontend`
-**Branch:** `dev/frontend`
-**Domain:** `apps/web/src/app/` (pages/layouts), `apps/web/src/components/`
-**Current Task:** Settings > Support UI + magic link cleanup
-**Status:** ✅ COMPLETE (pending Agent 1 API route for live wiring)
-**Last Update:** 2026-02-18
+**Worktree:** 
+**Branch:** 
+**Domain:**  (pages/layouts), 
+**Current Task:** Sprint 2 COMPLETE - Password Reset Flow
+**Status:** COMPLETE - commit  on dev/frontend, pushed
+**Last Update:** 2026-02-20
 
-**Completed:**
+**Sprint 1 Completed (carried over):**
+- Magic link REMOVED from login page (commit )
+- SupportTicketForm built and wired to POST /api/support/submit (commit )
+- URL fix to match Agent 1 schema (commit )
 
-**1. Magic link — REMOVED ✅ (commit `7d3d58f`)**
-- Removed `sendMagicLink()`, `isMagicLoading` state, `getValues`, magic link button JSX
-- `/login` now clean: Google OAuth + GitHub OAuth + credentials only
+**Sprint 2 Completed (commit ):**
 
-**2. SupportTicketForm — BUILT & WIRED ✅ (commit `ec34f4f`)**
-- `apps/web/src/components/SupportTicketForm.tsx` — subject, category (select), message textarea
-- Zod validation, loading states, toast feedback
-- POSTs to `POST /api/support/ticket` — **stub until Agent 1 confirms route**
-- Wired into `apps/web/src/app/(dashboard)/settings/page.tsx`
+**Step 1 - email.ts:**
+- Created  (new file - was absent from frontend branch)
+- Exports  and 
+- Uses Resend with  and  /  env vars
+- Reset email links to 
 
-**URL fix COMPLETE (commit `f574646`):** Form now POSTs to `POST /api/support/submit` with `{ subject, message }` matching confirmed Agent 1 schema. Category field removed — not in backend contract. Form is fully functional pending Agent 1 WS + health work.
+**Step 2 - POST /api/auth/forgot-password:**
+- Created 
+- Always returns 200 to prevent email enumeration
+- Skips OAuth-only users (no passwordHash)
+- Generates  token, 1-hour expiry
+- Inserts into , sends email via 
 
+**Step 3 - POST /api/auth/reset-password:**
+- Created 
+- Validates: token exists, , 
+- Updates  (bcrypt cost 12) and  in one transaction
+- Returns 400  for bad/expired/used tokens
+
+**Step 4 - Wired forgot-password page:**
+- Modified 
+- Replaced setTimeout stub with real fetch to 
+- toast.error on API failure; setSubmitted(true) on success
+
+**Step 5 - Wired reset-password page:**
+- Modified 
+- Added  to read  from URL
+- Shows invalid-token error state when no token present
+- Real fetch to  with 
+- On success: toast.success then router.push to /login
+- On failure: reads error message from response body for toast.error
+
+**Step 6 - E2E test spec:**
+- Created  (211 lines, 17 tests)
+- Group A (5 tests): /forgot-password - render, blank validation, format validation, success, API error
+- Group B (8 tests): /reset-password - no-token error, form render, too-short, no-uppercase, no-number, mismatch, redirect, expired
+- Group C (5 tests): API mocks capturing request payloads, verifying response handling
+- Group D (2 tests): always-pass documentation tests with inline spec comments
+- All API calls mocked via  - no live backend required
+
+**TypeScript:**  exits 0, no errors.
+
+**Gaps / Notes for Overwatch:**
+- Playwright requires  in CI (no node_modules at apps/web level yet)
+- reset-password page uses  which may need  or Suspense wrapper if Next.js SSG complains at build time
+- No DB migration needed:  table already exists in schema
 ---
 
 ## AGENT 3 STATUS (Desktop)

@@ -1,11 +1,11 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 (Agent 4 — Dockerfile fix + redeploy → revision 00068-8qj. install.sh 200 ✅)
+# Last Updated: 2026-02-20 (Overwatch — WS connect VERIFIED ✅. Revision 00075-x67. 2 root causes fixed.)
 
 ---
 
 ## SPRINT GOAL
-Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ install.sh 200 ✅ (revision 00068-8qj). Only remaining item: Stripe billing E2E (DEFERRED).
+Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ (revision 00075-x67). Only remaining item: Stripe billing E2E (DEFERRED).
 
 **Launch Checklist — Full State (2026-02-20 post-deploy revision 00061-nts):**
 - [x] `ANTHROPIC_API_KEY` — ✅ Cloud Run Secret Manager
@@ -26,7 +26,7 @@ Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ ins
 - [x] **Onboarding first-login redirect** — ✅ DEPLOYED (revision 00061-nts)
 - [x] **install.sh / install.ps1** — ✅ DEPLOYED + VERIFIED 200 (revision 00068-8qj). Root cause was missing COPY of public/ in Dockerfile runner stage. Fixed 2026-02-20.
 - [x] **onboardingCompletedAt DB column** — ✅ schema deployed + db:push ✅ LIVE in Cloud SQL (2026-02-20)
-- [x] **Go agent WS connect test** — ✅ CONNECTED (255ms), v0.1.0 binary, sf_live_djERRpd6ia45C6Y2fcbRojBE0zx0gLc_, DESKTOP-2L1SN9D (2026-02-20)
+- [x] **Go agent WS connect test** — ✅ CONNECTED + clean close (code 1000). 2 bugs found+fixed: (1) server.js used bcrypt vs SHA-256 stored by api-keys.ts; (2) DATABASE_URL not mounted in Cloud Run. Both fixed, revision 00075-x67 (2026-02-20)
 - [ ] Stripe billing E2E — DEFERRED (last)
 
 ---
@@ -35,7 +35,7 @@ Sprint 3: FULLY COMPLETE ✅. Deploy ✅ db:push ✅ Go agent WS connect ✅ ins
 | Task | Owner | Priority | Status |
 |------|-------|----------|--------|
 | **db:push onboardingCompletedAt** | Perry (manual — Cloud SQL proxy) | 🔴 CRITICAL | ✅ COMPLETE — live in Cloud SQL (2026-02-20) |
-| **Go agent WS connect test** | Perry (manual) | 🔴 HIGH | ✅ COMPLETE — Connection: CONNECTED (255ms), v0.1.0, DESKTOP-2L1SN9D (2026-02-20) |
+| **Go agent WS connect test** | Overwatch | 🔴 HIGH | ✅ COMPLETE — WS CONNECTED (code 1000 clean close). Fixed bcrypt/SHA-256 mismatch + DATABASE_URL secret mount. Revision 00075-x67 (2026-02-20) |
 | **Stripe billing E2E** | Agent 4 | 🟢 LOW | DEFERRED |
 
 ### db:push command (Perry — run when Cloud SQL Auth Proxy is active):

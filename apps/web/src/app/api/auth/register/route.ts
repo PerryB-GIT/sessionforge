@@ -88,9 +88,19 @@ export async function POST(req: NextRequest): Promise<NextResponse<ApiResponse<{
       console.error('[register] failed to send verification email:', err)
     })
 
+    // In E2E test mode: return the verification token so the test runner can
+    // verify the email without needing a real inbox. Gated by a secret header
+    // so this is safe to ship to production.
+    const testSecret = process.env.E2E_TEST_SECRET
+    const isTestRequest =
+      testSecret && req.headers.get('x-e2e-test-secret') === testSecret
+
     return NextResponse.json(
       {
-        data: { userId: newUser.id },
+        data: {
+          userId: newUser.id,
+          ...(isTestRequest ? { verificationToken: token } : {}),
+        },
         error: null,
       } satisfies ApiResponse<{ userId: string }>,
       { status: 201 }

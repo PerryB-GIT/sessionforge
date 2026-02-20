@@ -31,7 +31,12 @@ async function loginAsTestUser(page: Page, plan: 'free' | 'pro' = 'free') {
   await page.getByLabel(/email/i).fill(email)
   await page.getByLabel(/password/i).fill('E2eTestPass123!')
   await page.getByRole('button', { name: /sign in|log in/i }).click()
-  await page.waitForURL(/dashboard/, { timeout: 15000 })
+  // Accept dashboard or onboarding redirect (onboarding_completed_at seeded but token may vary)
+  await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 20000 })
+  // If landed on onboarding, navigate directly to billing page
+  if (page.url().includes('/onboarding')) {
+    await page.goto(`${BASE_URL}/dashboard/settings/org`)
+  }
 }
 
 // ---------------------------------------------------------------------------

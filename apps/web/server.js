@@ -20,7 +20,7 @@ const net = require('net')
 const path = require('path')
 const { WebSocketServer } = require('ws')
 const { Redis } = require('@upstash/redis')
-const bcrypt = require('bcryptjs')
+const { createHash } = require('crypto')
 const postgres = require('postgres')
 
 // ─── Next.js standalone ───────────────────────────────────────────────────────
@@ -100,16 +100,14 @@ async function getUserIdFromCookie(cookieHeader) {
 
 async function validateApiKey(rawKey) {
   if (!rawKey.startsWith('sf_live_')) return null
-  const prefix = rawKey.slice(8, 16)
+  const hash = createHash('sha256').update(rawKey).digest('hex')
   const rows = await query(
-    `SELECT id, user_id, key_hash, expires_at FROM api_keys WHERE key_prefix = $1 LIMIT 1`,
-    [prefix]
+    `SELECT id, user_id, expires_at FROM api_keys WHERE key_hash = $1 LIMIT 1`,
+    [hash]
   )
   const row = rows[0]
   if (!row) return null
   if (row.expires_at && new Date(row.expires_at) < new Date()) return null
-  const matches = await bcrypt.compare(rawKey, row.key_hash)
-  if (!matches) return null
   await query(`UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`, [row.id])
   return { userId: row.user_id }
 }

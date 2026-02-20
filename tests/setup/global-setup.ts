@@ -27,6 +27,10 @@ export const TEST_EMAIL = `e2e-pd-${RUN_ID}@sessionforge.dev`
 export const TEST_PASSWORD = 'E2eProdPass1!'
 export const TEST_NAME = 'E2E Post-Deploy User'
 
+// Secret header that unlocks the verificationToken in the register response.
+// Must match E2E_TEST_SECRET env var set on Cloud Run.
+const E2E_TEST_SECRET = process.env.E2E_TEST_SECRET ?? ''
+
 async function globalSetup(config: FullConfig) {
   // Ensure auth directory exists
   fs.mkdirSync(AUTH_DIR, { recursive: true })
@@ -54,12 +58,17 @@ async function globalSetup(config: FullConfig) {
   console.log('[global-setup] Site is healthy.')
 
   // ------------------------------------------------------------------
-  // Step 2: Register test user
+  // Step 2: Register test user + verify email via token
   // ------------------------------------------------------------------
   console.log(`[global-setup] Registering test user: ${TEST_EMAIL}`)
+  const registerHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (E2E_TEST_SECRET) {
+    registerHeaders['x-e2e-test-secret'] = E2E_TEST_SECRET
+  }
+
   const registerRes = await context.request.post(`${BASE_URL}/api/auth/register`, {
     data: { name: TEST_NAME, email: TEST_EMAIL, password: TEST_PASSWORD },
-    headers: { 'Content-Type': 'application/json' },
+    headers: registerHeaders,
   })
 
   if (!registerRes.ok() && registerRes.status() !== 409) {
@@ -69,6 +78,24 @@ async function globalSetup(config: FullConfig) {
       `[global-setup] Failed to register test user (${registerRes.status()}): ${body}`
     )
   }
+
+  // If the register response contains a verificationToken (E2E test mode),
+  // use it to verify the email immediately so credentials login works.
+  if (registerRes.ok()) {
+    const registerBody = await registerRes.json()
+    const verificationToken = registerBody?.data?.verificationToken as string | undefined
+    if (verificationToken) {
+      console.log('[global-setup] Got verificationToken from register — verifying email...')
+      // The verify-email endpoint does a redirect; we follow it and ignore the destination.
+      await context.request.get(`${BASE_URL}/api/auth/verify-email?token=${verificationToken}`, {
+        maxRedirects: 5,
+      })
+      console.log('[global-setup] Email verified via token.')
+    } else if (E2E_TEST_SECRET) {
+      console.warn('[global-setup] E2E_TEST_SECRET was set but no verificationToken in response — login may fail if email is unverified.')
+    }
+  }
+
   console.log('[global-setup] Test user registered (or already existed).')
 
   // ------------------------------------------------------------------

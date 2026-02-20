@@ -24,8 +24,8 @@ Sprint 2: Pre-launch quality — all 🟡 important checklist items green. Strip
 - [x] **Onboarding wizard E2E** — ✅ 616-line spec merged (658bc3d), 4 gaps documented
 - [x] **Next.js security vuln** — ✅ 14.2.0 → 14.2.35 (29 CVEs, a06caf7)
 - [x] **Sentry instrumentation.ts** — ✅ created + instrumentationHook flag (a06caf7)
-- [ ] **Onboarding first-login redirect** — new users not sent to /onboarding (Agent 1 Sprint 2b)
-- [ ] **onboardingCompletedAt DB column** — schema gap, needs migration (Agent 1 Sprint 2b)
+- [x] **Onboarding first-login redirect** — ✅ middleware redirects /dashboard → /onboarding if no onboardingCompletedAt (bc5e469)
+- [x] **onboardingCompletedAt DB column** — ✅ schema added + POST /api/onboarding/complete (872484b) — needs db:push
 - [ ] Stripe billing E2E — DEFERRED (last)
 
 ---
@@ -34,7 +34,7 @@ Sprint 2: Pre-launch quality — all 🟡 important checklist items green. Strip
 | Task | Agent | Branch | Status |
 |------|-------|--------|--------|
 | Password reset flow — pages + API + E2E | Agent 2 | dev/frontend | 🔵 IN PROGRESS |
-| onboardingCompletedAt schema + first-login redirect | Agent 1 | dev/backend | 🔵 ASSIGNED |
+| onboardingCompletedAt schema + first-login redirect | Agent 1 | dev/backend | ✅ COMPLETE |
 
 ## COMPLETED — Sprint 2 (merged to master 12d3f14)
 | Task | Agent | Notes |
@@ -220,9 +220,21 @@ npx playwright test oauth-redirect-uri --config tests/setup/playwright.config.ts
 **Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-backend`
 **Branch:** `dev/backend`
 **Domain:** `apps/web/src/server/`, `apps/web/src/db/`, `apps/web/src/app/api/`, `apps/web/src/lib/`
-**Current Task:** ✅ Sprint 2 — Email verification flow COMPLETE (2026-02-20, second pass)
-**Status:** ✅ COMMITTED — commits `f23fa2a` + `b84406b` on dev/backend. Awaiting Overwatch merge.
+**Current Task:** ✅ Sprint 2b — Onboarding wiring COMPLETE (2026-02-20)
+**Status:** ✅ COMMITTED — 2 commits on dev/backend. Awaiting Overwatch db:push approval + merge.
 **Last Update:** 2026-02-20
+
+**Sprint 2b commits on dev/backend:**
+- `872484b` — feat(onboarding): add onboardingCompletedAt schema + completion API
+- `bc5e469` — feat(onboarding): wire onboardingCompletedAt into JWT + first-login redirect
+
+**🚨 OVERWATCH ACTION NEEDED — drizzle-kit push:**
+New nullable column added to `users` table. Run push against Cloud SQL before deploying:
+```bash
+cd C:\Users\Jakeb\sessionforge\apps\web
+npx drizzle-kit push
+```
+Additive only (nullable column, no default required). Safe to run.
 
 **Sprint 2 commits on dev/backend:**
 - `f23fa2a` — feat: implement email verification flow (Sprint 2, first pass)

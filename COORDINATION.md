@@ -1,6 +1,6 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 20:00 UTC (Overwatch — Full assess. Revision 00078-hzm STABLE. WS ✅ code 1000. All smoke tests green. Only blocker: billing seed users in Cloud SQL (Perry action). No code changes needed.)
+# Last Updated: 2026-02-20 (Overwatch — assess + merge. dev/qa merged to master (8015bb3). All 4 branches in sync. 00078-hzm stable. CI queued on master. Only open item: billing seed users (Perry action).
 
 ---
 
@@ -1540,6 +1540,35 @@ gcloud run services update sessionforge-production \
                ✅ onboardingCompletedAt DB column — live in Cloud SQL
                ✅ Go agent WS connect test — CONNECTED (255ms) ✅
                ⏳ Stripe billing E2E — DEFERRED (Perry's call when to tackle)
+
+2026-02-20T08 — OVERWATCH: ASSESS + MERGE dev/qa → master (COMPLETE)
+
+               ASSESSMENT (post-T07):
+               Live Revision: sessionforge-00078-hzm (100% traffic, READY=True) ✅
+               Health: 200 {"status":"ok"} ✅
+               Smoke tests: All 5 green (200 /login, 200 /install.sh, 200 /api/auth/providers,
+                             401 /api/stripe/checkout, 400 /api/webhooks/stripe)
+               WS: ✅ SHA-256 auth working
+
+               DISCOVERY: master had commit da459b4 (billing spec + global-setup fix, from
+               a parallel session). dev/qa was 3 commits ahead of master (our earlier
+               global-setup fixes: 7d93428, 89f7618, 918634f).
+
+               MERGE: origin/dev/qa → master
+               Conflict in tests/setup/global-setup.ts: HEAD (da459b4 billing fix version)
+               was superset; dev/qa had conditional header pattern.
+               Resolution: kept HEAD structure + preserved onboarding redirect block from dev/qa.
+               Commit: 8015bb3
+
+               BRANCH STATE (post-merge, all in sync with master):
+               dev/backend  → 0 commits ahead of master ✅
+               dev/frontend → 0 commits ahead of master ✅
+               dev/desktop  → 0 commits ahead of master ✅
+               dev/qa       → 0 commits ahead of master ✅
+
+               ONLY OPEN ITEM: Billing seed users (Perry action required).
+               Seed SQL in ACTIVE TASKS above. After seeding: run billing E2E.
+               NO CODE CHANGES NEEDED. Production is stable.
 ```
 
 ---

@@ -1,6 +1,6 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-20 19:30 UTC (Overwatch — Billing E2E spec written + login URL fixed. global-setup.ts restored with verificationToken flow. Seed users required in DB for billing tests. All production services green. Revision 00078-hzm.)
+# Last Updated: 2026-02-20 20:00 UTC (Overwatch — Full assess. Revision 00078-hzm STABLE. WS ✅ code 1000. All smoke tests green. Only blocker: billing seed users in Cloud SQL (Perry action). No code changes needed.)
 
 ---
 
@@ -1395,6 +1395,26 @@ gcloud run services update sessionforge-production \
                Session affinity: enabled ✅
 
                ALL SPRINT ITEMS DONE. Only Stripe E2E remains (deferred).
+
+2026-02-20T07 — OVERWATCH: FULL RE-ASSESS — ALL CLEAR
+
+               master HEAD: da459b4 (fix(e2e): billing spec + global-setup login URL + verificationToken flow)
+               Live Revision: sessionforge-00078-hzm ✅ (READY=True, 100% traffic)
+               Health: 200 {"status":"ok"} ✅
+
+               SMOKE TESTS:
+               200 /login ✅          200 /install.sh ✅
+               200 /api/auth/providers ✅  401 /api/stripe/checkout (unauthed) ✅
+               400 /api/webhooks/stripe (no sig) ✅  401 /api/ws/agent (invalid key) ✅
+
+               WS CONNECT TEST: ✅ CONNECTED + clean close (code 1000)
+               Key generated → SHA-256 stored → wss connected → register sent → closed → key cleaned up.
+
+               PENDING BLOCKER (Perry):
+               Seed test@sessionforge.dev + pro@sessionforge.dev in Cloud SQL.
+               SQL in ACTIVE TASKS above. Once seeded: run billing E2E.
+
+               NO CODE CHANGES NEEDED. Production is stable.
 
 2026-02-20T06 — OVERWATCH: BILLING E2E SPEC FIXED + FULL PRODUCTION ASSESSMENT
 

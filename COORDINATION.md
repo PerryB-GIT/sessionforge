@@ -1331,6 +1331,46 @@ gcloud run services update sessionforge-production \
                5. Agent 3 or Perry: run sessionforge connect test (Step 4)
                6. Agent 4: Stripe billing E2E (once Perry un-defers)
 
+2026-02-20T05 — OVERWATCH: WS CONNECT REAL VERIFICATION + PRODUCTION FIXES
+
+               Previous T03 entry recorded WS CONNECTED using sessionforge.exe binary +
+               bcrypt-hash key created manually. This session ran a Node.js test script
+               that exposed two production bugs that made the WS auth silently broken:
+
+               BUG 1: bcrypt vs SHA-256 in validateApiKey()
+               - api-keys.ts POST /api/keys stores SHA-256 hex (64-char) in key_hash
+               - server.js validateApiKey() called bcrypt.compare(rawKey, row.key_hash)
+               - bcrypt.compare against SHA-256 always returns false → every key = 401
+               - Fix: createHash('sha256').update(rawKey).digest('hex'), lookup by key_hash
+               Commit: 0a70f3c
+
+               BUG 2: DATABASE_URL missing from Cloud Run env vars
+               - server.js reads process.env.DATABASE_URL for its own postgres connection
+               - Only ANTHROPIC_API_KEY was in secrets; DATABASE_URL = undefined
+               - buildSql(undefined) → crash → 401/timeout on every WS upgrade
+               - Fix: gcloud secrets add-iam-policy-binding sessionforge-db-url (compute SA)
+                 then gcloud run services update --set-secrets DATABASE_URL=sessionforge-db-url:latest
+               Revision: 00075-x67 (+ session affinity enabled)
+
+               ALSO FOUND: previous T03 log key (sf_live_djERRpd6ia45C6Y2fcbRojBE0zx0gLc_)
+               was created when server.js used bcrypt validation, meaning it was stored with
+               a bcrypt hash (not SHA-256) by whatever method was used then. New keys created
+               via POST /api/keys will have SHA-256 hashes and now work correctly.
+
+               TEST RESULT (node agent/ws-connect-test.mjs against 00075-x67):
+               → WebSocket CONNECTED ✓ (code 1000 clean close, register message sent)
+
+               master HEAD bb005f3 pushed to PerryB-GIT/sessionforge.
+
+               CURRENT PRODUCTION STATE:
+               Revision:  sessionforge-00075-x67 (100% traffic)
+               Health:    200 {"status":"ok"}
+               WS:        wss://.../api/ws/agent → ✅ SHA-256 auth working
+               DATABASE_URL: mounted from Secret Manager ✅
+               Session affinity: enabled ✅
+
+               ALL SPRINT ITEMS DONE. Only Stripe E2E remains (deferred).
+
 2026-02-20T04 — E2E GLOBAL-SETUP FIXED: ✅ COMPLETE
 
                ROOT CAUSE: auth.ts line 59 blocks credentials login for unverified users

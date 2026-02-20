@@ -93,7 +93,7 @@ jobs:
       - name: Deploy to Cloud Run
         run: |
           IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production-latest"
-          gcloud run deploy sessionforge-production \
+          gcloud run deploy sessionforge \
             --image "$IMAGE_TAG" \
             --region us-central1 \
             --project "${{ secrets.GCP_PROJECT_ID }}" \
@@ -110,5 +110,5 @@ jobs:
 
       - name: Output production URL
         run: |
-          URL=$(gcloud run services describe sessionforge-production --region us-central1 --project "${{ secrets.GCP_PROJECT_ID }}" --format "value(status.url)")
+          URL=$(gcloud run services describe sessionforge --region us-central1 --project "${{ secrets.GCP_PROJECT_ID }}" --format "value(status.url)")
           echo "Production URL: $URL"

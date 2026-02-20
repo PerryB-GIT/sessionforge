@@ -1,35 +1,131 @@
 # SessionForge COORDINATION.md
 # Overwatch task board — updated continuously
-# Last Updated: 2026-02-19 (Overwatch — OAuth E2E 13/13 ✅, Cloud Run deployed)
+# Last Updated: 2026-02-20 (Overwatch — master merged, Sprint 2 assigned)
 
 ---
 
 ## SPRINT GOAL
-Live launch: all 🔴 critical checklist items green
+Sprint 2: Pre-launch quality — all 🟡 important checklist items green. Stripe deferred (last).
 
-**Launch Checklist (from master plan Section 2):**
-- [x] `ANTHROPIC_API_KEY` — ✅ added to Cloud Run as GCP Secret (sessionforge-00058-pgv)
-- [x] Google OAuth E2E test — ✅ 13/13 passing (commit eb5d89f on dev/qa)
-- [x] GitHub OAuth E2E test — ✅ 13/13 passing (commit eb5d89f on dev/qa)
-- [ ] Real Go agent install + WebSocket connect test
-- [x] `supportTickets` DB migration — ✅ db:push COMPLETE 2026-02-18 20:05
-- [ ] Stripe billing E2E test (test mode)
-- [ ] Email verification flow E2E
-- [ ] Password reset flow E2E
-- [ ] Onboarding wizard E2E test
-- [ ] Magic link button on /login — remove or wire up (Resend removed)
-- [ ] Next.js 14.2.0 security vuln — upgrade to latest patch
-- [ ] Sentry instrumentation.ts migration
+**Launch Checklist — Full State (2026-02-20):**
+- [x] `ANTHROPIC_API_KEY` — ✅ Cloud Run Secret Manager
+- [x] Google OAuth E2E — ✅ 13/13 passing
+- [x] GitHub OAuth E2E — ✅ 13/13 passing
+- [x] `supportTickets` DB migration — ✅ db:push COMPLETE
+- [x] Go agent v0.1.0 released — ✅ PerryB-GIT/sessionforge
+- [x] /api/health route — ✅ LIVE
+- [x] Custom WebSocket server.js — ✅ LIVE
+- [x] Magic link removed from /login — ✅
+- [x] CI: Lint + TypeCheck + Test + Build — ✅ ALL GREEN
+- [x] dev/integration → master merged — ✅ 2026-02-20 (fc66b3d)
+- [ ] **Go agent WS connect test** — needs sf_live_ API key from dashboard + Go installed
+- [ ] **Email verification flow E2E** — sign up → verify → login (Resend wiring TBD)
+- [ ] **Password reset flow E2E** — request reset → click link → set new password
+- [ ] **Onboarding wizard E2E** — first-login wizard, step through all steps
+- [ ] **Next.js security vuln** — upgrade 14.2.0 → latest 14.x patch
+- [ ] **Sentry instrumentation.ts** — migrate to new init format (build warning)
+- [ ] Stripe billing E2E — DEFERRED (last)
 
 ---
 
-## ACTIVE TASKS
-| Task | Agent | Started | Status |
-|------|-------|---------|--------|
-| Custom server.ts + /api/health route | Agent 1 | 2026-02-19 | ✅ COMPLETE — commit fcec2df |
-| Wire SupportTicketForm URL fix (/api/support/submit) | Agent 2 | 2026-02-19 | ✅ COMPLETE — commit f574646 |
-| Fix goreleaser + push agent source (Option A) | Agent 3 | 2026-02-19 | ✅ COMPLETE — v0.1.0 released to PerryB-GIT/sessionforge |
-| Run OAuth E2E tests against sessionforge.dev | Agent 4 | 2026-02-19 | ✅ COMPLETE — 13/13 passed (commit eb5d89f) |
+## ACTIVE TASKS (Sprint 2)
+| Task | Agent | Branch | Status |
+|------|-------|--------|--------|
+| Email verification flow — audit + E2E | Agent 1 | dev/backend | 🔵 ASSIGNED |
+| Password reset flow — audit + E2E | Agent 2 | dev/frontend | 🔵 ASSIGNED |
+| Onboarding wizard — audit + E2E | Agent 4 | dev/qa | 🔵 ASSIGNED |
+| Next.js upgrade + Sentry fix | Agent 3 | dev/desktop | 🔵 ASSIGNED |
+
+---
+
+## SPRINT 2 TASK DETAILS
+
+### Agent 1 — Email Verification Flow
+**Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-backend`
+**Branch:** `dev/backend`
+**Task:** Audit and E2E test the email verification flow end-to-end.
+
+1. Read `apps/web/src/app/api/auth/register/route.ts` — understand what happens after signup (is a verification email sent? how?)
+2. Read `apps/web/src/lib/email.ts` — what email provider is wired? (Resend was removed from NextAuth but may still be in email.ts)
+3. Check `apps/web/src/app/(auth)/` for any verify-email page
+4. Check `apps/web/src/db/schema/index.ts` — `verificationTokens` table exists — is it being used?
+5. Document the full flow: signup → token created → email sent → user clicks link → email verified
+6. If email sending is broken (Resend removed = no transport), document exactly what's broken and write the minimal fix
+7. Write a test plan (or working E2E test) that covers:
+   - POST /api/auth/register → user created, emailVerified=null
+   - Verify token created in DB
+   - Verify email would be sent (or isn't — document which)
+   - GET /api/auth/verify?token=xxx → emailVerified set, redirect to dashboard
+8. Commit all findings + any fixes to dev/backend. Small commits, clear messages.
+9. Write status to COORDINATION.md (Agent 1 STATUS section).
+
+**DO NOT** send real emails or modify Cloud Run without Overwatch approval.
+
+---
+
+### Agent 2 — Password Reset Flow
+**Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-frontend`
+**Branch:** `dev/frontend`
+**Task:** Audit and E2E test the password reset flow end-to-end.
+
+1. Find the forgot-password page — check `apps/web/src/app/(auth)/` for forgot-password or reset-password pages
+2. Check `apps/web/src/app/api/auth/` for reset-password API routes
+3. Read `apps/web/src/db/schema/index.ts` — `passwordResetTokens` table exists — is it wired?
+4. Check `apps/web/src/lib/email.ts` — is a reset email being sent? With what transport?
+5. Document the full expected flow: enter email → token created → reset email sent → user clicks link → enter new password → passwordHash updated
+6. Test each step manually by examining code (don't need to hit live site):
+   - Does POST /api/auth/forgot-password exist?
+   - Does GET/POST /api/auth/reset-password?token=xxx exist?
+   - Does it hash the new password with bcrypt?
+7. Identify any broken steps (missing pages, broken email transport, etc.)
+8. Fix any frontend issues (missing pages, broken forms) in your domain
+9. Write your findings + test plan to COORDINATION.md (Agent 2 STATUS section)
+10. Commit all work to dev/frontend with small, clear commits.
+
+**DO NOT** reset real user passwords or modify production DB without Overwatch approval.
+
+---
+
+### Agent 3 — Next.js Upgrade + Sentry Fix
+**Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-desktop`
+**Branch:** `dev/desktop`
+
+> NOTE: Agent 3's domain is normally `agent/` (Go code). For this task only, domain is temporarily extended to `apps/web/package.json`, `apps/web/next.config.*`, and `apps/web/src/instrumentation.ts`. Do NOT touch other frontend files.
+
+**Task A — Next.js security upgrade:**
+1. Check `apps/web/package.json` — confirm current Next.js version (14.2.0)
+2. Run `npm show next versions --json` (or check npmjs.com) to find the latest 14.x patch
+3. Update `apps/web/package.json` Next.js version to latest 14.x patch (stay on 14.x — do NOT jump to 15.x)
+4. Commit the change to dev/desktop
+
+**Task B — Sentry instrumentation.ts migration:**
+1. Check if `apps/web/src/instrumentation.ts` exists
+2. If it exists, read it — look for deprecated `Sentry.init()` call inside `register()` or `onRequestError()` hook
+3. Migrate to the new format per Sentry Next.js docs (Next.js 14.2+ `onRequestError` hook)
+4. If it doesn't exist — check if Sentry is even in `package.json`. If not, just note that and move on.
+5. Commit any changes to dev/desktop.
+
+**Report both results in your COORDINATION.md status section.**
+
+---
+
+### Agent 4 — Onboarding Wizard E2E
+**Worktree:** `C:\Users\Jakeb\sessionforge\.worktrees\agent-qa`
+**Branch:** `dev/qa`
+**Task:** Audit and E2E test the onboarding wizard for first-time users.
+
+1. Check if an onboarding wizard exists — look in `apps/web/src/app/(dashboard)/` for any onboarding, welcome, or setup pages
+2. Check if there's a redirect for new users after first login (in middleware.ts or dashboard/page.tsx)
+3. Check the DB schema — is there an `onboardingCompletedAt` or similar flag on users?
+4. If onboarding wizard exists: write a Playwright E2E test that steps through it
+5. If onboarding wizard does NOT exist: document that it's missing and write a simple placeholder onboarding flow (just a "Welcome, let's get started" page that marks onboarding complete and redirects to dashboard)
+6. Write results to COORDINATION.md (Agent 4 STATUS section)
+7. Write any tests to `tests/e2e/onboarding.spec.ts` on dev/qa
+8. Commit all work to dev/qa.
+
+**DO NOT** run tests against live sessionforge.dev without Overwatch approval logged here.
+
+---
 
 ## 🚨 AGENT 4 ESCALATION — APPROVAL NEEDED TO RUN OAUTH E2E TESTS (2026-02-18)
 
@@ -818,6 +914,21 @@ gcloud run services update sessionforge-production \
                ✅ PRODUCTION: sessionforge-00058-pgv LIVE, health check passing
                ⏳ WS connect test: Perry needs Go installed or API key to run from v0.1.0 binary
                ⏳ Google Cloud Console: verify redirect URI registered (OAuth works but unconfirmed in console)
+
+2026-02-20T00 — SPRINT 1 COMPLETE. master merged. SPRINT 2 ASSIGNED.
+               ✅ dev/integration → master merged (fc66b3d). Pushed to origin/master.
+               ✅ 44 files, 4,056 insertions merged to master. CI will run on master now.
+               Stripe billing E2E DEFERRED to last by Perry.
+
+               SPRINT 2 TASK ASSIGNMENTS:
+               Agent 1 (Backend) → Email verification flow audit + E2E
+               Agent 2 (Frontend) → Password reset flow audit + E2E
+               Agent 3 (Desktop) → Next.js 14.x upgrade + Sentry instrumentation.ts fix
+               Agent 4 (QA) → Onboarding wizard audit + E2E
+
+               All task details in SPRINT 2 TASK DETAILS section above.
+               Agents: read your task, report status in your STATUS section, commit to your branch.
+               DO NOT push to master — branches only. Overwatch will merge on completion.
 ```
 
 ---

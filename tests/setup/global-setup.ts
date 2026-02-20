@@ -29,6 +29,10 @@ export const TEST_EMAIL = `e2e-pd-${RUN_ID}@sessionforge.dev`
 export const TEST_PASSWORD = 'E2eProdPass1!'
 export const TEST_NAME = 'E2E Post-Deploy User'
 
+// Secret header that unlocks the verificationToken in the register response.
+// Must match E2E_TEST_SECRET env var set on Cloud Run.
+const E2E_TEST_SECRET = process.env.E2E_TEST_SECRET ?? ''
+
 async function globalSetup(config: FullConfig) {
   // Ensure auth directory exists
   fs.mkdirSync(AUTH_DIR, { recursive: true })
@@ -60,6 +64,7 @@ async function globalSetup(config: FullConfig) {
   // ------------------------------------------------------------------
   const e2eSecret = process.env.E2E_TEST_SECRET ?? ''
   console.log(`[global-setup] Registering test user: ${TEST_EMAIL}`)
+
   const registerRes = await context.request.post(`${BASE_URL}/api/auth/register`, {
     data: { name: TEST_NAME, email: TEST_EMAIL, password: TEST_PASSWORD },
     headers: {
@@ -75,13 +80,16 @@ async function globalSetup(config: FullConfig) {
       `[global-setup] Failed to register test user (${registerRes.status()}): ${body}`
     )
   }
+
   console.log('[global-setup] Test user registered (or already existed).')
 
   // ------------------------------------------------------------------
   // Step 3: Verify email via token returned in register response
   // ------------------------------------------------------------------
   const registerBody = await registerRes.json().catch(() => ({}))
-  const verificationToken: string | undefined = registerBody.verificationToken
+  // Support both response shapes: { verificationToken } and { data: { verificationToken } }
+  const verificationToken: string | undefined =
+    registerBody.verificationToken ?? registerBody?.data?.verificationToken
 
   if (verificationToken) {
     console.log('[global-setup] Verifying email via token...')
@@ -119,6 +127,19 @@ async function globalSetup(config: FullConfig) {
   // Wait for redirect to dashboard or onboarding (new users hit /onboarding first)
   await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 30_000 })
   console.log('[global-setup] Login successful, on:', page.url())
+
+  // If redirected to /onboarding, complete it via API so saved state lands on /dashboard
+  if (page.url().includes('/onboarding')) {
+    console.log('[global-setup] New user on /onboarding — completing via API...')
+    const onboardingRes = await context.request.post(`${BASE_URL}/api/onboarding/complete`, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!onboardingRes.ok()) {
+      console.warn(`[global-setup] /api/onboarding/complete returned ${onboardingRes.status()} — continuing anyway`)
+    }
+    await page.goto(`${BASE_URL}/dashboard`)
+    await page.waitForURL(/dashboard/, { timeout: 15_000 })
+  }
 
   // Save auth state
   await context.storageState({ path: STORAGE_STATE })

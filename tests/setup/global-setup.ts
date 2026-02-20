@@ -80,8 +80,23 @@ async function globalSetup(config: FullConfig) {
   await page.getByLabel(/password/i).fill(TEST_PASSWORD)
   await page.getByRole('button', { name: /sign in|log in/i }).click()
 
-  // Wait for redirect to dashboard
-  await page.waitForURL(/dashboard/, { timeout: 30_000 })
+  // Wait for redirect — new users land on /onboarding before /dashboard
+  await page.waitForURL(/dashboard|onboarding/, { timeout: 30_000 })
+
+  // If the user was sent to /onboarding (first-login redirect), complete it
+  // via the API so the saved session state has onboarding done and lands on /dashboard
+  if (page.url().includes('/onboarding')) {
+    console.log('[global-setup] New user redirected to /onboarding — completing via API...')
+    const onboardingRes = await context.request.post(`${BASE_URL}/api/onboarding/complete`, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!onboardingRes.ok()) {
+      console.warn(`[global-setup] /api/onboarding/complete returned ${onboardingRes.status()} — continuing anyway`)
+    }
+    await page.goto(`${BASE_URL}/dashboard`)
+    await page.waitForURL(/dashboard/, { timeout: 15_000 })
+  }
+
   console.log('[global-setup] Login successful, on dashboard.')
 
   // Save auth state

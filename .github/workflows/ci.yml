@@ -103,6 +103,33 @@ jobs:
             echo "No testable source on this branch — skipping tests."
           fi
 
+  go-ci:
+    name: Go Agent (build + vet)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - name: go vet
+        run: cd agent && go vet ./...
+
+      - name: Build all platforms
+        run: |
+          cd agent
+          GOOS=linux   GOARCH=amd64 go build -o /dev/null ./cmd/sessionforge
+          GOOS=linux   GOARCH=arm64 go build -o /dev/null ./cmd/sessionforge
+          GOOS=darwin  GOARCH=amd64 go build -o /dev/null ./cmd/sessionforge
+          GOOS=darwin  GOARCH=arm64 go build -o /dev/null ./cmd/sessionforge
+          GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/sessionforge
+        env:
+          CGO_ENABLED: "0"
+
   build:
     name: Build
     runs-on: ubuntu-latest

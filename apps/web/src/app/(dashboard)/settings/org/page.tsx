@@ -6,7 +6,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Building2, Users, Save, CreditCard, Check, Infinity } from 'lucide-react'
+import { Building2, Users, Save, CreditCard, Check, Infinity, BarChart3 } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
+import type { UsageData } from '@/app/api/usage/route'
 
 type OrgMember = { id: string; name: string | null; email: string; role: string }
 
@@ -50,6 +52,7 @@ export default function OrgSettingsPage() {
   const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
   const [members, setMembers] = useState<OrgMember[]>([])
+  const [usage, setUsage] = useState<UsageData | null>(null)
   const { data: session } = useSession()
   const currentPlan = (session?.user as { plan?: string } | undefined)?.plan ?? 'free'
 
@@ -107,6 +110,11 @@ export default function OrgSettingsPage() {
     fetch('/api/org/members')
       .then((r) => r.json())
       .then((json) => { if (json.data) setMembers(json.data) })
+      .catch(() => {})
+
+    fetch('/api/usage')
+      .then((r) => r.json())
+      .then((json) => { if (json.data) setUsage(json.data) })
       .catch(() => {})
   }, [reset])
 
@@ -215,7 +223,7 @@ export default function OrgSettingsPage() {
       </Card>
 
       {/* Billing / Plan */}
-      <Card>
+      <Card id="plan-billing-section">
         <CardHeader>
           <div className="flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-purple-400" />
@@ -291,6 +299,90 @@ export default function OrgSettingsPage() {
           </div>
         </CardContent>
       </Card>
+      {/* Usage metering */}
+      {usage && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-purple-400" />
+              <CardTitle className="text-base">Usage</CardTitle>
+            </div>
+            <CardDescription>Current usage against your {usage.plan} plan limits</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Machines */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Machines</span>
+                <span className="text-white font-medium">
+                  {usage.machines.current}
+                  {usage.machines.limit === -1 ? ' / ∞' : ` / ${usage.machines.limit}`}
+                </span>
+              </div>
+              {usage.machines.limit !== -1 && (
+                <Progress
+                  value={(usage.machines.current / usage.machines.limit) * 100}
+                  indicatorClassName={
+                    usage.machines.current / usage.machines.limit >= 0.9
+                      ? 'bg-red-400'
+                      : usage.machines.current / usage.machines.limit >= 0.7
+                        ? 'bg-yellow-400'
+                        : 'bg-purple-500'
+                  }
+                />
+              )}
+            </div>
+
+            {/* Active sessions */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Active Sessions</span>
+                <span className="text-white font-medium">
+                  {usage.sessions.current}
+                  {usage.sessions.limit === -1 ? ' / ∞' : ` / ${usage.sessions.limit}`}
+                </span>
+              </div>
+              {usage.sessions.limit !== -1 && (
+                <Progress
+                  value={(usage.sessions.current / usage.sessions.limit) * 100}
+                  indicatorClassName={
+                    usage.sessions.current / usage.sessions.limit >= 0.9
+                      ? 'bg-red-400'
+                      : usage.sessions.current / usage.sessions.limit >= 0.7
+                        ? 'bg-yellow-400'
+                        : 'bg-purple-500'
+                  }
+                />
+              )}
+            </div>
+
+            {/* API keys */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-400">API Keys</span>
+              <span className="text-white font-medium">{usage.apiKeys.current}</span>
+            </div>
+
+            {/* Overage alert */}
+            {(
+              (usage.machines.limit !== -1 && usage.machines.current / usage.machines.limit >= 0.8) ||
+              (usage.sessions.limit !== -1 && usage.sessions.current / usage.sessions.limit >= 0.8)
+            ) && (
+              <div className="flex items-center justify-between rounded-lg bg-yellow-500/5 border border-yellow-500/20 px-3 py-2">
+                <span className="text-xs text-yellow-300">Approaching plan limits</span>
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('plan-billing-section')
+                    el?.scrollIntoView({ behavior: 'smooth' })
+                  }}
+                  className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
+                >
+                  Upgrade →
+                </button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

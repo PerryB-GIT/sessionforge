@@ -2,7 +2,7 @@
  * E2E tests for billing and plan upgrade flows
  *
  * Covers:
- *   - Viewing current plan on /dashboard/settings/org
+ *   - Viewing current plan on /settings/org
  *   - Upgrade plan → Stripe Checkout redirect (real sandbox, verifies URL shape)
  *   - Plan feature comparison display
  *   - Billing portal access for pro users
@@ -19,7 +19,7 @@ import crypto from 'crypto'
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'https://sessionforge.dev'
 const STRIPE_CHECKOUT_URL_PATTERN = /checkout\.stripe\.com/
-const BILLING_PAGE = `${BASE_URL}/dashboard/settings/org`
+const BILLING_PAGE = `${BASE_URL}/settings/org`
 
 // ---------------------------------------------------------------------------
 // Auth helper
@@ -35,7 +35,7 @@ async function loginAsTestUser(page: Page, plan: 'free' | 'pro' = 'free') {
   await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 20000 })
   // If landed on onboarding, navigate directly to billing page
   if (page.url().includes('/onboarding')) {
-    await page.goto(`${BASE_URL}/dashboard/settings/org`)
+    await page.goto(`${BASE_URL}/settings/org`)
   }
 }
 
@@ -58,9 +58,9 @@ test.describe('Billing page (free user)', () => {
   test('billing page displays Pro and Team plan options', async ({ page }) => {
     await page.goto(BILLING_PAGE)
     await expect(page.getByText(/pro/i).first()).toBeVisible({ timeout: 8000 })
-    await expect(page.getByText(/\$19/i)).toBeVisible({ timeout: 8000 })
+    await expect(page.getByText(/\$19\/mo/i).first()).toBeVisible({ timeout: 8000 })
     await expect(page.getByText(/team/i).first()).toBeVisible({ timeout: 8000 })
-    await expect(page.getByText(/\$49/i)).toBeVisible({ timeout: 8000 })
+    await expect(page.getByText(/\$49\/mo/i).first()).toBeVisible({ timeout: 8000 })
   })
 
   test('upgrade button is visible for free plan users', async ({ page }) => {
@@ -87,9 +87,9 @@ test.describe('Billing page (free user)', () => {
       expect(postData).toContain('pro')
     }
 
-    // Should either navigate to Stripe checkout or show a redirect
+    // Should either navigate to Stripe checkout, or stay on settings if Stripe opens in new tab
     await page.waitForURL(
-      url => STRIPE_CHECKOUT_URL_PATTERN.test(url.href) || url.href.includes('/dashboard'),
+      url => STRIPE_CHECKOUT_URL_PATTERN.test(url.href) || url.href.includes('/settings/org') || url.href.includes('/dashboard'),
       { timeout: 15000 }
     )
   })

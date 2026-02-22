@@ -8,6 +8,7 @@ import { CookieConsent } from '@/components/CookieConsent'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://sessionforge.dev'),
   title: 'SessionForge — Remote AI Session Management',
   description:
     'Manage all your AI coding sessions from anywhere. Monitor, start, stop, and get alerts on every Claude Code instance across all your machines.',
@@ -16,6 +17,23 @@ export const metadata: Metadata = {
     title: 'SessionForge',
     description: 'Manage Claude from anywhere',
     type: 'website',
+    url: 'https://sessionforge.dev',
+    siteName: 'SessionForge',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'SessionForge — Remote AI Session Management',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'SessionForge — Remote AI Session Management',
+    description:
+      'Manage all your AI coding sessions from anywhere. Monitor, start, stop, and get alerts on every Claude Code instance across all your machines.',
+    images: ['/og-image.png'],
   },
 }
 

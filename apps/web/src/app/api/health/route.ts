@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
 import { sql } from 'drizzle-orm'
+import { logger } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,9 +13,10 @@ export async function GET() {
   try {
     await db.execute(sql`SELECT 1`)
     checks.db = 'ok'
-  } catch {
+  } catch (err) {
     checks.db = 'error'
     healthy = false
+    logger.error('Health check: DB unreachable', { error: String(err) })
   }
 
   // Redis check — only if Upstash env vars are present
@@ -25,9 +27,10 @@ export async function GET() {
       const { redis } = await import('@/lib/redis')
       await (redis as any).set('health:ping', '1', { ex: 10 })
       checks.redis = 'ok'
-    } catch {
+    } catch (err) {
       checks.redis = 'error'
       healthy = false
+      logger.error('Health check: Redis unreachable', { error: String(err) })
     }
   } else {
     checks.redis = 'skip'

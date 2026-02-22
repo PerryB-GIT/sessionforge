@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { Resend } from 'resend'
 import { db, users, organizations } from '@/db'
 import type { PlanTier } from '@sessionforge/shared-types'
+import { logger } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
       process.env.STRIPE_WEBHOOK_SECRET!
     )
   } catch (err) {
-    console.error('[stripe/webhook] signature verification failed:', err)
+    logger.error('Stripe webhook signature verification failed', { error: String(err) })
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
   }
 
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest) {
   </table>
 </body>
 </html>`,
-            }).catch((err) => console.error('[stripe/webhook] failed to send payment failure email:', err))
+            }).catch((err) => logger.error('Stripe webhook: payment failure email send failed', { error: String(err) }))
           }
         }
         break
@@ -151,7 +152,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ received: true }, { status: 200 })
   } catch (err) {
-    console.error('[stripe/webhook] error processing event:', event.type, err)
+    logger.error('Stripe webhook handler failed', { eventType: event.type, error: String(err) })
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }

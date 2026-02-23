@@ -35,6 +35,9 @@ export const metadata: Metadata = {
       'Manage all your AI coding sessions from anywhere. Monitor, start, stop, and get alerts on every Claude Code instance across all your machines.',
     images: ['/og-image.png'],
   },
+  alternates: {
+    canonical: 'https://sessionforge.dev',
+  },
 }
 
 export default function RootLayout({

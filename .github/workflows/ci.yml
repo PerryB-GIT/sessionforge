@@ -114,7 +114,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: agent/go.mod
-          cache-dependency-path: agent/go.sum
+
+      - name: go mod tidy
+        run: cd agent && go mod tidy
 
       - name: go vet
         run: cd agent && go vet ./...

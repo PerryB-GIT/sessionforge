@@ -23,15 +23,21 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'https://sessionforge.dev'
 const AUTH_DIR = path.join(__dirname, '.auth')
 export const STORAGE_STATE = path.join(AUTH_DIR, 'user.json')
 
-// Deterministic but unique-per-run test credentials
-const RUN_ID = Date.now()
-export const TEST_EMAIL = `e2e-pd-${RUN_ID}@sessionforge.dev`
-export const TEST_PASSWORD = 'E2eProdPass1!'
-export const TEST_NAME = 'E2E Post-Deploy User'
-
 // Secret header that unlocks the verificationToken in the register response.
 // Must match E2E_TEST_SECRET env var set on Cloud Run.
 const E2E_TEST_SECRET = process.env.E2E_TEST_SECRET ?? ''
+
+// If E2E_TEST_SECRET is not available, fall back to the pre-seeded fallback user.
+// Otherwise create a fresh user for this run.
+const USE_FALLBACK_USER = !E2E_TEST_SECRET
+const RUN_ID = Date.now()
+export const TEST_EMAIL = USE_FALLBACK_USER
+  ? (process.env.E2E_FALLBACK_EMAIL ?? 'e2e-fallback@sessionforge.dev')
+  : (process.env.E2E_TEST_EMAIL ?? `e2e-pd-${RUN_ID}@sessionforge.dev`)
+export const TEST_PASSWORD = USE_FALLBACK_USER
+  ? (process.env.E2E_FALLBACK_PASSWORD ?? 'E2eTestPass123!')
+  : 'E2eProdPass1!'
+export const TEST_NAME = 'E2E Post-Deploy User'
 
 async function globalSetup(config: FullConfig) {
   // Ensure auth directory exists
@@ -60,58 +66,53 @@ async function globalSetup(config: FullConfig) {
   console.log('[global-setup] Site is healthy.')
 
   // ------------------------------------------------------------------
-  // Step 2: Register test user (with E2E secret to get verificationToken)
+  // Step 2: Register test user (skip if using pre-seeded fallback user)
   // ------------------------------------------------------------------
-  const e2eSecret = process.env.E2E_TEST_SECRET ?? ''
-  console.log(`[global-setup] Registering test user: ${TEST_EMAIL}`)
-
-  const registerRes = await context.request.post(`${BASE_URL}/api/auth/register`, {
-    data: { name: TEST_NAME, email: TEST_EMAIL, password: TEST_PASSWORD },
-    headers: {
-      'Content-Type': 'application/json',
-      'x-e2e-test-secret': e2eSecret,
-    },
-  })
-
-  if (!registerRes.ok() && registerRes.status() !== 409) {
-    const body = await registerRes.text()
-    await browser.close()
-    throw new Error(
-      `[global-setup] Failed to register test user (${registerRes.status()}): ${body}`
-    )
-  }
-
-  console.log('[global-setup] Test user registered (or already existed).')
-
-  // ------------------------------------------------------------------
-  // Step 3: Verify email via token returned in register response
-  // ------------------------------------------------------------------
-  const registerBody = await registerRes.json().catch(() => ({}))
-  // Support both response shapes: { verificationToken } and { data: { verificationToken } }
-  const verificationToken: string | undefined =
-    registerBody.verificationToken ?? registerBody?.data?.verificationToken
-
-  if (verificationToken) {
-    console.log('[global-setup] Verifying email via token...')
-    const verifyRes = await context.request.get(
-      `${BASE_URL}/api/auth/verify-email?token=${verificationToken}`,
-      { maxRedirects: 0 }
-    )
-    // Expect 302 redirect to /login?verified=1 — that's success
-    if (verifyRes.status() !== 302 && !verifyRes.ok()) {
-      console.warn(`[global-setup] Email verify returned ${verifyRes.status()} — continuing anyway`)
-    } else {
-      console.log('[global-setup] Email verified.')
-    }
+  if (USE_FALLBACK_USER) {
+    console.log(`[global-setup] E2E_TEST_SECRET not set — using pre-seeded fallback user: ${TEST_EMAIL}`)
   } else {
-    // 409 = user already existed (from a previous run), email already verified
-    if (registerRes.status() === 409) {
+    console.log(`[global-setup] Registering test user: ${TEST_EMAIL}`)
+
+    const registerRes = await context.request.post(`${BASE_URL}/api/auth/register`, {
+      data: { name: TEST_NAME, email: TEST_EMAIL, password: TEST_PASSWORD },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-e2e-test-secret': E2E_TEST_SECRET,
+      },
+    })
+
+    if (!registerRes.ok() && registerRes.status() !== 409) {
+      const body = await registerRes.text()
+      await browser.close()
+      throw new Error(
+        `[global-setup] Failed to register test user (${registerRes.status()}): ${body}`
+      )
+    }
+
+    console.log('[global-setup] Test user registered (or already existed).')
+
+    // ------------------------------------------------------------------
+    // Step 3: Verify email via token returned in register response
+    // ------------------------------------------------------------------
+    const registerBody = await registerRes.json().catch(() => ({}))
+    const verificationToken: string | undefined =
+      registerBody.verificationToken ?? registerBody?.data?.verificationToken
+
+    if (verificationToken) {
+      console.log('[global-setup] Verifying email via token...')
+      const verifyRes = await context.request.get(
+        `${BASE_URL}/api/auth/verify-email?token=${verificationToken}`,
+        { maxRedirects: 0 }
+      )
+      if (verifyRes.status() !== 302 && !verifyRes.ok()) {
+        console.warn(`[global-setup] Email verify returned ${verifyRes.status()} — continuing anyway`)
+      } else {
+        console.log('[global-setup] Email verified.')
+      }
+    } else if (registerRes.status() === 409) {
       console.log('[global-setup] User already existed — assuming email already verified.')
     } else {
-      console.warn(
-        '[global-setup] No verificationToken in register response. ' +
-          'E2E_TEST_SECRET may not be set or does not match. Login may fail.'
-      )
+      console.warn('[global-setup] No verificationToken in register response. Login may fail.')
     }
   }
 

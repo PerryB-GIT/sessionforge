@@ -160,8 +160,9 @@ test.describe('Magic link auth', () => {
     })
   })
 
-  test('rate limit: 4th magic-link request is throttled', async ({ page }) => {
-    // This test verifies the Upstash rate limit (3/hour per email) is active.
+  test('rate limit: 4th forgot-password request is throttled', async ({ page }) => {
+    // This test verifies the Upstash rate limit (3/hour per email) is active
+    // on the /api/auth/forgot-password endpoint.
     // Skip if Redis is not configured (rate limiting requires Upstash).
     const health = await page.request.get(`${BASE_URL}/api/health`)
     const healthBody = await health.json().catch(() => ({ checks: {} }))
@@ -170,16 +171,13 @@ test.describe('Magic link auth', () => {
       return
     }
 
+    // Use a unique email per run so we don't collide with previous test runs
+    const rateLimitEmail = `rl-test-${Date.now()}@sessionforge.dev`
     const responses: number[] = []
     for (let i = 0; i < 4; i++) {
-      const res = await page.request.post(`${BASE_URL}/api/auth/signin/resend`, {
-        data: { email: TEST_EMAIL(), csrfToken: 'test', callbackUrl: `${BASE_URL}/dashboard` },
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        form: {
-          email: TEST_EMAIL(),
-          csrfToken: 'test',
-          callbackUrl: `${BASE_URL}/dashboard`,
-        },
+      const res = await page.request.post(`${BASE_URL}/api/auth/forgot-password`, {
+        data: { email: rateLimitEmail },
+        headers: { 'Content-Type': 'application/json' },
       })
       responses.push(res.status())
     }

@@ -129,7 +129,8 @@ async function globalSetup(config: FullConfig) {
   await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 30_000 })
   console.log('[global-setup] Login successful, on:', page.url())
 
-  // If redirected to /onboarding, complete it via API so saved state lands on /dashboard
+  // If redirected to /onboarding, complete it via API then sign out and back in
+  // so the session JWT refreshes and picks up onboardingCompletedAt.
   if (page.url().includes('/onboarding')) {
     console.log('[global-setup] New user on /onboarding — completing via API...')
     const onboardingRes = await context.request.post(`${BASE_URL}/api/onboarding/complete`, {
@@ -138,8 +139,16 @@ async function globalSetup(config: FullConfig) {
     if (!onboardingRes.ok()) {
       console.warn(`[global-setup] /api/onboarding/complete returned ${onboardingRes.status()} — continuing anyway`)
     }
-    await page.goto(`${BASE_URL}/dashboard`)
-    await page.waitForURL(/dashboard/, { timeout: 15_000 })
+    // Sign out, then sign back in so the new session JWT reflects onboardingCompletedAt
+    await context.request.get(`${BASE_URL}/api/auth/signout`)
+    await context.clearCookies()
+    await page.goto(`${BASE_URL}/login`)
+    await page.waitForSelector('input[type="email"], [aria-label*="email" i]', { timeout: 15_000 })
+    await page.getByLabel(/email/i).fill(TEST_EMAIL)
+    await page.getByLabel(/password/i).fill(TEST_PASSWORD)
+    await page.getByRole('button', { name: /sign in|log in/i }).click()
+    await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 20_000 })
+    console.log('[global-setup] After onboarding complete, on:', page.url())
   }
 
   // Save auth state

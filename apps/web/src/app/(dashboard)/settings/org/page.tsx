@@ -170,7 +170,7 @@ export default function OrgSettingsPage() {
               <Label htmlFor="slug">URL Slug</Label>
               <div className="flex items-center gap-0">
                 <span className="flex h-9 items-center rounded-l-lg border border-r-0 border-[#1e1e2e] bg-[#1e1e2e] px-3 text-xs text-gray-500 shrink-0">
-                  app.sessionforge.io/
+                  sessionforge.dev/
                 </span>
                 <Input
                   id="slug"

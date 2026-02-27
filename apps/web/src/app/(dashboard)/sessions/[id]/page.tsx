@@ -28,7 +28,6 @@ export default function SessionDetailPage() {
   const isConnected = wsStatus === 'connected'
 
   function handleSendInput(data: string) {
-    // STUB: Send input through dashboard WS
     sendMessage({
       type: 'session_input',
       sessionId: id,

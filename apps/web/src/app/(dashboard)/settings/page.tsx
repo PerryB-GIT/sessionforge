@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -34,13 +35,17 @@ type ProfileForm = z.infer<typeof profileSchema>
 type PasswordForm = z.infer<typeof passwordSchema>
 
 export default function SettingsPage() {
+  const { data: session } = useSession()
   const [showPassword, setShowPassword] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { name: 'Perry Bailes', email: 'perry@example.com' },
+    defaultValues: {
+      name: session?.user?.name ?? '',
+      email: session?.user?.email ?? '',
+    },
   })
 
   const passwordForm = useForm<PasswordForm>({
@@ -50,8 +55,16 @@ export default function SettingsPage() {
   async function saveProfile(data: ProfileForm) {
     setIsSavingProfile(true)
     try {
-      // STUB: PATCH /api/user { name: data.name, email: data.email }
-      await new Promise((r) => setTimeout(r, 800))
+      const res = await fetch('/api/user', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.name }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to save profile')
+        return
+      }
       toast.success('Profile updated!')
     } finally {
       setIsSavingProfile(false)
@@ -61,12 +74,18 @@ export default function SettingsPage() {
   async function changePassword(data: PasswordForm) {
     setIsChangingPassword(true)
     try {
-      // STUB: POST /api/auth/change-password { currentPassword, newPassword }
-      await new Promise((r) => setTimeout(r, 800))
+      const res = await fetch('/api/user/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: data.currentPassword, newPassword: data.newPassword }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to change password')
+        return
+      }
       toast.success('Password changed!')
       passwordForm.reset()
-    } catch {
-      toast.error('Current password is incorrect')
     } finally {
       setIsChangingPassword(false)
     }

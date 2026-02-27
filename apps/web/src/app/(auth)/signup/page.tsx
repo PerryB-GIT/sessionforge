@@ -85,7 +85,7 @@ export default function SignupPage() {
             <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
             <Input
               id="name"
-              placeholder="Perry Bailes"
+              placeholder="Jane Smith"
               className="pl-9"
               error={errors.name?.message}
               {...register('name')}

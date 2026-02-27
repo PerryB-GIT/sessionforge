@@ -11,12 +11,12 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Zap,
   Activity,
   CreditCard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store'
+import { Logo } from '@/components/ui/Logo'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -41,8 +41,8 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-14 items-center border-b border-[#1e1e2e] px-4">
         <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500 shadow-lg shadow-purple-500/30">
-            <Zap className="h-4 w-4 text-white" />
+          <div className="shrink-0 shadow-lg shadow-purple-500/30">
+            <Logo size={32} />
           </div>
           {!collapsed && (
             <span className="text-sm font-semibold text-white whitespace-nowrap">

@@ -6,7 +6,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Building2, Users, Save, CreditCard, Check, Infinity, BarChart3 } from 'lucide-react'
+import { Building2, Users, Save, CreditCard, Check, Infinity, BarChart3, Mail } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import type { UsageData } from '@/app/api/usage/route'
 
 type OrgMember = { id: string; name: string | null; email: string; role: string }
@@ -40,6 +48,12 @@ const orgSchema = z.object({
 
 type OrgFormData = z.infer<typeof orgSchema>
 
+const inviteSchema = z.object({
+  email: z.string().email('Enter a valid email address'),
+})
+
+type InviteFormData = z.infer<typeof inviteSchema>
+
 const PLANS = [
   { name: 'Free',       price: 0,   machines: 1,  sessions: 3  },
   { name: 'Pro',        price: 19,  machines: 5,  sessions: -1 },
@@ -53,8 +67,20 @@ export default function OrgSettingsPage() {
   const [portalLoading, setPortalLoading] = useState(false)
   const [members, setMembers] = useState<OrgMember[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [isInviting, setIsInviting] = useState(false)
   const { data: session } = useSession()
   const currentPlan = (session?.user as { plan?: string } | undefined)?.plan ?? 'free'
+
+  const {
+    register: registerInvite,
+    handleSubmit: handleInviteSubmit,
+    reset: resetInvite,
+    formState: { errors: inviteErrors },
+  } = useForm<InviteFormData>({
+    resolver: zodResolver(inviteSchema),
+    defaultValues: { email: '' },
+  })
 
   async function handleUpgrade(planName: string) {
     setUpgradingPlan(planName)
@@ -137,6 +163,41 @@ export default function OrgSettingsPage() {
     }
   }
 
+  async function sendInvite(data: InviteFormData) {
+    setIsInviting(true)
+    try {
+      const res = await fetch('/api/org/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.email }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        // If the endpoint doesn't support POST yet, surface a friendly message
+        if (res.status === 405 || res.status === 404) {
+          toast.info('Invitations are coming soon. We\'ll notify you when they\'re ready.')
+        } else {
+          toast.error(json.error?.message ?? 'Failed to send invitation')
+        }
+        return
+      }
+      toast.success(`Invitation sent to ${data.email}`)
+      setInviteOpen(false)
+      resetInvite()
+    } catch {
+      toast.error('Failed to send invitation')
+    } finally {
+      setIsInviting(false)
+    }
+  }
+
+  function handleInviteClose(open: boolean) {
+    if (!open) {
+      resetInvite()
+    }
+    setInviteOpen(open)
+  }
+
   return (
     <div className="space-y-6 max-w-2xl">
       <Suspense>
@@ -170,7 +231,7 @@ export default function OrgSettingsPage() {
               <Label htmlFor="slug">URL Slug</Label>
               <div className="flex items-center gap-0">
                 <span className="flex h-9 items-center rounded-l-lg border border-r-0 border-[#1e1e2e] bg-[#1e1e2e] px-3 text-xs text-gray-500 shrink-0">
-                  sessionforge.dev/
+                  app.sessionforge.io/
                 </span>
                 <Input
                   id="slug"
@@ -196,7 +257,10 @@ export default function OrgSettingsPage() {
               <Users className="h-4 w-4 text-purple-400" />
               <CardTitle className="text-base">Team Members</CardTitle>
             </div>
-            <Button size="sm">Invite Member</Button>
+            <Button size="sm" onClick={() => setInviteOpen(true)}>
+              <Mail className="h-3.5 w-3.5" />
+              Invite Member
+            </Button>
           </div>
           <CardDescription>Manage access to your organization</CardDescription>
         </CardHeader>
@@ -221,6 +285,48 @@ export default function OrgSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Invite Member dialog */}
+      <Dialog open={inviteOpen} onOpenChange={handleInviteClose}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite a team member</DialogTitle>
+            <DialogDescription>
+              Enter their email address. They will receive an invitation to join your organization.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleInviteSubmit(sendInvite)} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="inviteEmail">Email address</Label>
+              <Input
+                id="inviteEmail"
+                type="email"
+                placeholder="colleague@example.com"
+                error={inviteErrors.email?.message}
+                autoFocus
+                {...registerInvite('email')}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleInviteClose(false)}
+                disabled={isInviting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" isLoading={isInviting}>
+                <Mail className="h-3.5 w-3.5" />
+                Send Invite
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Billing / Plan */}
       <Card id="plan-billing-section">

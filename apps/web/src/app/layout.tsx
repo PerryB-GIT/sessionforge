@@ -13,6 +13,10 @@ export const metadata: Metadata = {
   description:
     'Manage all your AI coding sessions from anywhere. Monitor, start, stop, and get alerts on every Claude Code instance across all your machines.',
   keywords: ['claude code', 'remote sessions', 'AI development', 'machine management'],
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+  },
   openGraph: {
     title: 'SessionForge',
     description: 'Manage Claude from anywhere',
@@ -21,7 +25,7 @@ export const metadata: Metadata = {
     siteName: 'SessionForge',
     images: [
       {
-        url: '/og-image.png',
+        url: '/og-image.svg',
         width: 1200,
         height: 630,
         alt: 'SessionForge — Remote AI Session Management',
@@ -33,7 +37,7 @@ export const metadata: Metadata = {
     title: 'SessionForge — Remote AI Session Management',
     description:
       'Manage all your AI coding sessions from anywhere. Monitor, start, stop, and get alerts on every Claude Code instance across all your machines.',
-    images: ['/og-image.png'],
+    images: ['/og-image.svg'],
   },
   alternates: {
     canonical: 'https://sessionforge.dev',

@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { ArrowRight, Check, Monitor, Terminal, Globe, Zap, Shield, BarChart3, Users, Building2 } from 'lucide-react'
+import { ArrowRight, Check, Monitor, Terminal, Globe, Zap, Shield, BarChart3, Users, Building2, Bell } from 'lucide-react'
+import { Logo } from '@/components/ui/Logo'
 
 const features = [
   {
@@ -21,6 +22,12 @@ const features = [
     title: 'Real-time Terminal',
     description:
       'Full xterm.js terminal with WebSocket I/O. Send input, view output, resize — exactly like you\'re there.',
+  },
+  {
+    icon: Bell,
+    title: 'Instant Alerts',
+    description:
+      'Get notified when sessions crash, machines go offline, or resource limits are reached. Never miss a critical event.',
   },
 ]
 
@@ -156,9 +163,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-14 items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500">
-                <Zap className="h-4 w-4 text-white" />
-              </div>
+              <Logo size={28} />
               <span className="text-sm font-semibold text-white">SessionForge</span>
             </div>
             <div className="hidden sm:flex items-center gap-6">
@@ -204,7 +209,7 @@ export default function LandingPage() {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/5 px-3 py-1 text-xs text-purple-300 mb-6">
                 <span className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse" />
-                Now in public beta
+                Now available
               </div>
               <h1 className="text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
                 Manage Claude{' '}
@@ -226,7 +231,7 @@ export default function LandingPage() {
                   href="/docs"
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#1e1e2e] px-6 py-3 text-base font-medium text-gray-300 hover:bg-[#1e1e2e] hover:text-white transition-colors"
                 >
-                  View docs
+                  Documentation
                 </Link>
               </div>
 
@@ -273,7 +278,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature) => {
               const Icon = feature.icon
               return (
@@ -409,9 +414,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-purple-500">
-                <Zap className="h-3.5 w-3.5 text-white" />
-              </div>
+              <Logo size={24} />
               <span className="text-sm font-medium text-white">SessionForge</span>
             </div>
             <div className="flex gap-6">

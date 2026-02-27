@@ -1,12 +1,16 @@
 #!/bin/sh
 # SessionForge Agent — Linux/macOS one-line installer
-# Usage: curl -sSL https://sessionforge.dev/install.sh | sh
+#
+# Basic install (prompts for key):
+#   curl -fsSL https://get.sessionforge.io/agent | sh
+#
+# Fully automated (key inline):
+#   curl -fsSL https://get.sessionforge.io/agent | bash -s -- --key sf_live_xxxxx
 set -e
 
 REPO="PerryB-GIT/sessionforge"
 BINARY="sessionforge"
 INSTALL_DIR="/usr/local/bin"
-CONFIG_DIR="${HOME}/.sessionforge"
 
 # ── Colours ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -18,6 +22,16 @@ RESET='\033[0m'
 log()  { printf "${CYAN}[sessionforge]${RESET} %s\n" "$1"; }
 ok()   { printf "${GREEN}[sessionforge]${RESET} %s\n" "$1"; }
 err()  { printf "${RED}[sessionforge] ERROR:${RESET} %s\n" "$1" >&2; exit 1; }
+
+# ── Parse flags ────────────────────────────────────────────────────────────────
+API_KEY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --key)   API_KEY="$2"; shift 2 ;;
+    --key=*) API_KEY="${1#--key=}"; shift ;;
+    *)       shift ;;
+  esac
+done
 
 # ── Detect OS ──────────────────────────────────────────────────────────────────
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -50,21 +64,19 @@ fi
 LATEST_JSON=$($FETCH "https://api.github.com/repos/${REPO}/releases/latest")
 VERSION=$(printf '%s' "$LATEST_JSON" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
-if [ -z "$VERSION" ]; then
-  err "Could not determine latest version. Check your internet connection."
-fi
-
+[ -z "$VERSION" ] && err "Could not determine latest version. Check your internet connection."
 log "Latest version: ${VERSION}"
 
 # ── Download and extract ───────────────────────────────────────────────────────
 ARCHIVE="sessionforge_${OS}_${ARCH}.tar.gz"
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
 TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
 
-log "Downloading ${DOWNLOAD_URL}..."
+log "Downloading ${ARCHIVE}..."
 $FETCH "$DOWNLOAD_URL" | tar xz -C "$TMP_DIR"
 
-# ── Install ────────────────────────────────────────────────────────────────────
+# ── Install binary ─────────────────────────────────────────────────────────────
 if [ -w "$INSTALL_DIR" ]; then
   SUDO=""
 else
@@ -74,20 +86,41 @@ fi
 
 $SUDO mv "${TMP_DIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
 $SUDO chmod +x "${INSTALL_DIR}/${BINARY}"
-rm -rf "$TMP_DIR"
 
 ok "SessionForge Agent ${VERSION} installed to ${INSTALL_DIR}/${BINARY}"
 
-# ── Verify ─────────────────────────────────────────────────────────────────────
+# ── Verify binary is in PATH ───────────────────────────────────────────────────
 if ! command -v sessionforge >/dev/null 2>&1; then
   printf "\n${RED}Warning:${RESET} ${INSTALL_DIR} is not in your PATH.\n"
   printf "Add this to your shell profile:\n"
   printf "  export PATH=\"\$PATH:${INSTALL_DIR}\"\n\n"
+  SF="${INSTALL_DIR}/${BINARY}"
+else
+  SF="sessionforge"
 fi
 
-# ── Next steps ─────────────────────────────────────────────────────────────────
-printf "\n${BOLD}Next steps:${RESET}\n"
-printf "  1. Get your API key from ${CYAN}https://sessionforge.dev/dashboard/api-keys${RESET}\n"
-printf "  2. Run: ${BOLD}sessionforge auth login --key sf_live_xxxxx${RESET}\n"
-printf "  3. Run: ${BOLD}sessionforge service install${RESET}  (start on boot)\n"
-printf "  4. Run: ${BOLD}sessionforge status${RESET}           (verify connection)\n\n"
+# ── Authenticate if key was provided ──────────────────────────────────────────
+if [ -n "$API_KEY" ]; then
+  log "Authenticating with API key..."
+  "$SF" auth login --key "$API_KEY" || err "Authentication failed. Check your API key and try again."
+  ok "Authenticated successfully."
+
+  # ── Install as system service ────────────────────────────────────────────────
+  log "Installing as system service..."
+  if "$SF" service install 2>/dev/null; then
+    "$SF" service start 2>/dev/null || true
+    ok "Service installed and started."
+  else
+    log "Service install requires elevated permissions. Run:"
+    printf "  sudo ${SF} service install\n"
+  fi
+
+  printf "\n${GREEN}${BOLD}Setup complete!${RESET}\n"
+  "$SF" status
+else
+  printf "\n${BOLD}Next steps:${RESET}\n"
+  printf "  1. Get your API key from ${CYAN}https://sessionforge.dev/dashboard/api-keys${RESET}\n"
+  printf "  2. Run: ${BOLD}sessionforge auth login --key sf_live_xxxxx${RESET}\n"
+  printf "  3. Run: ${BOLD}sessionforge service install${RESET}  (start on boot)\n"
+  printf "  4. Run: ${BOLD}sessionforge status${RESET}           (verify connection)\n\n"
+fi

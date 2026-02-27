@@ -30,6 +30,38 @@ Add the following records in the Cloudflare DNS dashboard:
 > **Note:** Replace `HASH` in Cloud Run URLs with the actual hash from your deployment.
 > Find it with: `gcloud run services describe sessionforge-production --region us-central1 --format "value(status.url)"`
 
+### get.sessionforge.io (install shortcut domain)
+
+`get.sessionforge.io` is the short install URL used in the one-liner commands shown in the dashboard.
+It must be added as a **separate zone** in Cloudflare (different domain registrar — `.io`).
+
+**DNS record (in the sessionforge.io zone):**
+
+| Type  | Name | Value                                                        | Proxy | Notes                          |
+|-------|------|--------------------------------------------------------------|-------|-------------------------------|
+| CNAME | `get` | `sessionforge-production-HASH-uc.a.run.app`                 | ON    | Same Cloud Run app as .dev     |
+
+**Cloud Run custom domain:**
+Add `get.sessionforge.io` as a custom domain mapping in Cloud Run so it routes to the same service:
+```
+gcloud run domain-mappings create --service sessionforge-production --domain get.sessionforge.io --region us-central1
+```
+
+**What it serves (handled by Next.js app):**
+- `GET /agent` → Linux/macOS shell installer (route handler at `app/agent/route.ts`)
+- `GET /agent/install.ps1` → Windows PowerShell installer (static file at `public/agent/install.ps1`)
+
+**One-liner install commands:**
+```sh
+# Linux/macOS
+curl -fsSL https://get.sessionforge.io/agent | bash -s -- --key sf_live_xxxxx
+
+# Windows (PowerShell)
+iwr -useb https://get.sessionforge.io/agent/install.ps1 | iex; Install-SessionForge -ApiKey 'sf_live_xxxxx'
+```
+
+---
+
 ### Root Domain CNAME Caveat
 
 Cloudflare's CNAME Flattening feature automatically handles root domain CNAME records

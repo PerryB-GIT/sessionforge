@@ -2,10 +2,10 @@
 # SessionForge Agent — Linux/macOS one-line installer
 #
 # Basic install (prompts for key):
-#   curl -fsSL https://get.sessionforge.io/agent | sh
+#   curl -fsSL https://sessionforge.dev/agent | sh
 #
 # Fully automated (key inline):
-#   curl -fsSL https://get.sessionforge.io/agent | bash -s -- --key sf_live_xxxxx
+#   curl -fsSL https://sessionforge.dev/agent | bash -s -- --key sf_live_xxxxx
 set -e
 
 REPO="PerryB-GIT/sessionforge"

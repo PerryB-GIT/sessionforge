@@ -95,7 +95,7 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 
 	// Remove existing service entry if present so reinstall works cleanly.
 	if existing, err := m.OpenService(serviceName); err == nil {
-		_ = existing.Control(svc.Stop)
+		_, _ = existing.Control(svc.Stop)
 		_ = existing.Delete()
 		existing.Close()
 	}
@@ -129,7 +129,7 @@ func runServiceUninstall(cmd *cobra.Command, args []string) error {
 	}
 	defer s.Close()
 
-	_ = s.Control(svc.Stop)
+	_, _ = s.Control(svc.Stop)
 	if err := s.Delete(); err != nil {
 		return errorHint(fmt.Errorf("delete service: %w", err), "Run this command as Administrator")
 	}

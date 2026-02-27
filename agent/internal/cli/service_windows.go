@@ -68,9 +68,8 @@ func RunAsWindowsService() error {
 }
 
 // IsWindowsService reports whether the process was started by the Windows SCM.
-func IsWindowsService() bool {
-	inService, _ := svc.IsWindowsService()
-	return inService
+func IsWindowsService() (bool, error) {
+	return svc.IsWindowsService()
 }
 
 // runDaemonCtx is a context-aware wrapper around runDaemon for use by the service handler.

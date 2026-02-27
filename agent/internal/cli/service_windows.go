@@ -103,12 +103,18 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 		existing.Close()
 	}
 
+	// Derive the config dir from the installing user's profile so the
+	// service (running as LocalSystem) reads the correct config.toml.
+	// We pass it as a flag: sessionforge --config-dir C:\Users\Perry\.sessionforge
+	userProfile := os.Getenv("USERPROFILE")
+	configDir := filepath.Join(userProfile, ".sessionforge")
+
 	s, err := m.CreateService(serviceName, execPath, mgr.Config{
 		DisplayName:  serviceDisplayName,
 		Description:  serviceDescription,
 		StartType:    mgr.StartAutomatic,
 		ErrorControl: mgr.ErrorNormal,
-	})
+	}, "--config-dir", configDir)
 	if err != nil {
 		return errorHint(fmt.Errorf("create service: %w", err), "Run this command as Administrator")
 	}

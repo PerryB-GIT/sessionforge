@@ -35,6 +35,7 @@ func Execute() error {
 }
 
 var flagLogLevel string
+var flagConfigDir string
 
 var rootCmd = &cobra.Command{
 	Use:   "sessionforge",
@@ -55,6 +56,8 @@ Running 'sessionforge' without a subcommand starts the agent daemon.`,
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flagLogLevel, "log-level", "",
 		"Override log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().StringVar(&flagConfigDir, "config-dir", "",
+		"Override config directory (default: ~/.sessionforge)")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(authCmd)
@@ -88,7 +91,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 // It accepts an external context so it can be driven by either OS signals
 // (interactive) or the Windows SCM stop handler (service mode).
 func runDaemonWithContext(ctx context.Context) error {
-	cfg, err := config.Load()
+	cfg, err := config.LoadFrom(flagConfigDir)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}

@@ -57,12 +57,24 @@ func ConfigPath() (string, error) {
 	return filepath.Join(dir, configFile), nil
 }
 
-// Load reads the config file from disk. If the file does not exist, it returns
-// the default configuration without error.
+// Load reads the config file from the default location (~/.sessionforge/config.toml).
+// If the file does not exist, it returns the default configuration without error.
 func Load() (*Config, error) {
-	path, err := ConfigPath()
-	if err != nil {
-		return nil, err
+	return LoadFrom("")
+}
+
+// LoadFrom reads the config file from the given directory.
+// If dir is empty, it falls back to the default ~/.sessionforge directory.
+func LoadFrom(dir string) (*Config, error) {
+	var path string
+	if dir != "" {
+		path = filepath.Join(dir, configFile)
+	} else {
+		var err error
+		path, err = ConfigPath()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	cfg := DefaultConfig()

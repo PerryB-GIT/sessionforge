@@ -15,6 +15,11 @@ var (
 )
 
 func main() {
+	// On Windows, check if started by the SCM before doing anything else.
+	// This must be in main(), not init(), so the Go runtime is fully ready
+	// before calling StartServiceCtrlDispatcher.
+	runAsServiceIfNeeded()
+
 	cli.SetVersion(Version, BuildDate, GitCommit)
 	if err := cli.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

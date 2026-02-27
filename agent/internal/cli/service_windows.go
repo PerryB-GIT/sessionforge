@@ -3,21 +3,83 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/mgr"
 )
 
 const serviceName = "SessionForgeAgent"
 const serviceDisplayName = "SessionForge Agent"
 const serviceDescription = "Connects this machine to the SessionForge cloud for remote session management."
 
-// runServiceInstall registers a Windows Service using sc.exe.
-// STUB: Full Windows Service integration (e.g. kardianos/service) can be added
-// for production; sc.exe covers the basic install use-case.
+// windowsService implements svc.Handler so the Windows SCM can start/stop the daemon.
+type windowsService struct{}
+
+// Execute is called by the Windows SCM when the service starts.
+// It signals Ready, runs the daemon, and handles Stop/Shutdown control requests.
+func (w *windowsService) Execute(args []string, requests <-chan svc.ChangeRequest, status chan<- svc.Status) (bool, uint32) {
+	status <- svc.Status{State: svc.StartPending}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Run the daemon in a goroutine so we can listen for SCM control requests.
+	done := make(chan error, 1)
+	go func() {
+		done <- runDaemonCtx(ctx)
+	}()
+
+	status <- svc.Status{
+		State:   svc.Running,
+		Accepts: svc.AcceptStop | svc.AcceptShutdown,
+	}
+
+	for {
+		select {
+		case req := <-requests:
+			switch req.Cmd {
+			case svc.Stop, svc.Shutdown:
+				status <- svc.Status{State: svc.StopPending}
+				cancel()
+				<-done
+				return false, 0
+			default:
+				// Ignore unhandled control codes.
+			}
+		case <-done:
+			return false, 0
+		}
+	}
+}
+
+// RunAsWindowsService runs the binary under Windows SCM control.
+// Called from main() when the process is detected to be running as a service.
+func RunAsWindowsService() error {
+	return svc.Run(serviceName, &windowsService{})
+}
+
+// IsWindowsService reports whether the process was started by the Windows SCM.
+func IsWindowsService() bool {
+	inService, _ := svc.IsWindowsService()
+	return inService
+}
+
+// runDaemonCtx is a context-aware wrapper around runDaemon for use by the service handler.
+func runDaemonCtx(ctx context.Context) error {
+	// runDaemon in root.go blocks on ctx.Done via signal.NotifyContext.
+	// We replicate its logic here with the provided context so the SCM
+	// stop signal propagates cleanly without depending on OS signals.
+	return runDaemonWithContext(ctx)
+}
+
+// ── Service management commands (install/uninstall/start/stop/restart/status) ──
+
 func runServiceInstall(cmd *cobra.Command, args []string) error {
 	execPath, err := os.Executable()
 	if err != nil {
@@ -25,27 +87,29 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 	}
 	execPath, _ = filepath.EvalSymlinks(execPath)
 
-	// STUB: Windows service registration via sc.exe.
-	// For full SCM integration with Start/Stop handlers, use golang.org/x/sys/windows/svc
-	// or github.com/kardianos/service.
-	scArgs := []string{
-		"create", serviceName,
-		"binPath=", execPath,
-		"DisplayName=", serviceDisplayName,
-		"start=", "auto",
-		"obj=", "LocalSystem",
-	}
-	out, err := exec.Command("sc.exe", scArgs...).CombinedOutput()
+	m, err := mgr.Connect()
 	if err != nil {
-		return errorHint(
-			fmt.Errorf("sc create: %w\n%s", err, out),
-			"Run this command as Administrator",
-		)
+		return errorHint(fmt.Errorf("connect to SCM: %w", err), "Run this command as Administrator")
+	}
+	defer m.Disconnect()
+
+	// Remove existing service entry if present so reinstall works cleanly.
+	if existing, err := m.OpenService(serviceName); err == nil {
+		_ = existing.Control(svc.Stop)
+		_ = existing.Delete()
+		existing.Close()
 	}
 
-	// Set description.
-	descArgs := []string{"description", serviceName, serviceDescription}
-	_ = exec.Command("sc.exe", descArgs...).Run()
+	s, err := m.CreateService(serviceName, execPath, mgr.Config{
+		DisplayName:  serviceDisplayName,
+		Description:  serviceDescription,
+		StartType:    mgr.StartAutomatic,
+		ErrorControl: mgr.ErrorNormal,
+	})
+	if err != nil {
+		return errorHint(fmt.Errorf("create service: %w", err), "Run this command as Administrator")
+	}
+	defer s.Close()
 
 	successMsg("Installed", "Windows Service: "+serviceName)
 	fmt.Println("Run: sessionforge service start")
@@ -53,13 +117,21 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 }
 
 func runServiceUninstall(cmd *cobra.Command, args []string) error {
-	_ = exec.Command("sc.exe", "stop", serviceName).Run()
-	out, err := exec.Command("sc.exe", "delete", serviceName).CombinedOutput()
+	m, err := mgr.Connect()
 	if err != nil {
-		return errorHint(
-			fmt.Errorf("sc delete: %w\n%s", err, out),
-			"Run this command as Administrator",
-		)
+		return errorHint(fmt.Errorf("connect to SCM: %w", err), "Run this command as Administrator")
+	}
+	defer m.Disconnect()
+
+	s, err := m.OpenService(serviceName)
+	if err != nil {
+		return fmt.Errorf("open service: %w", err)
+	}
+	defer s.Close()
+
+	_ = s.Control(svc.Stop)
+	if err := s.Delete(); err != nil {
+		return errorHint(fmt.Errorf("delete service: %w", err), "Run this command as Administrator")
 	}
 	fmt.Println("Service uninstalled.")
 	return nil
@@ -68,7 +140,7 @@ func runServiceUninstall(cmd *cobra.Command, args []string) error {
 func runServiceStart(cmd *cobra.Command, args []string) error {
 	out, err := exec.Command("sc.exe", "start", serviceName).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("sc start: %w\n%s", err, out)
+		return errorHint(fmt.Errorf("sc start: %w\n%s", err, out), "Run this command as Administrator")
 	}
 	fmt.Println("Service started.")
 	return nil
@@ -77,7 +149,7 @@ func runServiceStart(cmd *cobra.Command, args []string) error {
 func runServiceStop(cmd *cobra.Command, args []string) error {
 	out, err := exec.Command("sc.exe", "stop", serviceName).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("sc stop: %w\n%s", err, out)
+		return errorHint(fmt.Errorf("sc stop: %w\n%s", err, out), "Run this command as Administrator")
 	}
 	fmt.Println("Service stopped.")
 	return nil

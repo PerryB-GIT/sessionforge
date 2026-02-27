@@ -76,10 +76,18 @@ var versionCmd = &cobra.Command{
 	},
 }
 
-// runDaemon is the main agent event loop.
-// It connects to the SessionForge cloud over WebSocket, registers the machine,
-// sends periodic heartbeats, and dispatches cloud commands to the session manager.
+// runDaemon is the Cobra entry point for the bare `sessionforge` command.
+// It creates an OS-signal context then delegates to runDaemonWithContext.
 func runDaemon(cmd *cobra.Command, args []string) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	return runDaemonWithContext(ctx)
+}
+
+// runDaemonWithContext is the main agent event loop.
+// It accepts an external context so it can be driven by either OS signals
+// (interactive) or the Windows SCM stop handler (service mode).
+func runDaemonWithContext(ctx context.Context) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
@@ -106,9 +114,6 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 		"os", system.GetOS(),
 	)
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
 	// We build handler, client, and manager with mutual references via a
 	// dispatch wrapper that is set up after all three are constructed.
 	var dispatch func(msg connection.CloudMessage)
@@ -133,7 +138,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	// Start the WebSocket client (blocks with auto-reconnect until ctx cancelled).
 	go client.Run(ctx)
 
-	// Block until OS signal.
+	// Block until context is cancelled (OS signal or SCM stop).
 	<-ctx.Done()
 
 	logger.Info("shutdown signal received — stopping all sessions")

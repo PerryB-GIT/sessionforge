@@ -37,11 +37,11 @@ export const redis = new Proxy({} as Redis, {
 // ─── Key Helpers ───────────────────────────────────────────────────────────────
 
 export const RedisKeys = {
-  /** Channel for broadcasting to browser dashboard WebSocket subscribers */
-  dashboardChannel: (userId: string) => `dashboard:${userId}`,
+  /** Stream key for broadcasting to browser dashboard WebSocket subscribers */
+  dashboardChannel: (userId: string) => `stream:dashboard:${userId}`,
 
-  /** Channel for sending commands to a specific agent */
-  agentChannel: (machineId: string) => `agent:${machineId}`,
+  /** Stream key for sending commands to a specific agent */
+  agentChannel: (machineId: string) => `stream:agent:${machineId}`,
 
   /** Circular buffer of session PTY output (last N lines) */
   sessionLogs: (sessionId: string) => `session:logs:${sessionId}`,

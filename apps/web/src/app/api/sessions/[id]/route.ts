@@ -105,7 +105,7 @@ export async function DELETE(
     force: false,
   }
 
-  await redis.publish(RedisKeys.agentChannel(record.machineId), JSON.stringify(stopCommand))
+  await redis.xadd(RedisKeys.agentChannel(record.machineId), '*', { data: JSON.stringify(stopCommand) })
 
   // Optimistically update status - agent will confirm via WebSocket
   await db

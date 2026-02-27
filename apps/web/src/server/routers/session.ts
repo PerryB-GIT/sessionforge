@@ -137,7 +137,7 @@ export const sessionRouter = router({
         env,
       }
 
-      await redis.publish(RedisKeys.agentChannel(machineId), JSON.stringify(startCommand))
+      await redis.xadd(RedisKeys.agentChannel(machineId), '*', { data: JSON.stringify(startCommand) })
 
       return newSession
     }),
@@ -174,7 +174,7 @@ export const sessionRouter = router({
         force: input.force,
       }
 
-      await redis.publish(RedisKeys.agentChannel(record.machineId), JSON.stringify(stopCommand))
+      await redis.xadd(RedisKeys.agentChannel(record.machineId), '*', { data: JSON.stringify(stopCommand) })
 
       await db
         .update(sessions)

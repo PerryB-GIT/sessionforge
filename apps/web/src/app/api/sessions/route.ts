@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
     env,
   }
 
-  await redis.publish(RedisKeys.agentChannel(machineId), JSON.stringify(agentCommand))
+  await redis.xadd(RedisKeys.agentChannel(machineId), '*', { data: JSON.stringify(agentCommand) })
 
   return NextResponse.json(
     { data: newSession, error: null } satisfies ApiResponse<typeof newSession>,

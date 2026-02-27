@@ -76,8 +76,8 @@ test.describe('Login page', () => {
     await page.goto('/login')
     const passwordInput = page.locator('#password')
     await expect(passwordInput).toHaveAttribute('type', 'password')
-    // Click the show-password toggle button (it renders Eye/EyeOff icons)
-    await page.locator('#password').locator('..').getByRole('button').click()
+    // Click the show-password toggle button (sibling button in the relative wrapper)
+    await page.locator('button[type="button"]').filter({ has: page.locator('svg') }).last().click()
     await expect(passwordInput).toHaveAttribute('type', 'text')
   })
 
@@ -210,7 +210,7 @@ test.describe('Forgot password page', () => {
     await page.goto('/forgot-password')
     await page.getByLabel('Email').fill('not-an-email')
     await page.getByRole('button', { name: 'Send reset link' }).click()
-    await expect(page.getByText(/invalid email/i)).toBeVisible()
+    await expect(page.getByText(/invalid email address/i)).toBeVisible()
   })
 
   test('after valid submission shows "Check your email" confirmation', async ({ page }) => {

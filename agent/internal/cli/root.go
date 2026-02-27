@@ -94,9 +94,7 @@ func runDaemonWithContext(ctx context.Context) error {
 	}
 
 	if !cfg.IsConfigured() {
-		fmt.Fprintln(os.Stderr, "Error: agent is not configured.")
-		fmt.Fprintln(os.Stderr, "Run: sessionforge auth login --key <your-api-key>")
-		os.Exit(1)
+		return fmt.Errorf("agent is not configured — run: sessionforge auth login --key <your-api-key>")
 	}
 
 	// CLI flag overrides config file log level.

@@ -24,21 +24,24 @@ type windowsService struct{}
 // Execute is called by the Windows SCM when the service starts.
 // It signals Ready, runs the daemon, and handles Stop/Shutdown control requests.
 func (w *windowsService) Execute(args []string, requests <-chan svc.ChangeRequest, status chan<- svc.Status) (bool, uint32) {
+	// Signal StartPending immediately so SCM knows we're alive.
 	status <- svc.Status{State: svc.StartPending}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Signal Running BEFORE launching the daemon so the SCM 30s timeout
+	// is not consumed by config load or WebSocket dial.
+	status <- svc.Status{
+		State:   svc.Running,
+		Accepts: svc.AcceptStop | svc.AcceptShutdown,
+	}
 
 	// Run the daemon in a goroutine so we can listen for SCM control requests.
 	done := make(chan error, 1)
 	go func() {
 		done <- runDaemonCtx(ctx)
 	}()
-
-	status <- svc.Status{
-		State:   svc.Running,
-		Accepts: svc.AcceptStop | svc.AcceptShutdown,
-	}
 
 	for {
 		select {

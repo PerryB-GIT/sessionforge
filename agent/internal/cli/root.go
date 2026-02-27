@@ -37,6 +37,12 @@ func Execute() error {
 var flagLogLevel string
 var flagConfigDir string
 
+// SetConfigDir allows the Windows service init path to set the config directory
+// before Cobra parses flags (service mode bypasses Cobra entirely).
+func SetConfigDir(dir string) {
+	flagConfigDir = dir
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "sessionforge",
 	Short: "SessionForge Agent — Remote AI Session Manager",

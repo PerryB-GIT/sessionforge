@@ -10,3 +10,9 @@ dist/
 *.log
 coverage/
 .worktrees/
+
+# Secret/restore env files — never commit these
+restore-env.env
+e2e-secret.env
+*.secret.env
+*-secret.env

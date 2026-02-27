@@ -230,13 +230,15 @@ function handleDashboardWs(ws, userId) {
 const HEARTBEAT_INTERVAL_MS = 30_000
 const AGENT_TIMEOUT_MS = 90_000
 
-function handleAgentWs(ws, userId) {
+function handleAgentWs(ws, userId, remoteAddress) {
   let machineId = null
   let lastHeartbeatAt = Date.now()
   let pingTimer = null
   let watchdogTimer = null
   let pollTimer = null
   let agentPollLastId = '$'
+  // Per-session stats accumulator: sessionId -> { peakMemory, cpuTotal, cpuSamples }
+  const sessionStats = {}
 
   async function pollAgentCommands() {
     if (!machineId || ws.readyState !== WebSocket.OPEN) return
@@ -266,7 +268,7 @@ function handleAgentWs(ws, userId) {
     let msg
     try { msg = JSON.parse(raw.toString()) } catch { return }
     try {
-      await handleAgentMessage(msg, userId, (id) => {
+      await handleAgentMessage(msg, userId, remoteAddress, sessionStats, (id) => {
         machineId = id
         lastHeartbeatAt = Date.now()
         if (!pollTimer) pollAgentCommands()
@@ -287,17 +289,38 @@ function handleAgentWs(ws, userId) {
   })
 }
 
-async function handleAgentMessage(msg, userId, onMachineId) {
+// flushSessionStats writes accumulated peak_memory_mb and avg_cpu_percent to the DB
+// for a given sessionId, then removes the entry from the in-memory accumulator.
+async function flushSessionStats(sessionId, sessionStats) {
+  const stats = sessionStats[sessionId]
+  if (!stats) return
+  delete sessionStats[sessionId]
+  const peakMemory = stats.peakMemory ?? null
+  const avgCpu = stats.cpuSamples > 0 ? stats.cpuTotal / stats.cpuSamples : null
+  if (peakMemory !== null || avgCpu !== null) {
+    await query(
+      `UPDATE sessions SET peak_memory_mb = $1, avg_cpu_percent = $2 WHERE id = $3`,
+      [peakMemory, avgCpu, sessionId]
+    ).catch(console.error)
+  }
+}
+
+async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMachineId) {
   switch (msg.type) {
     case 'register': {
-      const { machineId, name, os, hostname: h, version } = msg
+      const { machineId, name, os, hostname: h, version, cpuModel, ramGb } = msg
       if (!['windows', 'macos', 'linux'].includes(os)) return
+      // Extract a clean IP: strip IPv6-mapped IPv4 prefix (::ffff:1.2.3.4 -> 1.2.3.4)
+      const rawIp = remoteAddress ?? null
+      const ipAddress = rawIp ? rawIp.replace(/^::ffff:/, '') : null
       await query(
-        `INSERT INTO machines (id, user_id, name, os, hostname, agent_version, status, last_seen, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'online', NOW(), NOW(), NOW())
+        `INSERT INTO machines (id, user_id, name, os, hostname, agent_version, ip_address, cpu_model, ram_gb, status, last_seen, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'online', NOW(), NOW(), NOW())
          ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, hostname = EXCLUDED.hostname,
-           agent_version = EXCLUDED.agent_version, status = 'online', last_seen = NOW(), updated_at = NOW()`,
-        [machineId, userId, name, os, h, version]
+           agent_version = EXCLUDED.agent_version, ip_address = EXCLUDED.ip_address,
+           cpu_model = EXCLUDED.cpu_model, ram_gb = EXCLUDED.ram_gb,
+           status = 'online', last_seen = NOW(), updated_at = NOW()`,
+        [machineId, userId, name, os, h, version, ipAddress, cpuModel ?? null, ramGb ?? null]
       )
       onMachineId(machineId)
       await publishToDashboard(userId, { type: 'machine_updated', machine: { id: machineId, status: 'online', cpu: 0, memory: 0 } })
@@ -311,6 +334,23 @@ async function handleAgentMessage(msg, userId, onMachineId) {
         redis.setex(StreamKeys.machineMetrics(machineId), 120, JSON.stringify({ cpu, memory, disk, sessionCount, ts: Date.now() })),
       ])
       await publishToDashboard(userId, { type: 'machine_updated', machine: { id: machineId, status: 'online', cpu, memory, disk, sessionCount } })
+
+      // Update per-session stats accumulators for any running sessions on this machine.
+      if (machineId && (cpu != null || memory != null)) {
+        const runningSessions = await query(
+          `SELECT id FROM sessions WHERE machine_id = $1 AND status = 'running'`,
+          [machineId]
+        ).catch(() => [])
+        for (const row of runningSessions) {
+          const sid = row.id
+          if (!sessionStats[sid]) sessionStats[sid] = { peakMemory: 0, cpuTotal: 0, cpuSamples: 0 }
+          const s = sessionStats[sid]
+          // memory from heartbeat is a percentage (0-100); store as-is in peak_memory_mb field
+          // (column is named peak_memory_mb but we store percentage since we don't have absolute MB here)
+          if (memory != null && memory > s.peakMemory) s.peakMemory = memory
+          if (cpu != null) { s.cpuTotal += cpu; s.cpuSamples++ }
+        }
+      }
       break
     }
 
@@ -327,6 +367,7 @@ async function handleAgentMessage(msg, userId, onMachineId) {
 
     case 'session_stopped': {
       const { sessionId, exitCode } = msg
+      await flushSessionStats(sessionId, sessionStats)
       await query(`UPDATE sessions SET status = 'stopped', exit_code = $1, stopped_at = NOW() WHERE id = $2`, [exitCode, sessionId])
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
       if (rows[0]) await publishToDashboard(userId, { type: 'session_updated', session: { id: sessionId, status: 'stopped', machineId: rows[0].machine_id } })
@@ -335,6 +376,7 @@ async function handleAgentMessage(msg, userId, onMachineId) {
 
     case 'session_crashed': {
       const { sessionId, error } = msg
+      await flushSessionStats(sessionId, sessionStats)
       await query(`UPDATE sessions SET status = 'crashed', stopped_at = NOW() WHERE id = $1`, [sessionId])
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
       if (rows[0]) {
@@ -458,8 +500,8 @@ async function main() {
   })
 
   wsAgent.on('connection', (ws, req) => {
-    console.log(`[ws/agent] connected userId=${req._userId}`)
-    handleAgentWs(ws, req._userId)
+    console.log(`[ws/agent] connected userId=${req._userId} ip=${req._remoteAddress ?? 'unknown'}`)
+    handleAgentWs(ws, req._userId, req._remoteAddress)
   })
 
   // 4. Create our public-facing HTTP server
@@ -489,6 +531,8 @@ async function main() {
       const validKey = await validateApiKey(apiKey)
       if (!validKey) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return }
       req._userId = validKey.userId
+      // Capture remote IP: prefer X-Forwarded-For (set by load balancers/proxies) then socket address.
+      req._remoteAddress = (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || null
       wsAgent.handleUpgrade(req, socket, head, (ws) => wsAgent.emit('connection', ws, req))
       return
     }

@@ -27,12 +27,14 @@ const (
 
 // registerMsg is sent once on connection to identify this agent to the cloud.
 type registerMsg struct {
-	Type      string `json:"type"`
-	MachineID string `json:"machineId"`
-	Name      string `json:"name"`
-	OS        string `json:"os"`
-	Hostname  string `json:"hostname"`
-	Version   string `json:"version"`
+	Type      string  `json:"type"`
+	MachineID string  `json:"machineId"`
+	Name      string  `json:"name"`
+	OS        string  `json:"os"`
+	Hostname  string  `json:"hostname"`
+	Version   string  `json:"version"`
+	CpuModel  string  `json:"cpuModel"`
+	RamGb     float64 `json:"ramGb"`
 }
 
 // CloudMessage is the minimal envelope used to route incoming messages.
@@ -262,6 +264,8 @@ func (c *Client) sendRegister() error {
 		OS:        system.GetOS(),
 		Hostname:  system.GetHostname(),
 		Version:   c.version,
+		CpuModel:  system.GetCPUModel(),
+		RamGb:     system.GetRAMGB(),
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {

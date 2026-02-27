@@ -169,7 +169,16 @@ function handleDashboardWs(ws, userId) {
       const [newLastId, messages] = await readStream(StreamKeys.dashboard(userId), lastId)
       lastId = newLastId
       for (const msg of messages) {
-        if (ws.readyState === WebSocket.OPEN) ws.send(msg)
+        if (ws.readyState !== WebSocket.OPEN) break
+        // Filter session_output: only forward if the client has no subscription
+        // (backwards compat) or if the subscribed sessionId matches.
+        if (ws.subscribedSessionId) {
+          try {
+            const parsed = JSON.parse(msg)
+            if (parsed.type === 'session_output' && parsed.sessionId !== ws.subscribedSessionId) continue
+          } catch { /* not valid JSON, forward as-is */ }
+        }
+        ws.send(msg)
       }
     } catch { /* transient */ }
     if (ws.readyState === WebSocket.OPEN) {
@@ -186,6 +195,11 @@ function handleDashboardWs(ws, userId) {
     try { msg = JSON.parse(raw.toString()) } catch { return }
     switch (msg.type) {
       case 'ping': break
+      case 'subscribe_session': {
+        if (!msg.sessionId) break
+        ws.subscribedSessionId = msg.sessionId
+        break
+      }
       case 'session_input': {
         if (!msg.sessionId || !msg.data) break
         const record = await getSessionRecord(msg.sessionId, userId)
@@ -296,7 +310,7 @@ async function handleAgentMessage(msg, userId, onMachineId) {
         query(`UPDATE machines SET last_seen = NOW(), status = 'online', updated_at = NOW() WHERE id = $1`, [machineId]),
         redis.setex(StreamKeys.machineMetrics(machineId), 120, JSON.stringify({ cpu, memory, disk, sessionCount, ts: Date.now() })),
       ])
-      await publishToDashboard(userId, { type: 'machine_updated', machine: { id: machineId, status: 'online', cpu, memory } })
+      await publishToDashboard(userId, { type: 'machine_updated', machine: { id: machineId, status: 'online', cpu, memory, disk, sessionCount } })
       break
     }
 

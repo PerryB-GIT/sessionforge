@@ -164,11 +164,11 @@ test.describe('Docs page', () => {
   })
 
   test('sidebar shows "Dashboard" anchor', async ({ page }) => {
-    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Dashboard', exact: true }).first()).toBeVisible()
   })
 
   test('sidebar shows "API Keys" anchor', async ({ page }) => {
-    await expect(page.getByRole('link', { name: 'API Keys' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'API Keys', exact: true }).first()).toBeVisible()
   })
 
   test('sidebar shows "Supported Platforms" anchor', async ({ page }) => {
@@ -214,7 +214,7 @@ test.describe('Docs page', () => {
 
   test('CLI table contains "sessionforge auth login" command', async ({ page }) => {
     await page.locator('#cli-reference').scrollIntoViewIfNeeded()
-    await expect(page.getByText(/sessionforge auth login/)).toBeVisible()
+    await expect(page.getByText(/sessionforge auth login/).first()).toBeVisible()
   })
 
   test('CLI table contains "sessionforge session start" command', async ({ page }) => {
@@ -242,7 +242,7 @@ test.describe('Docs page', () => {
   // sf_live_ key format example
   test('key format example "sf_live_" is visible in API Keys section', async ({ page }) => {
     await page.locator('#api-keys').scrollIntoViewIfNeeded()
-    await expect(page.getByText(/sf_live_/)).toBeVisible()
+    await expect(page.getByText(/sf_live_/).first()).toBeVisible()
   })
 
   // Sidebar anchor link navigates in-page
@@ -254,7 +254,7 @@ test.describe('Docs page', () => {
 
   // Nav bar on docs page
   test('docs nav "Sign in" link is visible', async ({ page }) => {
-    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible()
   })
 
   test('docs nav "SessionForge" logo link points to /', async ({ page }) => {

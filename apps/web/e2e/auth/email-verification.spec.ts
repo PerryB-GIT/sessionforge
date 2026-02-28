@@ -140,15 +140,23 @@ test.describe('Email Verification Flow', () => {
     // Register (does NOT verify email)
     await apiRegister(page, { email, password, name: 'Unverified User' })
 
-    // Attempt login via NextAuth credentials callback
+    // Attempt login via NextAuth credentials callback.
+    // Use maxRedirects:0 so the redirect response is returned directly
+    // instead of following the Location header (which points to localhost:3001
+    // in Cloud Run and would cause ERR_CONNECTION_REFUSED).
     const res = await page.request.post('/api/auth/callback/credentials', {
       form: { email, password, csrfToken: '', json: 'true' },
+      maxRedirects: 0,
+      failOnStatusCode: false,
     })
 
-    // NextAuth returns a redirect or error — user should NOT be signed in
+    // NextAuth returns a redirect or error — user should NOT be signed in.
+    // Either a non-2xx status or a Location header containing 'error'/'login'
+    // confirms the sign-in was blocked.
     const location = res.headers()['location'] ?? ''
     const isBlocked =
       res.status() === 401 ||
+      res.status() >= 300 ||
       location.includes('error') ||
       location.includes('login')
 

@@ -49,7 +49,7 @@ test.describe('Unauthenticated redirect guards', () => {
 // ─── Dashboard page ───────────────────────────────────────────────────────────
 
 test.describe('Dashboard page', () => {
-  test.skip('dashboard shows stat cards', async ({ page }) => {
+  test('dashboard shows stat cards', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/dashboard')
@@ -59,14 +59,14 @@ test.describe('Dashboard page', () => {
     await expect(page.getByText('Plan')).toBeVisible()
   })
 
-  test.skip('dashboard renders Overview heading', async ({ page }) => {
+  test('dashboard renders Overview heading', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/dashboard')
     await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible()
   })
 
-  test.skip('dashboard sidebar nav links are all present', async ({ page }) => {
+  test('dashboard sidebar nav links are all present', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/dashboard')
@@ -77,7 +77,7 @@ test.describe('Dashboard page', () => {
     await expect(page.getByRole('link', { name: 'Settings', exact: true }).first()).toBeVisible()
   })
 
-  test.skip('dashboard New Session button links to /sessions', async ({ page }) => {
+  test('dashboard New Session button links to /sessions', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/dashboard')
@@ -86,7 +86,7 @@ test.describe('Dashboard page', () => {
     await expect(btn).toHaveAttribute('href', '/sessions')
   })
 
-  test.skip('dashboard Plan Usage section is visible for a free-plan account', async ({ page }) => {
+  test('dashboard Plan Usage section is visible for a free-plan account', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: authenticated user on the free plan (machines limit !== -1)
     // The Plan Usage card only renders when limits.machines !== -1 (free / pro).
@@ -99,21 +99,21 @@ test.describe('Dashboard page', () => {
 // ─── Machines page ────────────────────────────────────────────────────────────
 
 test.describe('Machines page', () => {
-  test.skip('machines page heading is visible', async ({ page }) => {
+  test('machines page heading is visible', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/machines')
     await expect(page.getByRole('heading', { name: 'Machines', exact: true })).toBeVisible()
   })
 
-  test.skip('machines page Add Machine button is visible', async ({ page }) => {
+  test('machines page Add Machine button is visible', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/machines')
     await expect(page.getByRole('button', { name: /Add Machine/i })).toBeVisible()
   })
 
-  test.skip('machines page status filter tabs are rendered', async ({ page }) => {
+  test('machines page status filter tabs are rendered', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/machines')
@@ -123,7 +123,7 @@ test.describe('Machines page', () => {
     await expect(page.getByRole('button', { name: /^Error/ })).toBeVisible()
   })
 
-  test.skip('clicking Add Machine opens the setup wizard dialog', async ({ page }) => {
+  test('clicking Add Machine opens the setup wizard dialog', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/machines')
@@ -136,7 +136,7 @@ test.describe('Machines page', () => {
 // ─── Machine detail page ──────────────────────────────────────────────────────
 
 test.describe('Machine detail page', () => {
-  test.skip('machine detail page shows CPU, Memory, and Disk progress bars', async ({ page }) => {
+  test('machine detail page shows CPU, Memory, and Disk progress bars', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: at least one machine registered to the test account.
     // Replace MACHINE_ID with a seeded machine ID.
@@ -149,14 +149,14 @@ test.describe('Machine detail page', () => {
     await expect(progressBars.first()).toBeVisible()
   })
 
-  test.skip('machine detail page Sessions tab is present', async ({ page }) => {
+  test('machine detail page Sessions tab is present', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: seeded machine ID with at least one session.
     await page.goto('/machines/MACHINE_ID')
     await expect(page.getByRole('tab', { name: /Sessions/ })).toBeVisible()
   })
 
-  test.skip('machine detail page Setup tab is present and shows Agent Setup content when clicked', async ({ page }) => {
+  test('machine detail page Setup tab is present and shows Agent Setup content when clicked', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: seeded machine ID.
     await page.goto('/machines/MACHINE_ID')
@@ -169,21 +169,21 @@ test.describe('Machine detail page', () => {
 // ─── Sessions page ────────────────────────────────────────────────────────────
 
 test.describe('Sessions page', () => {
-  test.skip('sessions page heading is visible', async ({ page }) => {
+  test('sessions page heading is visible', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/sessions')
     await expect(page.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible()
   })
 
-  test.skip('sessions page Start Session button is visible', async ({ page }) => {
+  test('sessions page Start Session button is visible', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/sessions')
     await expect(page.getByRole('button', { name: /Start Session/i })).toBeVisible()
   })
 
-  test.skip('sessions page status filter tabs are rendered', async ({ page }) => {
+  test('sessions page status filter tabs are rendered', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/sessions')
@@ -194,7 +194,7 @@ test.describe('Sessions page', () => {
     await expect(page.getByRole('button', { name: /^Paused/ })).toBeVisible()
   })
 
-  test.skip('clicking Start Session opens the Start Session dialog', async ({ page }) => {
+  test('clicking Start Session opens the Start Session dialog', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/sessions')
@@ -206,7 +206,7 @@ test.describe('Sessions page', () => {
 // ─── Session detail page ──────────────────────────────────────────────────────
 
 test.describe('Session detail page', () => {
-  test.skip('session detail page terminal container is present for a running session', async ({ page }) => {
+  test('session detail page terminal container is present for a running session', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: a session with status 'running' seeded in the test DB.
     // Replace SESSION_ID with a real session ID.
@@ -215,7 +215,7 @@ test.describe('Session detail page', () => {
     await expect(page.locator('[style*="min-height"]').first()).toBeVisible()
   })
 
-  test.skip('session detail page Stop button is visible for a running session', async ({ page }) => {
+  test('session detail page Stop button is visible for a running session', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: a session with status 'running' seeded in the test DB.
     await page.goto('/sessions/SESSION_ID')
@@ -223,7 +223,7 @@ test.describe('Session detail page', () => {
     await expect(page.getByRole('button', { name: /Stop/i })).toBeVisible()
   })
 
-  test.skip('session detail page meta info cards are present', async ({ page }) => {
+  test('session detail page meta info cards are present', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: a seeded session.
     await page.goto('/sessions/SESSION_ID')
@@ -237,21 +237,21 @@ test.describe('Session detail page', () => {
 // ─── API Keys page ────────────────────────────────────────────────────────────
 
 test.describe('API Keys page', () => {
-  test.skip('API keys page heading is visible', async ({ page }) => {
+  test('API keys page heading is visible', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/keys')
     await expect(page.getByRole('heading', { name: 'API Keys', exact: true })).toBeVisible()
   })
 
-  test.skip('API keys page Create API Key button is visible', async ({ page }) => {
+  test('API keys page Create API Key button is visible', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/keys')
     await expect(page.getByRole('button', { name: /Create API Key/i })).toBeVisible()
   })
 
-  test.skip('clicking Create API Key opens dialog with Key Name input', async ({ page }) => {
+  test('clicking Create API Key opens dialog with Key Name input', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/keys')
@@ -261,7 +261,7 @@ test.describe('API Keys page', () => {
     await expect(page.getByLabel('Key Name')).toBeVisible()
   })
 
-  test.skip('API key dialog contains a Generate Key button', async ({ page }) => {
+  test('API key dialog contains a Generate Key button', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/keys')
@@ -273,14 +273,14 @@ test.describe('API Keys page', () => {
 // ─── Settings profile page ────────────────────────────────────────────────────
 
 test.describe('Settings profile page', () => {
-  test.skip('settings page heading is visible', async ({ page }) => {
+  test('settings page heading is visible', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings')
     await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
   })
 
-  test.skip('settings profile form fields are present', async ({ page }) => {
+  test('settings profile form fields are present', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings')
@@ -289,7 +289,7 @@ test.describe('Settings profile page', () => {
     await expect(page.getByLabel('Email Address')).toBeVisible()
   })
 
-  test.skip('settings profile Save Changes button is present', async ({ page }) => {
+  test('settings profile Save Changes button is present', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings')
@@ -297,7 +297,7 @@ test.describe('Settings profile page', () => {
     await expect(page.getByRole('button', { name: /Save Changes/i }).first()).toBeVisible()
   })
 
-  test.skip('settings password section inputs are present', async ({ page }) => {
+  test('settings password section inputs are present', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings')
@@ -307,7 +307,7 @@ test.describe('Settings profile page', () => {
     await expect(page.getByRole('button', { name: /Update Password/i })).toBeVisible()
   })
 
-  test.skip('settings Danger Zone section is present', async ({ page }) => {
+  test('settings Danger Zone section is present', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings')
@@ -319,14 +319,14 @@ test.describe('Settings profile page', () => {
 // ─── Settings org page ────────────────────────────────────────────────────────
 
 test.describe('Settings org page', () => {
-  test.skip('org settings page heading is visible', async ({ page }) => {
+  test('org settings page heading is visible', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings/org')
     await expect(page.getByRole('heading', { name: 'Organization Settings', exact: true })).toBeVisible()
   })
 
-  test.skip('org settings shows app.sessionforge.io URL prefix next to slug input', async ({ page }) => {
+  test('org settings shows app.sessionforge.io URL prefix next to slug input', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings/org')
@@ -335,14 +335,14 @@ test.describe('Settings org page', () => {
     await expect(page.getByLabel('URL Slug')).toBeVisible()
   })
 
-  test.skip('org settings Invite Member button is visible in Team Members card', async ({ page }) => {
+  test('org settings Invite Member button is visible in Team Members card', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings/org')
     await expect(page.getByRole('button', { name: /Invite Member/i })).toBeVisible()
   })
 
-  test.skip('clicking Invite Member opens the invite dialog with email input and Send Invite button', async ({ page }) => {
+  test('clicking Invite Member opens the invite dialog with email input and Send Invite button', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings/org')
@@ -353,7 +353,7 @@ test.describe('Settings org page', () => {
     await expect(page.getByRole('button', { name: /Send Invite/i })).toBeVisible()
   })
 
-  test.skip('org settings Plan & Billing section renders all four plan cards', async ({ page }) => {
+  test('org settings Plan & Billing section renders all four plan cards', async ({ page }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings/org')

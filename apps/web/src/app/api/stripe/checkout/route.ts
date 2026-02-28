@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { plan } = await req.json()
+  const { plan, orgId } = await req.json()
   const priceId = PRICE_IDS[plan]
 
   if (!priceId) {
@@ -59,6 +59,17 @@ export async function POST(req: NextRequest) {
     metadata: {
       userId: session.user.id,
       plan,
+      orgId: orgId ?? '',
+    },
+    // subscription_data.metadata is required so that customer.subscription.updated
+    // and customer.subscription.deleted webhook events carry userId/plan/orgId.
+    // Without this, those events cannot identify the user and plan updates are silently skipped.
+    subscription_data: {
+      metadata: {
+        userId: session.user.id,
+        plan,
+        orgId: orgId ?? '',
+      },
     },
   })
 

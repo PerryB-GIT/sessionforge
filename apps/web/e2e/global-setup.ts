@@ -71,7 +71,21 @@ async function globalSetup(_config: FullConfig) {
     console.warn(`[global-setup] Onboarding complete returned ${onboardRes.status} — user may already be onboarded`)
   }
 
-  // 5. Save storage state (cookies) for use by authenticated tests
+  // 5. Re-login so the JWT is reissued with onboardingCompletedAt populated.
+  //    The JWT is minted at sign-in time, so onboarding must complete first,
+  //    then a fresh sign-in bakes the flag into the token.
+  //    Clear session cookies manually rather than going through the signout UI.
+  await context.clearCookies()
+
+  await page.goto('/login')
+  await page.waitForSelector('label', { timeout: 10000 })
+  await page.getByLabel('Email').fill(E2E_USER_EMAIL)
+  await page.getByLabel('Password').fill(E2E_USER_PASSWORD)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  // After fresh login with onboardingCompletedAt set, should go to /dashboard
+  await page.waitForURL(/\/dashboard/, { timeout: 15000 })
+
+  // 6. Save storage state (cookies) for use by authenticated tests
   await context.storageState({ path: 'e2e/.auth/user.json' })
 
   // Save test user credentials for reference

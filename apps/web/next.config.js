@@ -35,7 +35,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   experimental: {
-    serverComponentsExternalPackages: ['ws'],
+    serverComponentsExternalPackages: ['ws', '@grpc/grpc-js', '@opentelemetry/sdk-node', '@opentelemetry/exporter-trace-otlp-grpc', '@opentelemetry/exporter-logs-otlp-grpc', '@opentelemetry/exporter-metrics-otlp-grpc'],
     instrumentationHook: true,
   },
   async headers() {

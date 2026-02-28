@@ -22,7 +22,7 @@ async function setupOTel() {
   // pulls in @grpc/grpc-js which breaks the Next.js build.
   const [
     { NodeTracerProvider },
-    { Resource },
+    { resourceFromAttributes },
     { SimpleSpanProcessor },
     { OTLPTraceExporter },
     { OTLPLogExporter },
@@ -38,7 +38,7 @@ async function setupOTel() {
     import('@opentelemetry/sdk-logs'),
   ])
 
-  const resource = new Resource({
+  const resource = resourceFromAttributes({
     'service.name': appName,
     'deployment.environment': process.env.NODE_ENV ?? 'development',
   })
@@ -64,17 +64,18 @@ async function setupOTel() {
   }
 
   if (traceExporters.length > 0) {
-    const provider = new NodeTracerProvider({ resource })
-    for (const exporter of traceExporters) {
-      provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
-    }
+    const provider = new NodeTracerProvider({
+      resource,
+      spanProcessors: traceExporters.map(e => new SimpleSpanProcessor(e)),
+    })
     provider.register()
   }
 
   if (logExporters.length > 0) {
-    const logProvider = new LoggerProvider({ resource })
-    logProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporters[0]))
-    logProvider.forceFlush().catch(() => {})
+    new LoggerProvider({
+      resource,
+      processors: [new BatchLogRecordProcessor(logExporters[0])],
+    })
   }
 
   process.on('SIGTERM', async () => {

@@ -11,6 +11,13 @@ dist/
 coverage/
 .worktrees/
 
+# Build/deploy log output files
+build*.txt
+deploy*.txt
+build*-err.txt
+deploy*-err.txt
+service-config.txt
+
 # Secret/restore env files — never commit these
 restore-env.env
 e2e-secret.env

@@ -72,36 +72,43 @@ jobs:
           fi
 
   test:
-    name: Test
+    name: Unit Tests (agent-qa)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .worktrees/agent-qa
     steps:
-      - name: Checkout
+      - name: Checkout (with worktrees)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout agent-qa branch into .worktrees/agent-qa
+        run: |
+          git worktree add .worktrees/agent-qa origin/dev/qa 2>/dev/null || \
+          git worktree add .worktrees/agent-qa dev/qa 2>/dev/null || \
+          echo "Worktree already present"
+        working-directory: ${{ github.workspace }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: "**/package-lock.json"
+          cache-dependency-path: ".worktrees/agent-qa/package-lock.json"
 
-      - name: Install dependencies
-        run: |
-          if [ -f "package.json" ]; then
-            npm install --prefer-offline
-          else
-            echo "No package.json found — skipping install."
-          fi
+      - name: Install QA dependencies
+        run: npm install --prefer-offline
 
-      - name: Run tests
-        run: |
-          if [ -d "apps/web/src" ]; then
-            cd apps/web && npx vitest run --reporter=verbose 2>/dev/null || echo "No tests defined yet — skipping."
-          elif [ -d "tests" ] && [ -f "vitest.config.ts" ]; then
-            npx vitest run --reporter=verbose 2>/dev/null || echo "No tests defined yet — skipping."
-          else
-            echo "No testable source on this branch — skipping tests."
-          fi
+      - name: Run unit tests
+        run: npm run test:unit -- --reporter=verbose
+        env:
+          # BrowserStack (used by Percy visual tests — not needed for unit)
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          # Checkly
+          CHECKLY_API_KEY: ${{ secrets.CHECKLY_API_KEY }}
+          CHECKLY_ACCOUNT_ID: ${{ secrets.CHECKLY_ACCOUNT_ID }}
 
   go-ci:
     name: Go Agent (build + vet)

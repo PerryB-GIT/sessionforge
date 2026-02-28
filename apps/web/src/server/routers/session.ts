@@ -132,6 +132,7 @@ export const sessionRouter = router({
       const startCommand: CloudToAgentMessage = {
         type: 'start_session',
         requestId,
+        sessionId: newSession.id,
         command,
         workdir: workdir ?? '/home',
         env,

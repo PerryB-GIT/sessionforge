@@ -117,13 +117,13 @@ async function validateApiKey(rawKey) {
 async function publishToDashboard(userId, message) {
   const key = StreamKeys.dashboard(userId)
   await redis.xadd(key, '*', { data: JSON.stringify(message) })
-  await redis.xtrim(key, { kind: 'MAXLEN', threshold: 500 })
+  await redis.xtrim(key, { strategy: 'MAXLEN', threshold: 500 })
 }
 
 async function publishToAgent(machineId, message) {
   const key = StreamKeys.agent(machineId)
   await redis.xadd(key, '*', { data: JSON.stringify(message) })
-  await redis.xtrim(key, { kind: 'MAXLEN', threshold: 100 })
+  await redis.xtrim(key, { strategy: 'MAXLEN', threshold: 100 })
 }
 
 async function readStream(key, lastId) {

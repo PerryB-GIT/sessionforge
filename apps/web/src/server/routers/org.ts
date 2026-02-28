@@ -1,9 +1,11 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, isNull } from 'drizzle-orm'
 import { router, protectedProcedure } from '../trpc'
-import { db, organizations, orgMembers, users } from '@/db'
+import { db, organizations, orgMembers, orgInvites, users } from '@/db'
 import { requireFeature, FeatureNotAvailableError } from '@/lib/plan-enforcement'
+import { randomBytes } from 'crypto'
+import { sendInviteEmail } from '@/lib/email'
 
 export const orgRouter = router({
   /** Get an organization by ID (must be a member) */
@@ -113,12 +115,12 @@ export const orgRouter = router({
       return members
     }),
 
-  /** Invite a member to the org */
+  /** Invite a member to the org by email (token-based, no account required) */
   inviteMember: protectedProcedure
     .input(
       z.object({
         orgId: z.string().uuid(),
-        email: z.string().email(),
+        email: z.string().email().transform((e) => e.toLowerCase()),
         role: z.enum(['admin', 'member', 'viewer']).default('member'),
       })
     )
@@ -144,44 +146,150 @@ export const orgRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Only org owners and admins can invite members' })
       }
 
-      // Find invitee user
-      const [invitee] = await db
+      // Cannot invite yourself
+      const [caller] = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, ctx.userId))
+        .limit(1)
+
+      if (caller?.email === input.email) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'You cannot invite yourself' })
+      }
+
+      // Check if already an active member
+      const [existingUser] = await db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.email, input.email.toLowerCase()))
+        .where(eq(users.email, input.email))
         .limit(1)
 
-      if (!invitee) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'No user found with that email address. They must create an account first.',
-        })
+      if (existingUser) {
+        const [existingMember] = await db
+          .select({ id: orgMembers.id })
+          .from(orgMembers)
+          .where(and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, existingUser.id)))
+          .limit(1)
+
+        if (existingMember) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'This person is already a member of your organization' })
+        }
       }
 
-      // Check if already a member
-      const [existingMember] = await db
-        .select({ id: orgMembers.id })
-        .from(orgMembers)
-        .where(and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, invitee.id)))
+      // Fetch org name for email
+      const [org] = await db
+        .select({ name: organizations.name })
+        .from(organizations)
+        .where(eq(organizations.id, input.orgId))
         .limit(1)
 
-      if (existingMember) {
-        throw new TRPCError({ code: 'CONFLICT', message: 'User is already a member of this organization' })
+      if (!org) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' })
       }
 
-      const [newMember] = await db
-        .insert(orgMembers)
+      // Delete any previously accepted invite for this email+org before re-inviting
+      await db
+        .delete(orgInvites)
+        .where(
+          and(
+            eq(orgInvites.orgId, input.orgId),
+            eq(orgInvites.email, input.email),
+          )
+        )
+
+      // Insert fresh invite
+      const token = randomBytes(32).toString('hex')
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+      const [invite] = await db
+        .insert(orgInvites)
         .values({
           orgId: input.orgId,
-          userId: invitee.id,
+          email: input.email,
+          token,
           role: input.role,
+          invitedBy: ctx.userId,
+          expiresAt,
         })
         .returning()
 
-      // STUB: Send invitation email via Resend
-      // await resend.emails.send({ ... })
+      if (!invite) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create invitation' })
+      }
 
-      return { ...newMember, email: input.email }
+      // Send invite email — non-blocking
+      const APP_URL = process.env.NEXTAUTH_URL ?? 'https://sessionforge.dev'
+      const acceptUrl = `${APP_URL}/invite/${token}`
+
+      sendInviteEmail(input.email, caller?.email ?? null, org.name, acceptUrl).catch((err) => {
+        console.error('[inviteMember] failed to send invite email:', err)
+      })
+
+      return { id: invite.id, email: invite.email, role: invite.role, expiresAt: invite.expiresAt }
+    }),
+
+  /** List pending (not yet accepted, not expired) invites for an org */
+  listInvites: protectedProcedure
+    .input(z.object({ orgId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      // Must be owner or admin
+      const [membership] = await db
+        .select({ role: orgMembers.role })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, ctx.userId)))
+        .limit(1)
+
+      if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only org owners and admins can view invitations' })
+      }
+
+      const invites = await db
+        .select({
+          id: orgInvites.id,
+          email: orgInvites.email,
+          role: orgInvites.role,
+          expiresAt: orgInvites.expiresAt,
+          createdAt: orgInvites.createdAt,
+        })
+        .from(orgInvites)
+        .where(
+          and(
+            eq(orgInvites.orgId, input.orgId),
+            isNull(orgInvites.acceptedAt),
+          )
+        )
+        .orderBy(orgInvites.createdAt)
+
+      // Filter out expired in-memory
+      const now = new Date()
+      return invites.filter((i) => i.expiresAt > now)
+    }),
+
+  /** Revoke a pending invite */
+  revokeInvite: protectedProcedure
+    .input(z.object({ inviteId: z.string().uuid(), orgId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      // Must be owner or admin
+      const [membership] = await db
+        .select({ role: orgMembers.role })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, ctx.userId)))
+        .limit(1)
+
+      if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only org owners and admins can revoke invitations' })
+      }
+
+      const [deleted] = await db
+        .delete(orgInvites)
+        .where(and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, input.orgId)))
+        .returning({ id: orgInvites.id })
+
+      if (!deleted) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invitation not found' })
+      }
+
+      return { id: deleted.id, revoked: true }
     }),
 
   /** Remove a member from the org */

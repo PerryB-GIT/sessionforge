@@ -8,7 +8,7 @@ import (
 // SessionManager is the interface the handler uses to control sessions.
 // Implemented by session.Manager.
 type SessionManager interface {
-	Start(requestID, command, workdir string, env map[string]string) (string, error)
+	Start(requestID, sessionID, command, workdir string, env map[string]string) (string, error)
 	Stop(sessionID string, force bool) error
 	Pause(sessionID string) error
 	Resume(sessionID string) error
@@ -21,6 +21,7 @@ type SessionManager interface {
 type startSessionMsg struct {
 	Type      string            `json:"type"`
 	RequestID string            `json:"requestId"`
+	SessionID string            `json:"sessionId"`
 	Command   string            `json:"command"`
 	Workdir   string            `json:"workdir"`
 	Env       map[string]string `json:"env"`
@@ -117,17 +118,18 @@ func (h *Handler) handleStartSession(raw []byte) {
 
 	h.logger.Info("handler: start_session",
 		"requestId", m.RequestID,
+		"sessionId", m.SessionID,
 		"command", m.Command,
 		"workdir", m.Workdir,
 	)
 
-	sessionID, err := h.sessions.Start(m.RequestID, m.Command, m.Workdir, m.Env)
+	sessionID, err := h.sessions.Start(m.RequestID, m.SessionID, m.Command, m.Workdir, m.Env)
 	if err != nil {
 		h.logger.Error("handler: start_session failed", "err", err, "requestId", m.RequestID)
 		// Send a crash notification so the cloud knows the request failed.
 		_ = h.client.SendJSON(map[string]any{
 			"type":      "session_crashed",
-			"sessionId": m.RequestID,
+			"sessionId": m.SessionID,
 			"error":     err.Error(),
 		})
 		return
@@ -195,12 +197,10 @@ func (h *Handler) handleResize(raw []byte) {
 	}
 }
 
-// handlePing responds to a server ping with an immediate heartbeat.
-// The cloud uses this to verify the agent is alive.
+// handlePing responds to a server ping with a pong message.
 func (h *Handler) handlePing() {
 	h.logger.Debug("handler: ping received")
-	// Respond with a minimal heartbeat so the cloud gets a pong-equivalent.
 	_ = h.client.SendJSON(map[string]string{
-		"type": "heartbeat",
+		"type": "pong",
 	})
 }

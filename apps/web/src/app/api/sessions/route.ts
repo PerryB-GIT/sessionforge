@@ -192,6 +192,7 @@ export async function POST(req: NextRequest) {
   const agentCommand: CloudToAgentMessage = {
     type: 'start_session',
     requestId,
+    sessionId: newSession.id,
     command,
     workdir: workdir ?? process.env.DEFAULT_WORKDIR ?? '/home',
     env,

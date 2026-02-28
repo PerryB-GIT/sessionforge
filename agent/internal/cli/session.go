@@ -153,7 +153,7 @@ func runSessionStart(cmd *cobra.Command, args []string) error {
 	// Give the WebSocket connection time to register.
 	time.Sleep(600 * time.Millisecond)
 
-	sessionID, err := mgr.Start("cli-start", sessionStartCommand, sessionStartWorkdir, nil)
+	sessionID, err := mgr.Start("cli-start", "", sessionStartCommand, sessionStartWorkdir, nil)
 	if err != nil {
 		return fmt.Errorf("start session: %w", err)
 	}

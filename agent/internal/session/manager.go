@@ -68,8 +68,11 @@ func NewManager(ctx context.Context, messenger AgentMessenger, logger *slog.Logg
 
 // Start spawns a new PTY session and sends a 'session_started' message.
 // requestId is echoed back so the cloud can correlate the response.
-func (m *Manager) Start(requestID, command, workdir string, env map[string]string) (string, error) {
-	sessionID := uuid.New().String()
+// sessionID is the cloud-assigned session ID; if empty, a new UUID is generated.
+func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[string]string) (string, error) {
+	if sessionID == "" {
+		sessionID = uuid.New().String()
+	}
 
 	m.logger.Info("starting session",
 		"sessionId", sessionID,

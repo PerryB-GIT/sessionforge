@@ -9,7 +9,7 @@ export type AgentMessage =
 
 // Messages FROM cloud TO agent
 export type CloudToAgentMessage =
-  | { type: 'start_session'; requestId: string; command: string; workdir: string; env?: Record<string, string> }
+  | { type: 'start_session'; requestId: string; sessionId: string; command: string; workdir: string; env?: Record<string, string> }
   | { type: 'stop_session'; sessionId: string; force?: boolean }
   | { type: 'pause_session'; sessionId: string }
   | { type: 'resume_session'; sessionId: string }

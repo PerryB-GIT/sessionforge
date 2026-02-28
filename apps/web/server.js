@@ -327,8 +327,11 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       break
     }
 
+    case 'pong': break
+
     case 'heartbeat': {
       const { machineId, cpu, memory, disk, sessionCount } = msg
+      if (!machineId) break // guard against bare heartbeat responses
       await Promise.all([
         query(`UPDATE machines SET last_seen = NOW(), status = 'online', updated_at = NOW() WHERE id = $1`, [machineId]),
         redis.setex(StreamKeys.machineMetrics(machineId), 120, JSON.stringify({ cpu, memory, disk, sessionCount, ts: Date.now() })),

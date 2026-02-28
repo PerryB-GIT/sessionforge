@@ -135,12 +135,17 @@ async function publishToAgent(machineId, message) {
 }
 
 async function readStream(key, lastId) {
-  const result = await redis.xread({ key, id: lastId }, { count: 20 })
+  const result = await redis.xread(key, lastId, { count: 20 })
   if (!result || result.length === 0) return [lastId, []]
-  const entries = result[0]?.messages ?? []
+  // @upstash/redis returns: [[streamName, [[id, [field, value, ...]], ...]]]
+  // The value at e[1][1] is auto-parsed from JSON by @upstash/redis, so re-stringify for ws.send()
+  const entries = result[0]?.[1] ?? []
   if (entries.length === 0) return [lastId, []]
-  const newLastId = entries[entries.length - 1].id
-  const messages = entries.map((e) => e.message.data)
+  const newLastId = entries[entries.length - 1][0]
+  const messages = entries.map((e) => {
+    const val = e[1][1] // e[1] is [field, value, ...]; value is at index 1
+    return typeof val === 'string' ? val : JSON.stringify(val)
+  })
   return [newLastId, messages]
 }
 

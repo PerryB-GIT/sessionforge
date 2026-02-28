@@ -78,24 +78,32 @@ async function query(sqlStr, params = []) {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-async function getUserIdFromCookie(cookieHeader) {
-  if (!cookieHeader) return null
-  const cookieName = '__Secure-authjs.session-token'
-  const cookieNameDev = 'authjs.session-token'
-  // Try secure first, then dev
-  let match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${cookieName.replace('.', '\\.')}=([^;]+)`))
-  if (!match?.[1]) {
-    match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${cookieNameDev.replace('.', '\\.')}=([^;]+)`))
+// Lazily cache the getToken import (ESM module loaded once into CJS)
+let _getToken = null
+async function loadGetToken() {
+  if (!_getToken) {
+    const mod = await import('next-auth/jwt')
+    _getToken = mod.getToken
   }
-  if (!match?.[1]) return null
-  const token = decodeURIComponent(match[1])
-  try {
-    const [, payloadB64] = token.split('.')
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'))
-    return payload.sub ?? null
-  } catch {
-    return null
+  return _getToken
+}
+
+async function getUserIdFromCookie(req) {
+  const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET
+  if (!secret) return null
+  const getToken = await loadGetToken()
+  // next-auth/jwt getToken() accepts { headers: Record<string, string> }.
+  // Try the secure-prefixed cookie first (production), then the unprefixed one (dev).
+  const reqLike = { headers: req.headers }
+  for (const secureCookie of [true, false]) {
+    try {
+      const token = await getToken({ req: reqLike, secret, secureCookie })
+      if (token?.sub) return token.sub
+    } catch {
+      // Decryption failure with this cookie variant — try the next one
+    }
   }
+  return null
 }
 
 async function validateApiKey(rawKey) {
@@ -516,7 +524,7 @@ async function main() {
     const { pathname } = parse(req.url ?? '/')
 
     if (pathname === '/api/ws/dashboard') {
-      const userId = await getUserIdFromCookie(req.headers.cookie)
+      const userId = await getUserIdFromCookie(req)
       if (!userId) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         socket.destroy()

@@ -42,6 +42,19 @@ services:
     depends_on:
       - redis
 
+  toxiproxy:
+    image: shopify/toxiproxy:latest
+    container_name: sessionforge-toxiproxy
+    ports:
+      - "8474:8474"   # ToxiProxy management API
+      - "3001:3001"   # WebSocket chaos proxy
+      - "3002:3002"   # Latency chaos proxy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8474/version || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
   redis_data:

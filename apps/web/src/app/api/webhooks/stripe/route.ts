@@ -58,6 +58,12 @@ export async function POST(req: NextRequest) {
           await db.update(users).set({ stripeCustomerId: customerId, updatedAt: new Date() }).where(eq(users.id, userId))
         }
 
+        // Save stripeSubscriptionId on the org so subscription management works
+        const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
+        if (subscriptionId && orgId) {
+          await db.update(organizations).set({ stripeSubscriptionId: subscriptionId, updatedAt: new Date() }).where(eq(organizations.id, orgId))
+        }
+
         await updatePlanForUser(userId, plan as PlanTier, orgId || null)
         break
       }

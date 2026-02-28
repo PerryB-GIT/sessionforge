@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { Resend } from 'resend'
 import { db, users, organizations } from '@/db'
 import type { PlanTier } from '@sessionforge/shared-types'
+import { PLAN_LIMITS } from '@sessionforge/shared-types'
 import { logger } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
@@ -65,6 +66,82 @@ export async function POST(req: NextRequest) {
         }
 
         await updatePlanForUser(userId, plan as PlanTier, orgId || null)
+
+        // Send welcome email
+        try {
+          const [upgradeUser] = await db
+            .select({ email: users.email, name: users.name })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1)
+
+          if (upgradeUser) {
+            const resend = new Resend(process.env.RESEND_API_KEY)
+            const appUrl = process.env.NEXTAUTH_URL ?? 'https://sessionforge.dev'
+            const planLabel = (plan.charAt(0).toUpperCase() + plan.slice(1)) as string
+            const limits = PLAN_LIMITS[plan as PlanTier]
+            const machineLabel = limits.machines === -1 ? 'Unlimited' : String(limits.machines)
+            const historyLabel = limits.historyDays === 365 ? '1 year' : `${limits.historyDays} days`
+            const displayName = upgradeUser.name ?? upgradeUser.email
+
+            await resend.emails.send({
+              from: process.env.EMAIL_FROM ?? 'noreply@sessionforge.dev',
+              to: upgradeUser.email,
+              subject: `Your SessionForge ${planLabel} subscription is confirmed`,
+              html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:#18181b;border:1px solid #27272a;border-radius:12px;overflow:hidden">
+        <tr>
+          <td style="padding:32px 40px 24px;border-bottom:1px solid #27272a">
+            <span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px">Session<span style="color:#8b5cf6">Forge</span></span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 40px">
+            <p style="margin:0 0 8px;font-size:20px;font-weight:600;color:#ffffff">You're on ${planLabel}</p>
+            <p style="margin:0 0 24px;font-size:14px;color:#a1a1aa;line-height:1.6">
+              Hi ${displayName}, your ${planLabel} subscription is active. Here's what's unlocked:
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+              <tr>
+                <td style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#a1a1aa">Machines</td>
+                <td style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#ffffff;text-align:right">${machineLabel}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#a1a1aa">Concurrent sessions</td>
+                <td style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#ffffff;text-align:right">Unlimited</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 0;font-size:13px;color:#a1a1aa">Session history</td>
+                <td style="padding:8px 0;font-size:13px;color:#ffffff;text-align:right">${historyLabel}</td>
+              </tr>
+            </table>
+            <a href="${appUrl}/dashboard"
+               style="display:block;text-align:center;background:#7c3aed;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px">
+              Go to Dashboard
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px;border-top:1px solid #27272a">
+            <p style="margin:0;font-size:12px;color:#3f3f46">SessionForge LLC · <a href="${appUrl}/settings/org" style="color:#3f3f46">Manage subscription</a></p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+            })
+          }
+        } catch (emailErr) {
+          logger.error('Stripe webhook: welcome email send failed', { error: String(emailErr) })
+        }
+
         break
       }
 

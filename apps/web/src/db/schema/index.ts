@@ -73,6 +73,24 @@ export const orgMembers = pgTable('org_members', {
   userIdIdx: index('org_members_user_id_idx').on(table.userId),
 }))
 
+// ─── Org Invites ───────────────────────────────────────────────────────────────
+
+export const orgInvites = pgTable('org_invites', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  email: varchar('email', { length: 255 }).notNull(),
+  token: varchar('token', { length: 64 }).notNull().unique(),
+  role: memberRoleEnum('role').notNull().default('member'),
+  invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgIdIdx: index('org_invites_org_id_idx').on(table.orgId),
+  tokenIdx: index('org_invites_token_idx').on(table.token),
+  orgEmailUniq: uniqueIndex('org_invites_org_id_email_key').on(table.orgId, table.email),
+}))
+
 // ─── Machines ──────────────────────────────────────────────────────────────────
 
 export const machines = pgTable('machines', {
@@ -240,6 +258,7 @@ export const organizationsRelations = relations(organizations, ({ one, many }) =
   members: many(orgMembers),
   machines: many(machines),
   apiKeys: many(apiKeys),
+  invites: many(orgInvites),
 }))
 
 export const orgMembersRelations = relations(orgMembers, ({ one }) => ({
@@ -274,5 +293,10 @@ export const passwordResetTokensRelations = relations(passwordResetTokens, ({ on
 export const supportTicketsRelations = relations(supportTickets, ({ one }) => ({
   user: one(users, { fields: [supportTickets.userId], references: [users.id] }),
   machine: one(machines, { fields: [supportTickets.machineId], references: [machines.id] }),
+}))
+
+export const orgInvitesRelations = relations(orgInvites, ({ one }) => ({
+  org: one(organizations, { fields: [orgInvites.orgId], references: [organizations.id] }),
+  invitedByUser: one(users, { fields: [orgInvites.invitedBy], references: [users.id] }),
 }))
 

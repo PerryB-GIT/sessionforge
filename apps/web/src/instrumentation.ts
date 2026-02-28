@@ -1,7 +1,12 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     await import('../sentry.server.config')
-    await setupOTel()
+    try {
+      await setupOTel()
+    } catch (err) {
+      // OTel initialisation failures must not crash the server
+      console.error('[instrumentation] OTel setup failed (non-fatal):', err)
+    }
   }
 }
 

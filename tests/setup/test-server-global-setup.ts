@@ -1,9 +1,9 @@
 /**
- * Vitest globalSetup — starts the Next.js dev server on port 3001 before the
+ * Vitest globalSetup — starts the Next.js dev server on port 3099 before the
  * integration test suite runs, then tears it down afterwards.
  *
- * The BASE_URL env var is set to http://localhost:3001 so every test file can
- * do:  const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:3001'
+ * The BASE_URL env var is set to http://localhost:3099 so every test file can
+ * do:  const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:3099'
  *
  * Why next dev rather than next start?
  *   next start requires a prior `next build` which is slow in CI.
@@ -11,8 +11,10 @@
  *   env vars, making it suitable for integration tests against real route
  *   handlers.
  *
+ * Port 3099 is used to avoid conflicts with Docker/WSL which occupies 3001.
+ *
  * Ports:
- *   3001 — Next.js HTTP (integration tests hit this via fetch)
+ *   3099 — Next.js HTTP (integration tests hit this via fetch)
  *
  * Environment variables consumed by the route handlers are set in
  * tests/setup/vitest.setup.ts; the child process inherits process.env so
@@ -23,7 +25,7 @@ import { spawn, type ChildProcess } from 'child_process'
 import * as path from 'path'
 import * as fs from 'fs'
 
-const TEST_PORT = 3001
+const TEST_PORT = 3099
 export const TEST_BASE_URL = `http://localhost:${TEST_PORT}`
 
 // Absolute path to the Next.js app

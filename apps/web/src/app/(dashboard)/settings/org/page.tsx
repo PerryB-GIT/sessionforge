@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Building2, Users, Save, CreditCard, Check, Infinity, BarChart3, Mail } from 'lucide-react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,20 +23,46 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import type { UsageData } from '@/app/api/usage/route'
+import { UpgradeSuccessModal } from '@/components/billing/UpgradeSuccessModal'
+import type { PlanTier } from '@sessionforge/shared-types'
 
 type OrgMember = { id: string; name: string | null; email: string; role: string }
 type PendingInvite = { id: string; email: string; role: string; expiresAt: string }
 
-function StripeRedirectToasts() {
+function StripeRedirectHandler({
+  onUpgradeDetected,
+}: {
+  onUpgradeDetected: (plan: PlanTier) => void
+}) {
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const { update } = useSession()
+
   useEffect(() => {
-    if (searchParams.get('upgraded') === '1') {
-      toast.success('Plan upgraded successfully! Welcome to your new plan.')
-    }
     if (searchParams.get('canceled') === '1') {
       toast.info('Checkout canceled. Your plan has not changed.')
     }
-  }, [searchParams])
+
+    if (searchParams.get('upgraded') !== '1') return
+
+    // Strip query param immediately so refresh doesn't re-trigger
+    router.replace('/settings/org')
+
+    // Fetch fresh plan from DB, push into JWT, then open modal
+    fetch('/api/auth/refresh-session', { method: 'POST' })
+      .then((r) => r.json())
+      .then(async (data) => {
+        if (data.plan) {
+          await update({ plan: data.plan })
+          onUpgradeDetected(data.plan as PlanTier)
+        }
+      })
+      .catch(() => {
+        // Fallback: show modal anyway with plan from current session
+        onUpgradeDetected('pro')
+      })
+  }, [searchParams, router, update, onUpgradeDetected])
+
   return null
 }
 
@@ -70,6 +96,7 @@ export default function OrgSettingsPage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [isInviting, setIsInviting] = useState(false)
   const [isRevoking, setIsRevoking] = useState<string | null>(null)
+  const [upgradedPlan, setUpgradedPlan] = useState<PlanTier | null>(null)
   const { data: session } = useSession()
   const currentPlan = (session?.user as { plan?: string } | undefined)?.plan ?? 'free'
 
@@ -225,11 +252,20 @@ export default function OrgSettingsPage() {
     setInviteOpen(open)
   }
 
+  const handleUpgradeDetected = useCallback((plan: PlanTier) => {
+    setUpgradedPlan(plan)
+  }, [])
+
   return (
     <div className="space-y-6 max-w-2xl">
       <Suspense>
-        <StripeRedirectToasts />
+        <StripeRedirectHandler onUpgradeDetected={handleUpgradeDetected} />
       </Suspense>
+      <UpgradeSuccessModal
+        open={upgradedPlan !== null}
+        onClose={() => setUpgradedPlan(null)}
+        plan={upgradedPlan ?? 'pro'}
+      />
       <div>
         <h2 className="text-lg font-semibold text-white">Organization Settings</h2>
         <p className="text-sm text-gray-400">Manage your organization profile and billing</p>

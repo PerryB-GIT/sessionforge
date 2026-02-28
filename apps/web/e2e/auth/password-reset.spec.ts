@@ -22,13 +22,12 @@ test.describe('Forgot Password Page', () => {
 
   test('shows validation error for invalid email format', async ({ page }) => {
     await page.goto('/forgot-password')
-    // Change input type to "text" so the browser skips native email format
-    // validation, allowing react-hook-form's Zod resolver to run instead.
-    await page.evaluate(() => {
-      const input = document.querySelector('#email') as HTMLInputElement
-      input.type = 'text'
-    })
     await page.getByLabel(/email/i).fill('not-an-email')
+    // Disable browser-native form validation so react-hook-form's Zod
+    // resolver runs instead of the browser's type="email" check.
+    await page.evaluate(() => {
+      document.querySelector('form')?.setAttribute('novalidate', '')
+    })
     await page.getByRole('button', { name: /send reset link/i }).click()
     await expect(page.getByText(/invalid email address/i)).toBeVisible()
   })
@@ -74,26 +73,33 @@ test.describe('Reset Password Page', () => {
 
   test('shows validation error when password is too short', async ({ page }) => {
     await page.goto('/reset-password?token=abc123validtoken')
-    await page.getByLabel(/new password/i).fill('short')
-    await page.getByLabel(/confirm password/i).fill('short')
+    // Wait for form to render before filling
+    await expect(page.getByRole('heading', { name: /set new password/i })).toBeVisible()
+    await page.locator('#password').fill('short')
+    await page.locator('#confirmPassword').fill('short')
     await page.getByRole('button', { name: /reset password/i }).click()
-    await expect(page.getByText(/at least 8 characters/i)).toBeVisible()
+    // Zod error: 'Password must be at least 8 characters'
+    await expect(page.locator('p').filter({ hasText: /at least 8 characters/i })).toBeVisible()
   })
 
   test('shows validation error when password missing uppercase', async ({ page }) => {
     await page.goto('/reset-password?token=abc123validtoken')
-    await page.getByLabel(/new password/i).fill('alllowercase1')
-    await page.getByLabel(/confirm password/i).fill('alllowercase1')
+    await expect(page.getByRole('heading', { name: /set new password/i })).toBeVisible()
+    await page.locator('#password').fill('alllowercase1')
+    await page.locator('#confirmPassword').fill('alllowercase1')
     await page.getByRole('button', { name: /reset password/i }).click()
-    await expect(page.getByText(/uppercase letter/i)).toBeVisible()
+    // Zod error: 'Must contain at least one uppercase letter'
+    await expect(page.locator('p').filter({ hasText: /uppercase letter/i })).toBeVisible()
   })
 
   test('shows validation error when password missing number', async ({ page }) => {
     await page.goto('/reset-password?token=abc123validtoken')
-    await page.getByLabel(/new password/i).fill('NoNumbersHere')
-    await page.getByLabel(/confirm password/i).fill('NoNumbersHere')
+    await expect(page.getByRole('heading', { name: /set new password/i })).toBeVisible()
+    await page.locator('#password').fill('NoNumbersHere')
+    await page.locator('#confirmPassword').fill('NoNumbersHere')
     await page.getByRole('button', { name: /reset password/i }).click()
-    await expect(page.getByText(/one number/i)).toBeVisible()
+    // Zod error: 'Must contain at least one number'
+    await expect(page.locator('p').filter({ hasText: /one number/i })).toBeVisible()
   })
 
   test('shows validation error when passwords do not match', async ({ page }) => {
@@ -146,12 +152,12 @@ test.describe('API Routes (mocked)', () => {
 
   test('POST /api/auth/forgot-password with invalid email is rejected client-side', async ({ page }) => {
     await page.goto('/forgot-password')
-    // Switch type to "text" so browser doesn't block submit with its own validation
-    await page.evaluate(() => {
-      const input = document.querySelector('#email') as HTMLInputElement
-      input.type = 'text'
-    })
     await page.getByLabel(/email/i).fill('not-valid')
+    // Disable browser-native form validation so react-hook-form's Zod
+    // resolver runs instead of the browser's type="email" check.
+    await page.evaluate(() => {
+      document.querySelector('form')?.setAttribute('novalidate', '')
+    })
     await page.getByRole('button', { name: /send reset link/i }).click()
     await expect(page.getByText(/invalid email address/i)).toBeVisible()
   })

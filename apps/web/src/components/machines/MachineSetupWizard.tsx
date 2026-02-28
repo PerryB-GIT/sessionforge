@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Check, Copy, Terminal, Monitor, CheckCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -18,14 +18,35 @@ const INSTALL_COMMANDS = {
 
 type TabType = 'linux' | 'macos' | 'windows'
 
-export function MachineSetupWizard({ apiKey = 'sf_live_xxxxxxxxxxxxxxxxxxxx', onComplete }: MachineSetupWizardProps) {
+export function MachineSetupWizard({ apiKey: apiKeyProp, onComplete }: MachineSetupWizardProps) {
   const [step, setStep] = useState(1)
   const [tab, setTab] = useState<TabType>('linux')
   const [copied, setCopied] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [verified, setVerified] = useState(false)
+  const [apiKey, setApiKey] = useState<string>(apiKeyProp ?? '')
+  const [keyLoading, setKeyLoading] = useState(!apiKeyProp)
+  const [keyMissing, setKeyMissing] = useState(false)
 
-  const command = INSTALL_COMMANDS[tab].replace('SF_API_KEY', apiKey)
+  // On mount, if no apiKey was passed as a prop, fetch the first key from /api/keys
+  useEffect(() => {
+    if (apiKeyProp) return
+    setKeyLoading(true)
+    fetch('/api/keys')
+      .then((res) => res.json())
+      .then((json) => {
+        const first = json.data?.items?.[0]?.key ?? json.data?.[0]?.key ?? null
+        if (first) {
+          setApiKey(first)
+        } else {
+          setKeyMissing(true)
+        }
+      })
+      .catch(() => setKeyMissing(true))
+      .finally(() => setKeyLoading(false))
+  }, [apiKeyProp])
+
+  const command = INSTALL_COMMANDS[tab].replace('SF_API_KEY', apiKey || 'SF_API_KEY')
 
   async function copyCommand() {
     await navigator.clipboard.writeText(command)
@@ -99,6 +120,20 @@ export function MachineSetupWizard({ apiKey = 'sf_live_xxxxxxxxxxxxxxxxxxxx', on
           <p className="text-xs text-gray-400 mb-4">
             Run this command on the machine you want to manage. The agent will connect automatically.
           </p>
+
+          {keyLoading && (
+            <div className="rounded-lg bg-[#0a0a0f] border border-[#1e1e2e] p-4 mb-4 text-xs text-gray-400">
+              Loading your API key...
+            </div>
+          )}
+
+          {keyMissing && (
+            <div className="rounded-lg bg-yellow-500/5 border border-yellow-500/20 p-4 mb-4">
+              <p className="text-xs text-yellow-400">
+                No API key found. Please generate one in <strong>Settings &rarr; API Keys</strong> before continuing.
+              </p>
+            </div>
+          )}
 
           {/* OS Tabs */}
           <div className="flex gap-1 mb-3 border-b border-[#1e1e2e]">

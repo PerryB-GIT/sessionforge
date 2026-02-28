@@ -13,8 +13,29 @@ const registerSchema = z.object({
   name: z.string().min(1).max(255).optional(),
 })
 
+const RATE_LIMIT_REQUESTS = 5
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000 // 1 hour
+
 export async function POST(req: NextRequest) {
   try {
+    // Redis rate limit: 5 registrations per IP per hour
+    const redisUrl = process.env.UPSTASH_REDIS_REST_URL
+    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
+    if (redisUrl && redisToken) {
+      const { Ratelimit } = await import('@upstash/ratelimit')
+      const { Redis } = await import('@upstash/redis')
+      const ratelimit = new Ratelimit({
+        redis: new Redis({ url: redisUrl, token: redisToken }),
+        limiter: Ratelimit.slidingWindow(RATE_LIMIT_REQUESTS, `${RATE_LIMIT_WINDOW_MS}ms`),
+        prefix: 'rl:register',
+      })
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
+      const { success } = await ratelimit.limit(ip)
+      if (!success) {
+        return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 })
+      }
+    }
+
     const body = await req.json()
     const parsed = registerSchema.safeParse(body)
 

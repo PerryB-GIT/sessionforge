@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -52,6 +52,15 @@ export function OnboardingWizard() {
     resolver: zodResolver(orgSchema),
     defaultValues: { orgName: '' },
   })
+
+  // When the wizard reaches step 5 (celebration screen), mark onboarding complete
+  useEffect(() => {
+    if (step === 5) {
+      fetch('/api/onboarding/complete', { method: 'POST' }).catch((err) => {
+        console.error('[onboarding] failed to mark complete:', err)
+      })
+    }
+  }, [step])
 
   const installCommand = apiKey
     ? INSTALL_COMMAND.replace('SF_API_KEY_PLACEHOLDER', apiKey)

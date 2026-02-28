@@ -114,15 +114,30 @@ export const authConfig: NextAuthConfig = {
     GitHub({
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          scope: 'read:user user:email',
+        },
+      },
     }),
   ],
 
   callbacks: {
     async signIn({ user, account }) {
-      if (!user.email) return false
-
-      // For OAuth providers, auto-create user if they don't exist
+      // For OAuth providers, resolve email — GitHub may return null even with
+      // user:email scope when the account has no verified email address.
+      // Fall back to a deterministic placeholder so the account can still be
+      // created; the user can add a real email later from their profile.
       if (account && account.provider !== 'credentials') {
+        if (!user.email) {
+          if (account.provider === 'github' && account.providerAccountId) {
+            user.email = `github_${account.providerAccountId}@sessionforge.dev`
+          } else {
+            // Unknown OAuth provider with no email — block sign-in.
+            return false
+          }
+        }
+
         const [existing] = await db
           .select({ id: users.id })
           .from(users)
@@ -136,7 +151,13 @@ export const authConfig: NextAuthConfig = {
             emailVerified: new Date(),
           })
         }
+
+        return true
       }
+
+      // Credentials provider: email must be present (authorize() already
+      // validates this, but guard here for safety).
+      if (!user.email) return false
 
       return true
     },

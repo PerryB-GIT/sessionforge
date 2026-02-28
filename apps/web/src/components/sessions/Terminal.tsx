@@ -48,7 +48,7 @@ function StubTerminalContent({ sessionId }: { sessionId: string }) {
   )
 }
 
-export function Terminal({ sessionId, isConnected = false, onSendInput }: TerminalProps) {
+export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendInput }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<XTermTerminal | null>(null)
   const fitAddonRef = useRef<XTermFitAddon | null>(null)
@@ -163,15 +163,16 @@ export function Terminal({ sessionId, isConnected = false, onSendInput }: Termin
       terminalRef.current = terminal
       fitAddonRef.current = fitAddon
 
-      // Handle keyboard input — send to WS
+      // Handle keyboard input — send to WS only via the terminal's own WebSocket.
+      // Do NOT call onSendInput here: page.tsx wraps data in btoa() again, causing
+      // double base64 encoding. The wsRef path below is the single correct path.
       terminal.onData((data) => {
-        if (onSendInput) onSendInput(data)
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(
             JSON.stringify({
               type: 'session_input',
               sessionId,
-              data: btoa(data), // base64 encode PTY input
+              data: btoa(data), // base64 encode PTY input — decoded once by agent writeInput
             })
           )
         }
@@ -203,7 +204,7 @@ export function Terminal({ sessionId, isConnected = false, onSendInput }: Termin
       terminalRef.current?.dispose()
       wsRef.current?.close()
     }
-  }, [sessionId, connectWebSocket, onSendInput])
+  }, [sessionId, connectWebSocket])
 
   return (
     <div className="relative flex flex-col h-full w-full overflow-hidden rounded-lg bg-[#0a0a0f] border border-[#1e1e2e]">

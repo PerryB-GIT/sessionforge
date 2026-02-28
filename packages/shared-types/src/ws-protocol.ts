@@ -19,7 +19,7 @@ export type CloudToAgentMessage =
 
 // Messages FROM cloud TO browser dashboard
 export type CloudToBrowserMessage =
-  | { type: 'machine_updated'; machine: { id: string; status: string; cpu: number; memory: number } }
+  | { type: 'machine_updated'; machine: { id: string; status: string; cpu: number; memory: number; disk: number; sessionCount: number } }
   | { type: 'session_updated'; session: { id: string; status: string; machineId: string } }
   | { type: 'session_output'; sessionId: string; data: string }
   | { type: 'alert_fired'; alertId: string; message: string; severity: 'info' | 'warning' | 'critical' }

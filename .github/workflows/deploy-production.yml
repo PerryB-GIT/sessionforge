@@ -118,7 +118,8 @@ jobs:
             --cpu 1 \
             --port 3000 \
             --set-env-vars "NODE_ENV=production" \
-            --set-secrets "DATABASE_URL=sessionforge-db-url:latest,REDIS_URL=sessionforge-redis-url:latest,NEXTAUTH_SECRET=sessionforge-nextauth-secret:latest,E2E_TEST_SECRET=sessionforge-e2e-test-secret:latest" \
+            --set-secrets "DATABASE_URL=sessionforge-db-url:latest,REDIS_URL=sessionforge-redis-url:latest,NEXTAUTH_SECRET=sessionforge-nextauth-secret:latest,E2E_TEST_SECRET=sessionforge-e2e-test-secret:latest,NEXTAUTH_URL=sessionforge-nextauth-url:latest,GITHUB_CLIENT_ID=sessionforge-github-client-id:latest,GITHUB_CLIENT_SECRET=sessionforge-github-client-secret:latest,GOOGLE_CLIENT_ID=sessionforge-google-client-id:latest,GOOGLE_CLIENT_SECRET=sessionforge-google-client-secret:latest,UPSTASH_REDIS_REST_URL=sessionforge-upstash-rest-url:latest,UPSTASH_REDIS_REST_TOKEN=sessionforge-upstash-rest-token:latest" \
+
             --quiet
 
       - name: Output production URL

@@ -9,6 +9,7 @@ import {
   real,
   boolean,
   uniqueIndex,
+  index,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 
@@ -66,7 +67,11 @@ export const orgMembers = pgTable('org_members', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   role: memberRoleEnum('role').notNull().default('member'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgIdIdx: index('org_members_org_id_idx').on(table.orgId),
+  userIdIdx: index('org_members_user_id_idx').on(table.userId),
+}))
 
 // ─── Machines ──────────────────────────────────────────────────────────────────
 
@@ -85,7 +90,11 @@ export const machines = pgTable('machines', {
   ramGb: real('ram_gb'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (table) => ({
+  userIdIdx: index('machines_user_id_idx').on(table.userId),
+  orgIdIdx: index('machines_org_id_idx').on(table.orgId),
+  statusIdx: index('machines_status_idx').on(table.status),
+}))
 
 // ─── Sessions ──────────────────────────────────────────────────────────────────
 
@@ -103,7 +112,11 @@ export const sessions = pgTable('sessions', {
   startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
   stoppedAt: timestamp('stopped_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (table) => ({
+  machineIdIdx: index('sessions_machine_id_idx').on(table.machineId),
+  userIdIdx: index('sessions_user_id_idx').on(table.userId),
+  statusIdx: index('sessions_status_idx').on(table.status),
+}))
 
 // ─── API Keys ──────────────────────────────────────────────────────────────────
 
@@ -118,7 +131,10 @@ export const apiKeys = pgTable('api_keys', {
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index('api_keys_user_id_idx').on(table.userId),
+}))
 
 // ─── Auth: OAuth Accounts (NextAuth) ──────────────────────────────────────────
 
@@ -168,7 +184,9 @@ export const authSessions = pgTable('sessions_auth', {
   sessionToken: varchar('session_token', { length: 255 }).notNull().unique(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   expires: timestamp('expires', { withTimezone: true }).notNull(),
-})
+}, (table) => ({
+  userIdIdx: index('sessions_auth_user_id_idx').on(table.userId),
+}))
 
 // ─── Password Reset Tokens ─────────────────────────────────────────────────────
 
@@ -179,7 +197,9 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   usedAt: timestamp('used_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (table) => ({
+  userIdIdx: index('password_reset_tokens_user_id_idx').on(table.userId),
+}))
 
 // ─── Support Tickets ───────────────────────────────────────────────────────────
 
@@ -198,7 +218,10 @@ export const supportTickets = pgTable('support_tickets', {
   closedAt: timestamp('closed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (table) => ({
+  userIdIdx: index('support_tickets_user_id_idx').on(table.userId),
+  statusIdx: index('support_tickets_status_idx').on(table.status),
+}))
 
 // ─── Relations ─────────────────────────────────────────────────────────────────
 

@@ -35,23 +35,41 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   experimental: {
-    serverComponentsExternalPackages: ['ws', '@grpc/grpc-js', '@grpc/proto-loader', '@opentelemetry/sdk-node', '@opentelemetry/exporter-trace-otlp-grpc', '@opentelemetry/exporter-logs-otlp-grpc', '@opentelemetry/exporter-metrics-otlp-grpc', '@opentelemetry/configuration'],
+    serverComponentsExternalPackages: [
+      'ws',
+      '@grpc/grpc-js',
+      '@grpc/proto-loader',
+      '@opentelemetry/sdk-node',
+      '@opentelemetry/sdk-trace-node',
+      '@opentelemetry/sdk-trace-base',
+      '@opentelemetry/sdk-logs',
+      '@opentelemetry/sdk-metrics',
+      '@opentelemetry/exporter-trace-otlp-grpc',
+      '@opentelemetry/exporter-trace-otlp-http',
+      '@opentelemetry/exporter-trace-otlp-proto',
+      '@opentelemetry/exporter-logs-otlp-grpc',
+      '@opentelemetry/exporter-logs-otlp-http',
+      '@opentelemetry/exporter-logs-otlp-proto',
+      '@opentelemetry/exporter-metrics-otlp-grpc',
+      '@opentelemetry/exporter-metrics-otlp-http',
+      '@opentelemetry/exporter-metrics-otlp-proto',
+      '@opentelemetry/exporter-prometheus',
+      '@opentelemetry/exporter-zipkin',
+      '@opentelemetry/configuration',
+      '@opentelemetry/otlp-exporter-base',
+      '@opentelemetry/otlp-grpc-exporter-base',
+      '@opentelemetry/otlp-transformer',
+      '@opentelemetry/instrumentation',
+      '@opentelemetry/resources',
+    ],
     instrumentationHook: true,
   },
   webpack(config, { isServer }) {
     if (!isServer) {
-      // Prevent any Node.js-only packages from ending up in the client bundle
       config.resolve.fallback = {
         ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-        stream: false,
-        http: false,
-        https: false,
-        zlib: false,
-        path: false,
-        crypto: false,
+        fs: false, net: false, tls: false, stream: false,
+        http: false, https: false, zlib: false, path: false,
       }
     }
     return config

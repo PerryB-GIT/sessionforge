@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
-import { eq } from 'drizzle-orm'
+import { eq, and, gt, isNull } from 'drizzle-orm'
 import { z } from 'zod'
-import { db, users } from '@/db'
+import { db, users, orgInvites, orgMembers } from '@/db'
 import { verificationTokens } from '@/db/schema'
 import { sendVerificationEmail } from '@/lib/email'
 
@@ -93,6 +93,39 @@ export async function POST(req: NextRequest) {
 
     if (!newUser) {
       throw new Error('Failed to create user')
+    }
+
+    // Auto-join: if there's a pending, non-expired invite for this email, add to org immediately
+    try {
+      const now = new Date()
+      const [pendingInvite] = await db
+        .select({ id: orgInvites.id, orgId: orgInvites.orgId, role: orgInvites.role })
+        .from(orgInvites)
+        .where(
+          and(
+            eq(orgInvites.email, normalizedEmail),
+            isNull(orgInvites.acceptedAt),
+            gt(orgInvites.expiresAt, now),
+          )
+        )
+        .limit(1)
+
+      if (pendingInvite) {
+        await db.transaction(async (tx) => {
+          await tx.insert(orgMembers).values({
+            orgId: pendingInvite.orgId,
+            userId: newUser.id,
+            role: pendingInvite.role,
+          })
+          await tx
+            .update(orgInvites)
+            .set({ acceptedAt: now })
+            .where(eq(orgInvites.id, pendingInvite.id))
+        })
+      }
+    } catch (err) {
+      // Non-fatal — user is created regardless; log and continue
+      console.error('[register] auto-join invite check failed:', err)
     }
 
     // Generate and store email verification token

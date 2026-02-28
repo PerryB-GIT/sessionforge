@@ -14,6 +14,9 @@ const PROTECTED_PREFIXES = [
 
 const AUTH_ROUTES = ['/login', '/signup']
 
+// Routes that must remain accessible without authentication
+const PUBLIC_PREFIXES = ['/invite']
+
 // ─── Middleware ─────────────────────────────────────────────────────────────
 
 export async function middleware(req: NextRequest): Promise<NextResponse> {
@@ -21,8 +24,10 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
   const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route))
+  const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 
   if (!isProtected && !isAuthRoute) return NextResponse.next()
+  if (isPublic) return NextResponse.next()
 
   // Use getToken which reads the JWT directly — no NextAuth handler needed
   // secureCookie must match what NextAuth used when setting the cookie:

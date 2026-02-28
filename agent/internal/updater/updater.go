@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	releasesURL = "https://api.github.com/repos/sessionforge/agent/releases/latest"
+	releasesURL = "https://api.github.com/repos/PerryB-GIT/sessionforge/releases/latest"
 	httpTimeout = 30 * time.Second
 )
 

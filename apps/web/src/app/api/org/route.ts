@@ -11,28 +11,36 @@ export const dynamic = 'force-dynamic'
 // Returns the first org owned by the authenticated user.
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { data: null, error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 } } satisfies ApiError,
+        { status: 401 }
+      )
+    }
+
+    const [org] = await db
+      .select({ id: organizations.id, name: organizations.name, slug: organizations.slug, plan: organizations.plan })
+      .from(organizations)
+      .where(eq(organizations.ownerId, session.user.id))
+      .limit(1)
+
+    if (!org) {
+      return NextResponse.json(
+        { data: null, error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 } } satisfies ApiError,
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({ data: org, error: null } satisfies ApiResponse<typeof org>)
+  } catch (err) {
+    console.error('[GET /api/org] unhandled error:', err)
     return NextResponse.json(
-      { data: null, error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 } } satisfies ApiError,
-      { status: 401 }
+      { data: null, error: { code: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unknown error', statusCode: 500 } },
+      { status: 500 }
     )
   }
-
-  const [org] = await db
-    .select({ id: organizations.id, name: organizations.name, slug: organizations.slug, plan: organizations.plan })
-    .from(organizations)
-    .where(eq(organizations.ownerId, session.user.id))
-    .limit(1)
-
-  if (!org) {
-    return NextResponse.json(
-      { data: null, error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 } } satisfies ApiError,
-      { status: 404 }
-    )
-  }
-
-  return NextResponse.json({ data: org, error: null } satisfies ApiResponse<typeof org>)
 }
 
 // ─── PATCH /api/org ────────────────────────────────────────────────────────────
@@ -43,59 +51,67 @@ const patchSchema = z.object({
 })
 
 export async function PATCH(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json(
-      { data: null, error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 } } satisfies ApiError,
-      { status: 401 }
-    )
-  }
-
-  const body = await req.json()
-  const parsed = patchSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json(
-      { data: null, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid input', statusCode: 400 } } satisfies ApiError,
-      { status: 400 }
-    )
-  }
-
-  const updates = parsed.data
-  if (Object.keys(updates).length === 0) {
-    return NextResponse.json(
-      { data: null, error: { code: 'VALIDATION_ERROR', message: 'No fields to update', statusCode: 400 } } satisfies ApiError,
-      { status: 400 }
-    )
-  }
-
-  // Verify slug uniqueness if changing it
-  if (updates.slug) {
-    const [conflict] = await db
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.slug, updates.slug))
-      .limit(1)
-
-    if (conflict) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { data: null, error: { code: 'CONFLICT', message: 'That URL slug is already taken', statusCode: 409 } } satisfies ApiError,
-        { status: 409 }
+        { data: null, error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 } } satisfies ApiError,
+        { status: 401 }
       )
     }
-  }
 
-  const [updated] = await db
-    .update(organizations)
-    .set({ ...updates, updatedAt: new Date() })
-    .where(eq(organizations.ownerId, session.user.id))
-    .returning()
+    const body = await req.json()
+    const parsed = patchSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { data: null, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid input', statusCode: 400 } } satisfies ApiError,
+        { status: 400 }
+      )
+    }
 
-  if (!updated) {
+    const updates = parsed.data
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json(
+        { data: null, error: { code: 'VALIDATION_ERROR', message: 'No fields to update', statusCode: 400 } } satisfies ApiError,
+        { status: 400 }
+      )
+    }
+
+    // Verify slug uniqueness if changing it
+    if (updates.slug) {
+      const [conflict] = await db
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(eq(organizations.slug, updates.slug))
+        .limit(1)
+
+      if (conflict) {
+        return NextResponse.json(
+          { data: null, error: { code: 'CONFLICT', message: 'That URL slug is already taken', statusCode: 409 } } satisfies ApiError,
+          { status: 409 }
+        )
+      }
+    }
+
+    const [updated] = await db
+      .update(organizations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(organizations.ownerId, session.user.id))
+      .returning()
+
+    if (!updated) {
+      return NextResponse.json(
+        { data: null, error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 } } satisfies ApiError,
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({ data: updated, error: null } satisfies ApiResponse<typeof updated>)
+  } catch (err) {
+    console.error('[PATCH /api/org] unhandled error:', err)
     return NextResponse.json(
-      { data: null, error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 } } satisfies ApiError,
-      { status: 404 }
+      { data: null, error: { code: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unknown error', statusCode: 500 } },
+      { status: 500 }
     )
   }
-
-  return NextResponse.json({ data: updated, error: null } satisfies ApiResponse<typeof updated>)
 }

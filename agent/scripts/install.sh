@@ -1,16 +1,21 @@
 #!/bin/sh
-# SessionForge Agent — Linux/macOS one-line installer
+# SessionForge Agent — Linux/macOS/Windows (Git Bash) one-line installer
 #
 # Basic install (prompts for key):
-#   curl -fsSL https://sessionforge.dev/agent | sh
+#   curl -fsSL https://sessionforge.dev/install.sh | sh
 #
 # Fully automated (key inline):
-#   curl -fsSL https://sessionforge.dev/agent | bash -s -- --key sf_live_xxxxx
+#   curl -fsSL https://sessionforge.dev/install.sh | bash -s -- --key sf_live_xxxxx
+#
+# Windows (PowerShell — recommended):
+#   irm https://sessionforge.dev/install.ps1 | iex
+#
+# Windows (Git Bash):
+#   curl -fsSL https://sessionforge.dev/install.sh | bash -s -- --key sf_live_xxxxx
 set -e
 
 REPO="PerryB-GIT/sessionforge"
 BINARY="sessionforge"
-INSTALL_DIR="/usr/local/bin"
 
 # ── Colours ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -34,11 +39,12 @@ while [ $# -gt 0 ]; do
 done
 
 # ── Detect OS ──────────────────────────────────────────────────────────────────
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-case "$OS" in
-  linux)  OS="linux"  ;;
-  darwin) OS="darwin" ;;
-  *)      err "Unsupported operating system: $OS" ;;
+UNAME=$(uname -s)
+case "$UNAME" in
+  Linux)                        OS="linux"   ;;
+  Darwin)                       OS="darwin"  ;;
+  MINGW*|MSYS*|CYGWIN*|WINDOWS) OS="windows" ;;
+  *)                            err "Unsupported operating system: $UNAME" ;;
 esac
 
 # ── Detect Architecture ────────────────────────────────────────────────────────
@@ -67,36 +73,80 @@ VERSION=$(printf '%s' "$LATEST_JSON" | grep '"tag_name":' | sed -E 's/.*"([^"]+)
 [ -z "$VERSION" ] && err "Could not determine latest version. Check your internet connection."
 log "Latest version: ${VERSION}"
 
-# ── Download and extract ───────────────────────────────────────────────────────
-ARCHIVE="sessionforge_${OS}_${ARCH}.tar.gz"
-DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
-TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
+# ── Windows install path ───────────────────────────────────────────────────────
+if [ "$OS" = "windows" ]; then
+  BINARY="sessionforge.exe"
+  # Resolve %LOCALAPPDATA% or fall back to a sensible default
+  if [ -n "$LOCALAPPDATA" ]; then
+    # Convert Windows path to POSIX for use in shell (Git Bash handles this)
+    INSTALL_DIR=$(cygpath -u "$LOCALAPPDATA/Programs/sessionforge" 2>/dev/null || echo "$LOCALAPPDATA/Programs/sessionforge")
+  else
+    INSTALL_DIR="$HOME/AppData/Local/Programs/sessionforge"
+  fi
+  mkdir -p "$INSTALL_DIR"
 
-log "Downloading ${ARCHIVE}..."
-$FETCH "$DOWNLOAD_URL" | tar xz -C "$TMP_DIR"
+  ARCHIVE="sessionforge_${OS}_${ARCH}.zip"
+  DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
+  TMP_DIR=$(mktemp -d)
+  trap 'rm -rf "$TMP_DIR"' EXIT
 
-# ── Install binary ─────────────────────────────────────────────────────────────
-if [ -w "$INSTALL_DIR" ]; then
-  SUDO=""
-else
-  SUDO="sudo"
-  log "Need sudo to install to ${INSTALL_DIR}"
-fi
+  log "Downloading ${ARCHIVE}..."
+  $FETCH "$DOWNLOAD_URL" -o "${TMP_DIR}/${ARCHIVE}"
 
-$SUDO mv "${TMP_DIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
-$SUDO chmod +x "${INSTALL_DIR}/${BINARY}"
+  log "Extracting..."
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -q "${TMP_DIR}/${ARCHIVE}" -d "$TMP_DIR"
+  else
+    err "unzip not found. Install Git for Windows (which includes unzip) and retry."
+  fi
 
-ok "SessionForge Agent ${VERSION} installed to ${INSTALL_DIR}/${BINARY}"
+  mv "${TMP_DIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  chmod +x "${INSTALL_DIR}/${BINARY}"
 
-# ── Verify binary is in PATH ───────────────────────────────────────────────────
-if ! command -v sessionforge >/dev/null 2>&1; then
-  printf "\n${RED}Warning:${RESET} ${INSTALL_DIR} is not in your PATH.\n"
-  printf "Add this to your shell profile:\n"
-  printf "  export PATH=\"\$PATH:${INSTALL_DIR}\"\n\n"
+  ok "SessionForge Agent ${VERSION} installed to ${INSTALL_DIR}/${BINARY}"
+
+  # ── Add to PATH for this session and advise on permanent PATH ───────────────
+  export PATH="$PATH:$INSTALL_DIR"
   SF="${INSTALL_DIR}/${BINARY}"
+
+  if ! command -v sessionforge >/dev/null 2>&1; then
+    WINPATH=$(cygpath -w "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")
+    printf "\n${CYAN}Note:${RESET} To use 'sessionforge' from any terminal, add to your PATH:\n"
+    printf "  ${BOLD}%s${RESET}\n" "$WINPATH"
+    printf "  (Settings → System → Advanced → Environment Variables → Path → New)\n\n"
+  fi
+
+# ── Linux / macOS install path ─────────────────────────────────────────────────
 else
-  SF="sessionforge"
+  INSTALL_DIR="/usr/local/bin"
+  ARCHIVE="sessionforge_${OS}_${ARCH}.tar.gz"
+  DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
+  TMP_DIR=$(mktemp -d)
+  trap 'rm -rf "$TMP_DIR"' EXIT
+
+  log "Downloading ${ARCHIVE}..."
+  $FETCH "$DOWNLOAD_URL" | tar xz -C "$TMP_DIR"
+
+  if [ -w "$INSTALL_DIR" ]; then
+    SUDO=""
+  else
+    SUDO="sudo"
+    log "Need sudo to install to ${INSTALL_DIR}"
+  fi
+
+  $SUDO mv "${TMP_DIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  $SUDO chmod +x "${INSTALL_DIR}/${BINARY}"
+
+  ok "SessionForge Agent ${VERSION} installed to ${INSTALL_DIR}/${BINARY}"
+
+  if ! command -v sessionforge >/dev/null 2>&1; then
+    printf "\n${RED}Warning:${RESET} ${INSTALL_DIR} is not in your PATH.\n"
+    printf "Add this to your shell profile:\n"
+    printf "  export PATH=\"\$PATH:${INSTALL_DIR}\"\n\n"
+    SF="${INSTALL_DIR}/${BINARY}"
+  else
+    SF="sessionforge"
+  fi
 fi
 
 # ── Authenticate if key was provided ──────────────────────────────────────────
@@ -107,12 +157,22 @@ if [ -n "$API_KEY" ]; then
 
   # ── Install as system service ────────────────────────────────────────────────
   log "Installing as system service..."
-  if "$SF" service install 2>/dev/null; then
-    "$SF" service start 2>/dev/null || true
-    ok "Service installed and started."
+  if [ "$OS" = "windows" ]; then
+    if "$SF" service install 2>/dev/null; then
+      "$SF" service start 2>/dev/null || true
+      ok "Service installed and started."
+    else
+      log "Service install may require an elevated (Admin) terminal. Run:"
+      printf "  ${BOLD}sessionforge service install${RESET}\n"
+    fi
   else
-    log "Service install requires elevated permissions. Run:"
-    printf "  sudo ${SF} service install\n"
+    if "$SF" service install 2>/dev/null; then
+      "$SF" service start 2>/dev/null || true
+      ok "Service installed and started."
+    else
+      log "Service install requires elevated permissions. Run:"
+      printf "  sudo ${SF} service install\n"
+    fi
   fi
 
   printf "\n${GREEN}${BOLD}Setup complete!${RESET}\n"

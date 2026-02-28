@@ -1,11 +1,10 @@
 # SessionForge Agent — Windows one-line installer
 #
 # Basic install (no key):
-#   iwr -useb https://sessionforge.dev/agent/install.ps1 | iex
+#   irm https://sessionforge.dev/install.ps1 | iex
 #
-# Fully automated (key inline) — two styles both work:
-#   iwr -useb https://sessionforge.dev/agent/install.ps1 | iex; Install-SessionForge -ApiKey 'sf_live_xxxxx'
-#   irm https://sessionforge.dev/agent/install.ps1 | iex; Install-SessionForge -ApiKey 'sf_live_xxxxx'
+# Fully automated (key inline):
+#   irm https://sessionforge.dev/install.ps1 | iex; Install-SessionForge -ApiKey 'sf_live_xxxxx'
 
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"

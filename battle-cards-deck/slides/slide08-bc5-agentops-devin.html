@@ -1,0 +1,117 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+p { background: transparent; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #16A34A;
+  padding: 10pt 28pt; display: flex; align-items: center; gap: 12pt;
+}
+.badge { background: #16A34A22; border: 1pt solid #16A34A; border-radius: 4pt; padding: 2pt 8pt; }
+.badge p { color: #86EFAC; font-size: 8pt; margin: 0; font-weight: bold; letter-spacing: 1pt; }
+.header h2 { color: #FFFFFF; font-size: 15pt; margin: 0; flex: 1; }
+.header .threat { color: #86EFAC; font-size: 9pt; margin: 0; }
+.content { flex: 1; display: flex; padding: 10pt 20pt 8pt; gap: 14pt; overflow: hidden; }
+.col { flex: 1; display: flex; flex-direction: column; gap: 8pt; }
+.section { background: #161B27; border-radius: 6pt; padding: 8pt 11pt; }
+.section-label { color: #06B6D4; font-size: 7pt; letter-spacing: 2pt; text-transform: uppercase; margin: 0 0 5pt 0; font-weight: bold; }
+.comp-header { color: #A78BFA; font-size: 9.5pt; font-weight: bold; margin: 0 0 4pt 0; }
+.item { color: #94A3B8; font-size: 7.5pt; margin: 0 0 3pt 0; padding-left: 8pt; position: relative; line-height: 1.4; }
+.item::before { content: "✗"; color: #EF4444; position: absolute; left: 0; font-size: 7pt; top: 1pt; }
+.item.plus::before { content: "✓"; color: #22C55E; }
+.item .em { color: #FCA5A5; font-weight: bold; }
+.divider { width: 100%; height: 1pt; background: #1E293B; margin: 4pt 0; }
+.cosell-box {
+  background: #22C55E11; border: 1pt solid #22C55E; border-radius: 6pt;
+  padding: 8pt 11pt;
+}
+.cosell-box p { color: #86EFAC; font-size: 8.5pt; margin: 0; line-height: 1.5; }
+.cosell-box .label { color: #22C55E; font-size: 7pt; letter-spacing: 1pt; text-transform: uppercase; margin: 0 0 4pt 0; font-weight: bold; }
+.loop-row { display: flex; gap: 8pt; margin-top: 6pt; }
+.loop-box { flex: 1; background: #0F172A; border-radius: 5pt; padding: 6pt 8pt; }
+.loop-box .loop-label { color: #64748B; font-size: 7pt; text-transform: uppercase; letter-spacing: 1pt; margin: 0 0 3pt 0; }
+.loop-box .loop-title { color: #A78BFA; font-size: 8.5pt; font-weight: bold; margin: 0 0 3pt 0; }
+.loop-box p { color: #94A3B8; font-size: 7.5pt; margin: 0; line-height: 1.4; }
+.quote-box {
+  background: #0F172A; border: 1pt solid #7C3AED; border-left: 3pt solid #7C3AED;
+  border-radius: 6pt; padding: 8pt 11pt;
+}
+.quote-box p { color: #C4B5FD; font-size: 8pt; margin: 0; line-height: 1.5; font-style: italic; }
+.objections { display: flex; flex-direction: column; gap: 3pt; }
+.obj { display: flex; align-items: flex-start; gap: 6pt; }
+.obj-q { color: #64748B; font-size: 7pt; flex: 1; font-style: italic; }
+.obj-a { color: #CBD5E1; font-size: 7pt; flex: 1.1; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>BATTLE CARDS 6 & 7</p></div>
+  <h2>vs. AgentOps / LangSmith &amp; Devin</h2>
+  <p class="threat">THREAT LEVEL: LOW · CO-SELL OPPORTUNITY</p>
+</div>
+<div class="content">
+  <div class="col">
+    <div class="cosell-box">
+      <p class="label">Co-Sell Opportunity — AgentOps / LangSmith</p>
+      <p>These are observability tools that <b>complement</b> SessionForge — not compete. Position them as the inner loop to SessionForge's outer loop.</p>
+    </div>
+    <div class="section">
+      <p class="section-label">Inner vs. Outer Loop</p>
+      <div class="loop-row">
+        <div class="loop-box">
+          <p class="loop-label">Inner Loop</p>
+          <p class="loop-title">AgentOps / LangSmith</p>
+          <p>LLM traces · Token costs · Decision chains · Prompt debugging · Time travel replay</p>
+        </div>
+        <div class="loop-box">
+          <p class="loop-label">Outer Loop</p>
+          <p class="loop-title">SessionForge</p>
+          <p>Process status · Machine health · Terminal I/O · Session lifecycle · CPU/memory</p>
+        </div>
+      </div>
+    </div>
+    <div class="quote-box">
+      <p>"AgentOps is the inner loop — what is Claude thinking, where did it fail? SessionForge is the outer loop — is the Claude process alive, can I restart it from my browser at 2am. Use both."</p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="section">
+      <p class="comp-header">Devin (Cognition AI) — LOW Threat</p>
+      <p class="item plus">Most mature autonomous agent — Goldman Sachs validated</p>
+      <p class="item plus">Parallel agent execution with admin controls</p>
+      <div class="divider"></div>
+      <p class="item"><span class="em">Runs in Cognition's cloud</span> — zero infrastructure control for you</p>
+      <p class="item">Not Claude Code — completely different AI tool and workflow</p>
+      <p class="item">$500+/month for team use — expensive for Claude Code management</p>
+      <p class="item">No visibility into system resources of machines running agents</p>
+    </div>
+    <div class="section" style="flex:1;">
+      <p class="section-label">Objection Handling</p>
+      <div class="objections">
+        <div class="obj">
+          <p class="obj-q">"We already use AgentOps for monitoring"</p>
+          <p class="obj-a">AgentOps monitors what Claude decides. SessionForge monitors whether Claude is running. AgentOps doesn't let you restart a crashed session remotely.</p>
+        </div>
+        <div class="divider" style="margin:3pt 0;"></div>
+        <div class="obj">
+          <p class="obj-q">"Devin runs autonomously without supervision"</p>
+          <p class="obj-a">Devin runs in their cloud. Claude Code on your machines with SessionForge monitoring it gives you supervised autonomy — you see what it's doing and can intervene.</p>
+        </div>
+        <div class="divider" style="margin:3pt 0;"></div>
+        <div class="obj">
+          <p class="obj-q">"Goldman Sachs uses Devin"</p>
+          <p class="obj-a">Great enterprise validation. SessionForge targets teams using Claude Code who need operational management, not teams replacing developers with autonomous agents.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -23,7 +23,9 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "checkly": "latest",
+    "jiti": "^2"
   },
   "dependencies": {
     "pdf-lib": "^1.17.1"

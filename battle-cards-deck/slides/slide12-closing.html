@@ -1,0 +1,95 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+}
+.accent-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 6pt; background: #7C3AED; }
+.accent-bottom { position: absolute; bottom: 0; left: 6pt; right: 0; height: 3pt; background: #06B6D4; }
+.content { flex: 1; display: flex; padding: 22pt 32pt 22pt 44pt; gap: 24pt; }
+.left { flex: 1.1; display: flex; flex-direction: column; justify-content: center; gap: 12pt; }
+.right { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 10pt; }
+.eyebrow { color: #06B6D4; font-size: 8pt; letter-spacing: 3pt; text-transform: uppercase; font-weight: bold; margin: 0; }
+h1 { color: #FFFFFF; font-size: 26pt; margin: 0; line-height: 1.15; }
+h1 span { color: #7C3AED; }
+.sub { color: #94A3B8; font-size: 10pt; margin: 0; line-height: 1.6; }
+.sub b { color: #CBD5E1; }
+.pricing-row { display: flex; gap: 10pt; }
+.pricing-box { flex: 1; background: #161B27; border-radius: 8pt; padding: 10pt 12pt; text-align: center; }
+.pricing-box.highlight { background: #7C3AED1A; border: 1pt solid #7C3AED; }
+.pricing-tier { color: #64748B; font-size: 7pt; text-transform: uppercase; letter-spacing: 1pt; margin: 0 0 3pt 0; }
+.pricing-price { color: #7C3AED; font-size: 18pt; font-weight: bold; margin: 0; line-height: 1; }
+.pricing-box.highlight .pricing-price { color: #A78BFA; }
+.pricing-sub { color: #64748B; font-size: 7pt; margin: 2pt 0 0 0; }
+.win-row { display: flex; flex-direction: column; gap: 5pt; }
+.win-item { display: flex; align-items: center; gap: 8pt; background: #161B27; border-radius: 5pt; padding: 6pt 10pt; }
+.win-num { color: #7C3AED; font-size: 13pt; font-weight: bold; min-width: 16pt; }
+.win-text { color: #CBD5E1; font-size: 8pt; flex: 1; }
+.win-text b { color: #F1F5F9; }
+.divider { width: 40pt; height: 2pt; background: #06B6D4; margin: 4pt 0; }
+</style>
+</head>
+<body>
+<div class="accent-bar"></div>
+<div class="accent-bottom"></div>
+<div class="content">
+  <div class="left">
+    <p class="eyebrow">The Bottom Line</p>
+    <h1>One <span>Dashboard.</span><br>Every Machine.</h1>
+    <div class="divider"></div>
+    <p class="sub">The only browser-based fleet management dashboard <b>purpose-built for Claude Code.</b> Monitor, control, and manage AI coding sessions across all your remote machines from one place.</p>
+    <div class="pricing-row">
+      <div class="pricing-box">
+        <p class="pricing-tier">Free Forever</p>
+        <p class="pricing-price">$0</p>
+        <p class="pricing-sub">1 machine · 3 sessions<br>No credit card</p>
+      </div>
+      <div class="pricing-box highlight">
+        <p class="pricing-tier">Pro</p>
+        <p class="pricing-price">$19<span style="font-size:10pt; color:#94A3B8;">/mo</span></p>
+        <p class="pricing-sub">Unlimited machines<br>SSH key management</p>
+      </div>
+      <div class="pricing-box">
+        <p class="pricing-tier">Team</p>
+        <p class="pricing-price">$49<span style="font-size:10pt; color:#94A3B8;">/mo</span></p>
+        <p class="pricing-sub">RBAC · Audit logs<br>Team management</p>
+      </div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="win-row">
+      <div class="win-item">
+        <p class="win-num">1</p>
+        <p class="win-text"><b>Your machines.</b> Works on the VPS, VMs, and servers you already own.</p>
+      </div>
+      <div class="win-item">
+        <p class="win-num">2</p>
+        <p class="win-text"><b>Claude Code-native.</b> Every competitor is Claude-blind. We're not.</p>
+      </div>
+      <div class="win-item">
+        <p class="win-num">3</p>
+        <p class="win-text"><b>Datadog for AI agents.</b> Fleet management for Claude Code, not monitoring agents.</p>
+      </div>
+      <div class="win-item">
+        <p class="win-num">4</p>
+        <p class="win-text"><b>Lightweight by design.</b> Agent binary + dashboard. No Terraform, no DevOps team.</p>
+      </div>
+      <div class="win-item">
+        <p class="win-num">5</p>
+        <p class="win-text"><b>Outer loop clarity.</b> AgentOps = what Claude thinks. SessionForge = is it alive.</p>
+      </div>
+      <div class="win-item">
+        <p class="win-num">6</p>
+        <p class="win-text"><b>Data sovereignty.</b> Code stays on your machines. Not 1Code's or Codespaces' cloud.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

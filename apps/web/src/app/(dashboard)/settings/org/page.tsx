@@ -67,6 +67,8 @@ export default function OrgSettingsPage() {
   const [portalLoading, setPortalLoading] = useState(false)
   const [members, setMembers] = useState<OrgMember[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
+  type PendingInvite = { id: string; email: string; role: string; expiresAt: string }
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [inviteOpen, setInviteOpen] = useState(false)
   const [isInviting, setIsInviting] = useState(false)
   const { data: session } = useSession()
@@ -130,6 +132,11 @@ export default function OrgSettingsPage() {
       .then((r) => r.json())
       .then((json) => {
         if (json.data) reset({ name: json.data.name, slug: json.data.slug })
+        // Fetch pending invites
+        fetch('/api/org/invites')
+          .then((r) => r.json())
+          .then((j) => { if (j.data) setPendingInvites(j.data) })
+          .catch(() => {})
       })
       .catch(() => {})
 
@@ -163,6 +170,21 @@ export default function OrgSettingsPage() {
     }
   }
 
+  async function revokeInvite(inviteId: string) {
+    try {
+      const res = await fetch(`/api/org/invites/${inviteId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json()
+        toast.error(json.error?.message ?? 'Failed to revoke invitation')
+        return
+      }
+      setPendingInvites((prev) => prev.filter((i) => i.id !== inviteId))
+      toast.success('Invitation revoked')
+    } catch {
+      toast.error('Failed to revoke invitation')
+    }
+  }
+
   async function sendInvite(data: InviteFormData) {
     setIsInviting(true)
     try {
@@ -184,6 +206,11 @@ export default function OrgSettingsPage() {
       toast.success(`Invitation sent to ${data.email}`)
       setInviteOpen(false)
       resetInvite()
+      // Refresh pending invites
+      fetch('/api/org/invites')
+        .then((r) => r.json())
+        .then((j) => { if (j.data) setPendingInvites(j.data) })
+        .catch(() => {})
     } catch {
       toast.error('Failed to send invitation')
     } finally {
@@ -283,6 +310,35 @@ export default function OrgSettingsPage() {
               </div>
             ))}
           </div>
+          {pendingInvites.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-[#1e1e2e]">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Pending Invitations</p>
+              <div className="space-y-2">
+                {pendingInvites.map((invite) => (
+                  <div key={invite.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1e1e2e] border border-[#2a2a3e] text-sm text-gray-500">
+                        <Mail className="h-3.5 w-3.5" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-300">{invite.email}</p>
+                        <p className="text-xs text-gray-600">Invited · expires {new Date(invite.expiresAt).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs text-gray-500">{invite.role}</Badge>
+                      <button
+                        onClick={() => revokeInvite(invite.id)}
+                        className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

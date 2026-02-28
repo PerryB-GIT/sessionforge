@@ -1,0 +1,102 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #DC2626;
+  padding: 10pt 28pt; display: flex; align-items: center; gap: 12pt;
+}
+.badge { background: #DC262633; border: 1pt solid #DC2626; border-radius: 4pt; padding: 2pt 8pt; }
+.badge p { color: #FCA5A5; font-size: 8pt; margin: 0; font-weight: bold; letter-spacing: 1pt; }
+.header h2 { color: #FFFFFF; font-size: 15pt; margin: 0; flex: 1; }
+.header .threat { color: #FCA5A5; font-size: 9pt; margin: 0; }
+.content { flex: 1; display: flex; padding: 10pt 20pt 8pt; gap: 14pt; overflow: hidden; }
+.col { flex: 1; display: flex; flex-direction: column; gap: 8pt; }
+.section { background: #161B27; border-radius: 6pt; padding: 8pt 11pt; }
+.section-label { color: #06B6D4; font-size: 7pt; letter-spacing: 2pt; text-transform: uppercase; margin: 0 0 5pt 0; font-weight: bold; }
+.item { color: #94A3B8; font-size: 8pt; margin: 0 0 3pt 0; padding-left: 8pt; position: relative; line-height: 1.45; }
+.item::before { content: "✓"; color: #22C55E; position: absolute; left: 0; font-size: 7pt; top: 1pt; }
+.item.bad::before { content: "✗"; color: #EF4444; }
+.item .em { color: #FCA5A5; font-weight: bold; }
+.quote-box {
+  background: #0F172A; border: 1pt solid #7C3AED; border-left: 3pt solid #7C3AED;
+  border-radius: 6pt; padding: 8pt 11pt; flex: 1;
+}
+.quote-box p { color: #C4B5FD; font-size: 8.5pt; margin: 0; line-height: 1.55; font-style: italic; }
+.yc-tag { display: inline-block; background: #F5892233; border: 1pt solid #F59E0B; border-radius: 4pt; padding: 1pt 6pt; margin-bottom: 4pt; }
+.yc-tag p { color: #FCD34D; font-size: 7pt; margin: 0; font-weight: bold; }
+.objections { display: flex; flex-direction: column; gap: 4pt; }
+.obj { display: flex; align-items: flex-start; gap: 6pt; }
+.obj-q { color: #64748B; font-size: 7.5pt; flex: 1; font-style: italic; }
+.obj-a { color: #CBD5E1; font-size: 7.5pt; flex: 1.1; }
+.divider { width: 100%; height: 1pt; background: #1E293B; margin: 3pt 0; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>BATTLE CARD 2</p></div>
+  <h2>vs. 1Code (21st.dev · YC-backed)</h2>
+  <p class="threat">THREAT LEVEL: HIGH</p>
+</div>
+<div class="content">
+  <div class="col">
+    <div class="section">
+      <div class="yc-tag"><p>YC WINTER 2025 · WELL-FUNDED</p></div>
+      <p class="section-label">Where They Win</p>
+      <p class="item">Parallel agent side-by-side view — genuinely compelling</p>
+      <p class="item">Only competitor with proper CI/CD integration for Claude Code</p>
+      <p class="item">Linear + Slack integrations — workflow native</p>
+      <p class="item">API to spin up Claude Code with a single POST call</p>
+    </div>
+    <div class="section">
+      <p class="section-label">Their Critical Gap</p>
+      <p class="item bad"><span class="em">1Code runs Claude Code in their sandboxes — not on your machines.</span> No CPU/memory monitoring of real infra.</p>
+      <p class="item bad">No SSH key management for your own servers</p>
+      <p class="item bad">Your code, configs, environments live in their cloud</p>
+      <p class="item bad">Pricing unknown — likely expensive at scale (VC-funded burn rate)</p>
+    </div>
+    <div class="quote-box">
+      <p>"1Code is impressive for managed sandboxes. SessionForge is the answer when you need Claude Code on <b>your own machines</b> — your VPS, your cloud VMs — with full visibility and control. Your code stays on your infrastructure."</p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="section" style="flex:1;">
+      <p class="section-label">Objection Handling</p>
+      <div class="objections">
+        <div class="obj">
+          <p class="obj-q">"1Code's CI/CD automation is unique"</p>
+          <p class="obj-a">Agreed — CI/CD is powerful. SessionForge is the operational layer: monitoring and managing sessions on your machines. These complement each other.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">"They have YC backing"</p>
+          <p class="obj-a">We build the tool that works with your existing infrastructure. You don't need VC-funded sandboxes if you already have the machines.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">"Their API is clean"</p>
+          <p class="obj-a">Our agent API gives you the same programmatic control, on your own hardware, without a third-party cloud dependency.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">"We want managed infrastructure"</p>
+          <p class="obj-a">Then 1Code is a strong option. If you want control over your servers — where your data lives — SessionForge is the answer.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">Key differentiator</p>
+          <p class="obj-a" style="color:#A78BFA; font-weight:bold;">Data sovereignty + infrastructure ownership. Win on: your machines, your code, your control.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

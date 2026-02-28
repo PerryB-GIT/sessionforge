@@ -1,0 +1,45 @@
+{
+  "cookies": [
+    {
+      "name": "GAESA",
+      "value": "CpoBMDBkYTZjZDJjNDYzOGI2NTRkNTQwYzU0NjEyYzBiNTE2NGE1M2ZlMzI5NzAyNTc0MjVlNDU0NzBiM2JiYjk0ZmVhNjA3OTNmOGNiOWE3OWNlMGE3MGNkNTBiYjdjZWNmZmU1N2ExMGQ1MTQ1OWI3MjVkYWMxYTZkMTkzNmYyMjQ4M2FjMmVhOTY0NjA5MjE1YTZkMWVkYmEyZBCN7J27yTM",
+      "domain": "sessionforge.dev",
+      "path": "/",
+      "expires": 1774658658.039384,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Host-authjs.csrf-token",
+      "value": "80b2cc84d572b3103b4b02447b17049fc197e93aa58a7a9974ec4cbf822f0832%7Ca59b47b8824bc7030b33a8000f3b24f702215c60fd503a982d44beff114367a9",
+      "domain": "sessionforge.dev",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Secure-authjs.callback-url",
+      "value": "https%3A%2F%2Fsessionforge.dev%2Flogin",
+      "domain": "sessionforge.dev",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Secure-authjs.session-token",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiZlpVYV9MY3BtdFo3Z2VfN3hpdUczcGh4LVJzMk5pcklBOEZldkhzN1FlWUVCdkU3M3M4R2JFNzVEUXdaczB3aWxySjc1N3RBX3oxbEppYnE5ZWhRTncifQ..qXaXQDDKa2c8xUq57O81Hw.Hvto6CVbi4sBrvLZDV6DVxT5chgOyLpAMxR7MYrogwG0-54uOtH93qU-_UqmGP4LJ243cYsEtxL1qdTA9RNvUymIL1kyFxcrPIzOIr0L0_h8Li9ko4uYyDXIB-q7VH1JVuP-zQhIRObFrUc33ZnSnqn6Lzwp73WANxd6fCjESF8l2PKbZub0imgESmndvqdcGBfwa-T9PD80IAnld80pk0VPRtTXGDTUr9DVCBcw2K0VaEXv7sdezazfyesuf-y5y7-7nA8wfeiIwnD2aNn90JPsC_lwojWUGSMQ4LuO9IoKrsSbqHsGaz3tVaJ3dzNJCFkDcHWCobw4R84A_-Q-oHRgIYRi2HaehYzESYq_uTDPaeKJoqAyaZqQ70J_ycTtB3Bkw19o4SGAHUwDSu523AXrn-HAIMTVjlBfvylh3TM.-s4097d2CLqqGEAPKhGRttZ9ptW25gvthH8bjE6aEyc",
+      "domain": "sessionforge.dev",
+      "path": "/",
+      "expires": 1774658658.946691,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

@@ -1,0 +1,100 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #06B6D4;
+  padding: 10pt 28pt; display: flex; align-items: center; gap: 12pt;
+}
+.badge { background: #06B6D422; border: 1pt solid #06B6D4; border-radius: 4pt; padding: 2pt 10pt; }
+.badge p { color: #7DD3FC; font-size: 8pt; margin: 0; font-weight: bold; letter-spacing: 1pt; }
+.header h2 { color: #FFFFFF; font-size: 16pt; margin: 0; }
+.content { flex: 1; display: flex; padding: 10pt 20pt 10pt; gap: 14pt; overflow: hidden; }
+.col { flex: 1; display: flex; flex-direction: column; gap: 8pt; }
+.section-label { color: #06B6D4; font-size: 7pt; letter-spacing: 2pt; text-transform: uppercase; margin: 0 0 6pt 0; font-weight: bold; }
+.watch-item {
+  background: #161B27; border-radius: 5pt; padding: 8pt 10pt;
+  border-left: 3pt solid #DC2626; margin-bottom: 5pt;
+}
+.watch-item.med { border-left-color: #D97706; }
+.watch-item.low { border-left-color: #16A34A; }
+.watch-item.info { border-left-color: #475569; }
+.watch-name { color: #F1F5F9; font-size: 9pt; font-weight: bold; margin: 0 0 3pt 0; }
+.watch-desc { color: #94A3B8; font-size: 7.5pt; margin: 0; line-height: 1.45; }
+.watch-desc span { color: #FCA5A5; font-weight: bold; }
+.watch-desc span.y { color: #FCD34D; font-weight: bold; }
+.watch-desc span.g { color: #86EFAC; font-weight: bold; }
+.legend { display: flex; gap: 12pt; margin-bottom: 8pt; }
+.leg-item { display: flex; align-items: center; gap: 5pt; }
+.leg-dot { width: 8pt; height: 8pt; border-radius: 2pt; }
+.leg-label { color: #64748B; font-size: 7pt; }
+.cadence-box {
+  background: #7C3AED1A; border: 1pt solid #7C3AED; border-radius: 6pt;
+  padding: 8pt 11pt;
+}
+.cadence-box .label { color: #A78BFA; font-size: 7pt; letter-spacing: 1pt; text-transform: uppercase; font-weight: bold; margin: 0 0 5pt 0; }
+.cadence-row { display: flex; justify-content: space-between; margin-bottom: 4pt; }
+.cadence-name { color: #C4B5FD; font-size: 8pt; }
+.cadence-freq { color: #7C3AED; font-size: 8pt; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>INTEL</p></div>
+  <h2>Competitive Intelligence &amp; Watch List</h2>
+</div>
+<div class="content">
+  <div class="col">
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot" style="background:#DC2626;"></div><p class="leg-label">Watch Closely</p></div>
+      <div class="leg-item"><div class="leg-dot" style="background:#D97706;"></div><p class="leg-label">Monitor</p></div>
+      <div class="leg-item"><div class="leg-dot" style="background:#16A34A;"></div><p class="leg-label">Safe (for now)</p></div>
+      <div class="leg-item"><div class="leg-dot" style="background:#475569;"></div><p class="leg-label">Wild Card</p></div>
+    </div>
+    <div class="watch-item">
+      <p class="watch-name">1Code (21st.dev)</p>
+      <p class="watch-desc">YC-backed, Claude Code-specific, moving fast. <span>Most likely to converge on SessionForge's exact space.</span> Monitor product releases monthly. Currently sandbox-centric — if they pivot to BYOM (bring your own machine), threat escalates to CRITICAL.</p>
+    </div>
+    <div class="watch-item">
+      <p class="watch-name">Warp Terminal</p>
+      <p class="watch-desc">Expanding AI and fleet features aggressively. Session sharing already close. <span>Watch for remote machine management features.</span> If they add multi-machine fleet dashboarding, threat escalates to HIGH.</p>
+    </div>
+    <div class="watch-item med">
+      <p class="watch-name">claudecodeui / siteboon</p>
+      <p class="watch-desc">Active open-source community. Currently single-machine. <span class="y">Monitor GitHub for multi-machine support PRs.</span> If they add fleet view, becomes a serious free competitor.</p>
+    </div>
+    <div class="watch-item med">
+      <p class="watch-name">Coder</p>
+      <p class="watch-desc">Explicitly marketing "AI agent governance." Could expand into Claude Code-specific session management. <span class="y">Watch their dev blog for agent management feature announcements.</span></p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="watch-item info">
+      <p class="watch-name">Anthropic</p>
+      <p class="watch-desc">Announced Claude Code analytics dashboard (July 2025) for software teams. <span style="color:#94A3B8; font-weight:bold;">If Anthropic builds first-party session management, this changes everything.</span> Monitor anthropic.com/news and Claude Code release notes. Existential risk if they go there.</p>
+    </div>
+    <div class="watch-item low">
+      <p class="watch-name">Remote Desktop Tools (TeamViewer, AnyDesk)</p>
+      <p class="watch-desc"><span class="g">Too far from developer workflows to pivot meaningfully.</span> AnyDesk license change causing customer churn — possible opportunity.</p>
+    </div>
+    <div class="watch-item low">
+      <p class="watch-name">LLM Observability (LangSmith, Langfuse, Helicone)</p>
+      <p class="watch-desc"><span class="g">Different layer — co-sell opportunity, not competition.</span> None building toward outer-loop process management.</p>
+    </div>
+    <div class="cadence-box">
+      <p class="label">Review Cadence</p>
+      <div class="cadence-row"><p class="cadence-name">1Code, Warp, claudecodeui</p><p class="cadence-freq">Monthly</p></div>
+      <div class="cadence-row"><p class="cadence-name">Anthropic product announcements</p><p class="cadence-freq">Weekly</p></div>
+      <div class="cadence-row"><p class="cadence-name">All other competitors</p><p class="cadence-freq">Quarterly</p></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

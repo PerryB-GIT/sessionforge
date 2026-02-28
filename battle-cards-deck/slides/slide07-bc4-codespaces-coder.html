@@ -1,0 +1,101 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #D97706;
+  padding: 10pt 28pt; display: flex; align-items: center; gap: 12pt;
+}
+.badge { background: #D9770633; border: 1pt solid #D97706; border-radius: 4pt; padding: 2pt 8pt; }
+.badge p { color: #FCD34D; font-size: 8pt; margin: 0; font-weight: bold; letter-spacing: 1pt; }
+.header h2 { color: #FFFFFF; font-size: 15pt; margin: 0; flex: 1; }
+.header .threat { color: #FCD34D; font-size: 9pt; margin: 0; }
+.content { flex: 1; display: flex; padding: 10pt 20pt 8pt; gap: 14pt; overflow: hidden; }
+.col { flex: 1; display: flex; flex-direction: column; gap: 8pt; }
+.col-narrow { flex: 0.85; display: flex; flex-direction: column; gap: 8pt; }
+.section { background: #161B27; border-radius: 6pt; padding: 8pt 11pt; }
+.section-label { color: #06B6D4; font-size: 7pt; letter-spacing: 2pt; text-transform: uppercase; margin: 0 0 5pt 0; font-weight: bold; }
+.comp-header { color: #A78BFA; font-size: 9.5pt; font-weight: bold; margin: 0 0 4pt 0; }
+.item { color: #94A3B8; font-size: 7.5pt; margin: 0 0 3pt 0; padding-left: 8pt; position: relative; line-height: 1.4; }
+.item::before { content: "✗"; color: #EF4444; position: absolute; left: 0; font-size: 7pt; top: 1pt; }
+.item .em { color: #FCA5A5; font-weight: bold; }
+.divider { width: 100%; height: 1pt; background: #1E293B; margin: 5pt 0; }
+.quote-box {
+  background: #0F172A; border: 1pt solid #7C3AED; border-left: 3pt solid #7C3AED;
+  border-radius: 6pt; padding: 8pt 11pt;
+}
+.quote-box p { color: #C4B5FD; font-size: 8pt; margin: 0; line-height: 1.5; font-style: italic; }
+.quote-box .label { color: #7C3AED; font-size: 7pt; letter-spacing: 1pt; text-transform: uppercase; margin: 0 0 3pt 0; font-weight: bold; }
+.objections { display: flex; flex-direction: column; gap: 3pt; }
+.obj { display: flex; align-items: flex-start; gap: 6pt; }
+.obj-q { color: #64748B; font-size: 7pt; flex: 1; font-style: italic; }
+.obj-a { color: #CBD5E1; font-size: 7pt; flex: 1.1; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>BATTLE CARDS 4 & 5</p></div>
+  <h2>vs. GitHub Codespaces &amp; Coder</h2>
+  <p class="threat">THREAT LEVEL: MEDIUM</p>
+</div>
+<div class="content">
+  <div class="col">
+    <div class="section">
+      <p class="comp-header">GitHub Codespaces</p>
+      <p class="item"><span class="em">GitHub owns the machine.</span> Your existing servers don't exist in Codespaces world.</p>
+      <p class="item">Costs escalate fast — 4-core × 8hr/day ≈ $300/month</p>
+      <p class="item">Hard GitHub lock-in — useless for GitLab, Bitbucket, Azure DevOps shops</p>
+      <p class="item">No terminal I/O streaming to external dashboard, no fleet view, no SSH key mgmt</p>
+    </div>
+    <div class="quote-box">
+      <p class="label">Codespaces counter</p>
+      <p>"Codespaces spins up GitHub's machines for you. SessionForge manages Claude Code on machines you already own. If you have a $6/month VPS running Claude Code, Codespaces has nothing to offer you."</p>
+    </div>
+    <div class="section">
+      <p class="comp-header">Coder</p>
+      <p class="item"><span class="em">Requires DevOps team + Terraform expertise</span> to deploy and maintain</p>
+      <p class="item">Workspace-centric, not session-centric — no concept of "Claude Code process running now"</p>
+      <p class="item">No real-time terminal I/O streaming, no CPU/memory monitoring per session</p>
+      <p class="item">Provisioning-heavy — overkill for "I have machines, I want to see what's running"</p>
+    </div>
+  </div>
+  <div class="col-narrow">
+    <div class="quote-box">
+      <p class="label">Coder counter</p>
+      <p>"Coder is right if you're building a standardized dev environment platform from scratch with Terraform. SessionForge is right if you already have machines running Claude Code and need operational visibility today — no Terraform, no DevOps overhead. Install the agent binary, connect, done."</p>
+    </div>
+    <div class="section" style="flex:1;">
+      <p class="section-label">Objections — Both</p>
+      <div class="objections">
+        <div class="obj">
+          <p class="obj-q">"We're all-in on GitHub ecosystem"</p>
+          <p class="obj-a">Keep GitHub for your code. SessionForge manages where Claude Code runs — your infrastructure, not GitHub's.</p>
+        </div>
+        <div class="divider" style="margin:3pt 0;"></div>
+        <div class="obj">
+          <p class="obj-q">"Coder is free and open source"</p>
+          <p class="obj-a">Coder server still needs to run somewhere and be maintained. SessionForge free tier is just agent + dashboard, zero ops overhead.</p>
+        </div>
+        <div class="divider" style="margin:3pt 0;"></div>
+        <div class="obj">
+          <p class="obj-q">"Coder has AI agent governance"</p>
+          <p class="obj-a">Coder governs environments. SessionForge governs running sessions — live status, resource usage, start/stop. Different layers.</p>
+        </div>
+        <div class="divider" style="margin:3pt 0;"></div>
+        <div class="obj">
+          <p class="obj-q">"We need RBAC and audit logs"</p>
+          <p class="obj-a">Our Team and Enterprise plans include both. Coder Premium is custom/expensive for features SessionForge covers at $49/month.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

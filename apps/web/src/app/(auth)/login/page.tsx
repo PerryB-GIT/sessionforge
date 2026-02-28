@@ -74,7 +74,7 @@ export default function LoginPage() {
           className="w-full"
           onClick={() => handleOAuth('google')}
         >
-          <Chrome className="h-4 w-4 text-blue-400" />
+          <Chrome className="h-4 w-4 text-purple-400" />
           Continue with Google
         </Button>
         <Button

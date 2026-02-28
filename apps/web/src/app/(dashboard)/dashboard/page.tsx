@@ -113,14 +113,14 @@ export default function DashboardPage() {
           value={activeSessions.length}
           icon={Terminal}
           description={limits.sessions === -1 ? 'Unlimited' : `${limits.sessions} max`}
-          color="text-blue-400"
+          color="text-purple-400"
         />
         <StatCard
           title="Plan"
           value={plan.charAt(0).toUpperCase() + plan.slice(1)}
           icon={TrendingUp}
           description={`${machines.length}/${limits.machines === -1 ? '∞' : limits.machines} machines`}
-          color="text-yellow-400"
+          color="text-purple-400"
         />
       </div>
 

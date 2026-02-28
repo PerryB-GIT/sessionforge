@@ -121,7 +121,7 @@ export default function SessionDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-3 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-blue-400 shrink-0" />
+            <Clock className="h-4 w-4 text-purple-400 shrink-0" />
             <div>
               <p className="text-xs text-gray-500">Duration</p>
               <p className="text-sm text-white tabular-nums">
@@ -143,7 +143,7 @@ export default function SessionDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-3 flex items-center gap-2">
-            <MemoryStick className="h-4 w-4 text-yellow-400 shrink-0" />
+            <MemoryStick className="h-4 w-4 text-purple-400 shrink-0" />
             <div>
               <p className="text-xs text-gray-500">Peak Memory</p>
               <p className="text-sm text-white">

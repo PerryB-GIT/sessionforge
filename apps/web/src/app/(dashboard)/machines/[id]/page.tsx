@@ -134,7 +134,7 @@ export default function MachineDetailPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
-              <MemoryStick className="h-4 w-4 text-blue-400" />
+              <MemoryStick className="h-4 w-4 text-purple-400" />
               <span className="text-xs text-gray-500">Memory</span>
             </div>
             <div className="text-xl font-bold text-white">
@@ -144,7 +144,7 @@ export default function MachineDetailPage() {
               <Progress
                 value={machine.memory}
                 className="mt-2 h-1"
-                indicatorClassName={machine.memory > 80 ? 'bg-red-400' : 'bg-blue-500'}
+                indicatorClassName={machine.memory > 80 ? 'bg-red-400' : 'bg-purple-500'}
               />
             )}
           </CardContent>
@@ -170,7 +170,7 @@ export default function MachineDetailPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Clock className="h-4 w-4 text-yellow-400" />
+              <Clock className="h-4 w-4 text-gray-400" />
               <span className="text-xs text-gray-500">Last Seen</span>
             </div>
             <div className="text-sm font-medium text-white">

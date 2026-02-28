@@ -31,8 +31,8 @@ const PLAN_ICONS = {
 const PLAN_COLORS = {
   free: 'text-gray-400',
   pro: 'text-purple-400',
-  team: 'text-blue-400',
-  enterprise: 'text-yellow-400',
+  team: 'text-purple-400',
+  enterprise: 'text-gray-300',
 }
 
 interface PlanCardProps {

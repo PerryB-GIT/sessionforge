@@ -59,9 +59,9 @@ function Note({ children }: { children: React.ReactNode }) {
 
 export default function DocsPage() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-white">
+    <div className="min-h-screen bg-[#0a0a0f] text-white">
       {/* Nav */}
-      <nav className="border-b border-[#1e1e2e] px-6 py-4 sticky top-0 z-40 bg-[#09090b]/95 backdrop-blur">
+      <nav className="border-b border-[#1e1e2e] px-6 py-4 sticky top-0 z-40 bg-[#0a0a0f]/95 backdrop-blur">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">
             SessionForge
@@ -118,7 +118,7 @@ export default function DocsPage() {
             </CodeBlock>
 
             <SubHeading>Windows (PowerShell) — one-liner</SubHeading>
-            <CodeBlock color="text-blue-400">
+            <CodeBlock color="text-purple-300">
               {`iwr -useb https://sessionforge.dev/agent/install.ps1 | iex; Install-SessionForge -ApiKey 'YOUR_KEY'`}
             </CodeBlock>
 

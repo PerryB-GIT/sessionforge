@@ -73,7 +73,7 @@ const plans = [
     price: 49,
     description: 'For growing engineering teams',
     icon: Users,
-    color: 'text-blue-400',
+    color: 'text-purple-400',
     borderColor: 'border-[#1e1e2e]',
     features: [
       '20 machines',
@@ -92,7 +92,7 @@ const plans = [
     price: 199,
     description: 'For large organizations',
     icon: Building2,
-    color: 'text-yellow-400',
+    color: 'text-gray-300',
     borderColor: 'border-[#1e1e2e]',
     features: [
       'Unlimited machines',

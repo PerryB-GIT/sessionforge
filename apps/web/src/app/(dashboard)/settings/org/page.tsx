@@ -1,7 +1,5 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect, Suspense } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -27,6 +25,7 @@ import {
 import type { UsageData } from '@/app/api/usage/route'
 
 type OrgMember = { id: string; name: string | null; email: string; role: string }
+type PendingInvite = { id: string; email: string; role: string; expiresAt: string }
 
 function StripeRedirectToasts() {
   const searchParams = useSearchParams()
@@ -67,10 +66,10 @@ export default function OrgSettingsPage() {
   const [portalLoading, setPortalLoading] = useState(false)
   const [members, setMembers] = useState<OrgMember[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
-  type PendingInvite = { id: string; email: string; role: string; expiresAt: string }
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [inviteOpen, setInviteOpen] = useState(false)
   const [isInviting, setIsInviting] = useState(false)
+  const [isRevoking, setIsRevoking] = useState<string | null>(null)
   const { data: session } = useSession()
   const currentPlan = (session?.user as { plan?: string } | undefined)?.plan ?? 'free'
 
@@ -130,19 +129,17 @@ export default function OrgSettingsPage() {
   useEffect(() => {
     fetch('/api/org')
       .then((r) => r.json())
-      .then((json) => {
-        if (json.data) reset({ name: json.data.name, slug: json.data.slug })
-        // Fetch pending invites
-        fetch('/api/org/invites')
-          .then((r) => r.json())
-          .then((j) => { if (j.data) setPendingInvites(j.data) })
-          .catch(() => {})
-      })
+      .then((json) => { if (json.data) reset({ name: json.data.name, slug: json.data.slug }) })
       .catch(() => {})
 
     fetch('/api/org/members')
       .then((r) => r.json())
       .then((json) => { if (json.data) setMembers(json.data) })
+      .catch(() => {})
+
+    fetch('/api/org/invites')
+      .then((r) => r.json())
+      .then((json) => { if (json.data) setPendingInvites(json.data) })
       .catch(() => {})
 
     fetch('/api/usage')
@@ -171,6 +168,7 @@ export default function OrgSettingsPage() {
   }
 
   async function revokeInvite(inviteId: string) {
+    setIsRevoking(inviteId)
     try {
       const res = await fetch(`/api/org/invites/${inviteId}`, { method: 'DELETE' })
       if (!res.ok) {
@@ -182,6 +180,8 @@ export default function OrgSettingsPage() {
       toast.success('Invitation revoked')
     } catch {
       toast.error('Failed to revoke invitation')
+    } finally {
+      setIsRevoking(null)
     }
   }
 
@@ -329,9 +329,10 @@ export default function OrgSettingsPage() {
                       <Badge variant="outline" className="text-xs text-gray-500">{invite.role}</Badge>
                       <button
                         onClick={() => revokeInvite(invite.id)}
-                        className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                        disabled={isRevoking === invite.id}
+                        className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
                       >
-                        Revoke
+                        {isRevoking === invite.id ? 'Revoking...' : 'Revoke'}
                       </button>
                     </div>
                   </div>

@@ -8,7 +8,7 @@ import (
 // SessionManager is the interface the handler uses to control sessions.
 // Implemented by session.Manager.
 type SessionManager interface {
-	Start(requestID, command, workdir string, env map[string]string) (string, error)
+	Start(requestID, sessionID, command, workdir string, env map[string]string) (string, error)
 	Stop(sessionID string, force bool) error
 	Pause(sessionID string) error
 	Resume(sessionID string) error
@@ -21,6 +21,7 @@ type SessionManager interface {
 type startSessionMsg struct {
 	Type      string            `json:"type"`
 	RequestID string            `json:"requestId"`
+	SessionID string            `json:"sessionId"`
 	Command   string            `json:"command"`
 	Workdir   string            `json:"workdir"`
 	Env       map[string]string `json:"env"`
@@ -121,7 +122,7 @@ func (h *Handler) handleStartSession(raw []byte) {
 		"workdir", m.Workdir,
 	)
 
-	sessionID, err := h.sessions.Start(m.RequestID, m.Command, m.Workdir, m.Env)
+	sessionID, err := h.sessions.Start(m.RequestID, m.SessionID, m.Command, m.Workdir, m.Env)
 	if err != nil {
 		h.logger.Error("handler: start_session failed", "err", err, "requestId", m.RequestID)
 		// Send a crash notification so the cloud knows the request failed.

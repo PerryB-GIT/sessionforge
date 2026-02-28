@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { token: string } }
 ) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -33,7 +33,7 @@ export async function DELETE(
 
   const [deleted] = await db
     .delete(orgInvites)
-    .where(and(eq(orgInvites.id, params.id), eq(orgInvites.orgId, org.id)))
+    .where(and(eq(orgInvites.id, params.token), eq(orgInvites.orgId, org.id)))
     .returning({ id: orgInvites.id })
 
   if (!deleted) {

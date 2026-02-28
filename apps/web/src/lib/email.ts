@@ -246,3 +246,65 @@ export async function sendSupportResponseEmail(
 </html>`,
   })
 }
+
+export async function sendInviteEmail(
+  to: string,
+  inviterName: string | null,
+  orgName: string,
+  acceptUrl: string,
+) {
+  const resend = new Resend(process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY)
+  const displayInviter = inviterName ?? 'Someone'
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `You've been invited to join ${orgName} on SessionForge`,
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 0">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#0f0f14;border:1px solid #1e1e2e;border-radius:12px;overflow:hidden">
+        <!-- Header -->
+        <tr>
+          <td style="padding:32px 40px 24px;border-bottom:1px solid #1e1e2e">
+            <span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px">Session<span style="color:#8b5cf6">Forge</span></span>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:32px 40px">
+            <p style="margin:0 0 8px;font-size:22px;font-weight:600;color:#ffffff">You're invited</p>
+            <p style="margin:0 0 24px;font-size:14px;color:#9ca3af;line-height:1.6">
+              ${displayInviter} has invited you to join <strong style="color:#ffffff">${orgName}</strong> on SessionForge.
+              Click the button below to accept your invitation.
+            </p>
+            <a href="${acceptUrl}"
+               style="display:inline-block;padding:12px 28px;background:#7c3aed;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px">
+              Accept Invitation
+            </a>
+            <p style="margin:24px 0 0;font-size:13px;color:#6b7280;line-height:1.6">
+              This invitation expires in 7 days. If you weren't expecting this, you can safely ignore it.
+            </p>
+            <p style="margin:16px 0 0;font-size:12px;color:#4b5563;word-break:break-all">
+              Or copy this link: <a href="${acceptUrl}" style="color:#8b5cf6">${acceptUrl}</a>
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 40px;border-top:1px solid #1e1e2e">
+            <p style="margin:0;font-size:12px;color:#4b5563">
+              SessionForge LLC · You're receiving this because someone invited you to their organization.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  })
+}

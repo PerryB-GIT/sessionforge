@@ -89,6 +89,13 @@ const nextConfig = {
     }
     return config
   },
+  async redirects() {
+    return [
+      // Canonical route aliases
+      { source: '/pricing', destination: '/#pricing', permanent: false },
+      { source: '/register', destination: '/signup', permanent: true },
+    ]
+  },
   async headers() {
     return [
       {

@@ -7,9 +7,18 @@ import { db, users } from '@/db'
 import { verificationTokens } from '@/db/schema'
 import { sendVerificationEmail } from '@/lib/email'
 
+const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number')
+  .regex(/[^a-zA-Z0-9]/, 'Password must contain at least one special character')
+  .refine((p) => p.trim().length > 0, 'Password cannot be whitespace only')
+
 const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: passwordSchema,
   name: z.string().min(1).max(255).optional(),
 })
 
@@ -41,7 +50,14 @@ export async function POST(req: NextRequest) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.errors[0]?.message ?? 'Invalid input' },
+        {
+          data: null,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: parsed.error.errors[0]?.message ?? 'Invalid input',
+            statusCode: 400,
+          },
+        },
         { status: 400 }
       )
     }

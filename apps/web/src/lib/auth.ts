@@ -8,6 +8,31 @@ import { eq } from 'drizzle-orm'
 import { db, users } from '@/db'
 import { z } from 'zod'
 
+// ─── Sign-in Rate Limiter ──────────────────────────────────────────────────────
+// 10 attempts per IP per 15-minute sliding window.
+// Called from the Credentials authorize() function.
+// Gracefully no-ops if Redis env vars are absent (dev environments).
+async function checkLoginRateLimit(ip: string): Promise<boolean> {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
+  if (!redisUrl || !redisToken) return true // no Redis → allow
+
+  try {
+    const { Ratelimit } = await import('@upstash/ratelimit')
+    const { Redis } = await import('@upstash/redis')
+    const ratelimit = new Ratelimit({
+      redis: new Redis({ url: redisUrl, token: redisToken }),
+      limiter: Ratelimit.slidingWindow(10, '15 m'),
+      prefix: 'rl:login',
+    })
+    const { success } = await ratelimit.limit(ip)
+    return success
+  } catch {
+    // Redis unavailable → fail open (do not lock out users)
+    return true
+  }
+}
+
 // ─── Credential Validation Schema ─────────────────────────────────────────────
 
 const credentialsSchema = z.object({
@@ -38,7 +63,20 @@ export const authConfig: NextAuthConfig = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(rawCredentials) {
+      async authorize(rawCredentials, request) {
+        // Rate limit by IP: 10 attempts per 15-minute window
+        const ip =
+          (request as Request | undefined)?.headers?.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+          (request as Request | undefined)?.headers?.get('x-real-ip') ??
+          'unknown'
+        const allowed = await checkLoginRateLimit(ip)
+        if (!allowed) {
+          // authorize() cannot return a 429 — returning null triggers the generic
+          // CredentialsSignin error. The rate limit is enforced server-side;
+          // the client sees the same "Invalid credentials" message (no enumeration).
+          return null
+        }
+
         const parsed = credentialsSchema.safeParse(rawCredentials)
         if (!parsed.success) return null
 

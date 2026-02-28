@@ -66,11 +66,23 @@ const nextConfig = {
   },
   webpack(config, { isServer }) {
     if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false, net: false, tls: false, stream: false,
-        http: false, https: false, zlib: false, path: false,
-      }
+      // Prevent Node.js-only packages from being bundled on the client/edge
+      const originalExternals = config.externals || []
+      config.externals = [
+        ...(Array.isArray(originalExternals) ? originalExternals : [originalExternals]),
+        ({ request }, callback) => {
+          if (
+            request && (
+              request.startsWith('@opentelemetry/') ||
+              request.startsWith('@grpc/') ||
+              request === 'ws'
+            )
+          ) {
+            return callback(null, `commonjs ${request}`)
+          }
+          callback()
+        },
+      ]
     }
     return config
   },

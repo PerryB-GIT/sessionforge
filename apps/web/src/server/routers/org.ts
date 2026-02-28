@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { eq, and, isNull } from 'drizzle-orm'
+import { eq, and, isNull, gt } from 'drizzle-orm'
 import { router, protectedProcedure } from '../trpc'
 import { db, organizations, orgMembers, orgInvites, users } from '@/db'
 import { requireFeature, FeatureNotAvailableError } from '@/lib/plan-enforcement'
@@ -153,7 +153,7 @@ export const orgRouter = router({
         .where(eq(users.id, ctx.userId))
         .limit(1)
 
-      if (caller?.email === input.email) {
+      if (caller?.email?.toLowerCase() === input.email) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'You cannot invite yourself' })
       }
 
@@ -187,31 +187,32 @@ export const orgRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Organization not found' })
       }
 
-      // Delete any previously accepted invite for this email+org before re-inviting
-      await db
-        .delete(orgInvites)
-        .where(
-          and(
-            eq(orgInvites.orgId, input.orgId),
-            eq(orgInvites.email, input.email),
-          )
-        )
-
-      // Insert fresh invite
       const token = randomBytes(32).toString('hex')
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-      const [invite] = await db
-        .insert(orgInvites)
-        .values({
-          orgId: input.orgId,
-          email: input.email,
-          token,
-          role: input.role,
-          invitedBy: ctx.userId,
-          expiresAt,
-        })
-        .returning()
+      // Delete all prior invites for this (orgId, email) — clears pending, expired, or accepted rows
+      const invite = await db.transaction(async (tx) => {
+        await tx
+          .delete(orgInvites)
+          .where(
+            and(
+              eq(orgInvites.orgId, input.orgId),
+              eq(orgInvites.email, input.email),
+            )
+          )
+        const [row] = await tx
+          .insert(orgInvites)
+          .values({
+            orgId: input.orgId,
+            email: input.email,
+            token,
+            role: input.role,
+            invitedBy: ctx.userId,
+            expiresAt,
+          })
+          .returning()
+        return row
+      })
 
       if (!invite) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create invitation' })
@@ -256,13 +257,12 @@ export const orgRouter = router({
           and(
             eq(orgInvites.orgId, input.orgId),
             isNull(orgInvites.acceptedAt),
+            gt(orgInvites.expiresAt, new Date()),
           )
         )
         .orderBy(orgInvites.createdAt)
 
-      // Filter out expired in-memory
-      const now = new Date()
-      return invites.filter((i) => i.expiresAt > now)
+      return invites
     }),
 
   /** Revoke a pending invite */

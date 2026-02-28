@@ -45,3 +45,15 @@ export interface Organization {
   stripeSubscriptionId: string | null
   createdAt: Date
 }
+
+export type OrgInvite = {
+  id: string
+  orgId: string
+  email: string
+  token: string
+  role: 'owner' | 'admin' | 'member' | 'viewer'
+  invitedBy: string | null
+  expiresAt: Date
+  acceptedAt: Date | null
+  createdAt: Date
+}

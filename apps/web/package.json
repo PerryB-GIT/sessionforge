@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "analyze": "ANALYZE=true next build",
     "start": "node server.js",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
@@ -70,6 +71,7 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^15.0.0",
     "@playwright/test": "^1.58.2",
     "@sessionforge/shared-types": "*",
     "@types/bcryptjs": "^2.4.6",

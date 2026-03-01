@@ -101,13 +101,21 @@ jobs:
         run: npm install --prefer-offline
 
       - name: Run unit tests
-        run: npm run test:unit -- --reporter=verbose
+        run: npm run test:unit -- --reporter=verbose --coverage
         env:
           BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
           CHECKLY_API_KEY: ${{ secrets.CHECKLY_API_KEY }}
           CHECKLY_ACCOUNT_ID: ${{ secrets.CHECKLY_ACCOUNT_ID }}
           PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: .worktrees/agent-qa/coverage
+          flags: unittests
+          fail_ci_if_error: false
 
   go-ci:
     name: Go Agent (build + vet)

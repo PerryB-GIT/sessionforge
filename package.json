@@ -18,16 +18,32 @@
     "docker:dev": "docker-compose up -d",
     "docker:dev:tools": "docker-compose --profile tools up -d",
     "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:logs": "docker-compose logs -f",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0",
     "checkly": "latest",
-    "jiti": "^2"
+    "jiti": "^2",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0"
   },
   "dependencies": {
     "pdf-lib": "^1.17.1"
+  },
+  "lint-staged": {
+    "apps/web/**/*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "packages/**/*.{ts,tsx}": [
+      "prettier --write"
+    ],
+    "**/*.{json,md}": [
+      "prettier --write"
+    ]
   }
 }

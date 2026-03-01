@@ -1,4 +1,5 @@
 const { withSentryConfig } = require('@sentry/nextjs')
+const withBundleAnalyzer = require('@next/bundle-analyzer')({ enabled: process.env.ANALYZE === 'true' })
 
 const securityHeaders = [
   { key: 'X-Content-Type-Options',              value: 'nosniff' },
@@ -106,10 +107,10 @@ const nextConfig = {
   },
 }
 
-module.exports = withSentryConfig(nextConfig, {
+module.exports = withBundleAnalyzer(withSentryConfig(nextConfig, {
   silent: true,
   disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
   disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
   hideSourceMaps: true,
   widenClientFileUpload: true,
-})
+}))

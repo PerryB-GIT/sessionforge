@@ -32,6 +32,9 @@ jobs:
           else
             echo "No package.json found — skipping install."
           fi
+          if [ -f "apps/web/package.json" ]; then
+            cd apps/web && npm install --prefer-offline
+          fi
 
       - name: Run ESLint
         run: |
@@ -61,6 +64,9 @@ jobs:
             npm ci
           else
             echo "No package.json found — skipping install."
+          fi
+          if [ -f "apps/web/package.json" ]; then
+            cd apps/web && npm install --prefer-offline
           fi
 
       - name: Run TypeScript compiler
@@ -159,6 +165,9 @@ jobs:
             npm ci
           else
             echo "No package.json found — skipping install."
+          fi
+          if [ -f "apps/web/package.json" ]; then
+            cd apps/web && npm install --prefer-offline
           fi
 
       - name: Build Next.js app

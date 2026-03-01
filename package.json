@@ -1,46 +1,33 @@
 {
-  "name": "@sessionforge/qa",
-  "version": "0.1.0",
+  "name": "sessionforge",
   "private": true,
-  "description": "SessionForge QA test suite - unit, integration, and E2E tests",
+  "packageManager": "npm@10.9.3",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "test": "vitest run --config vitest.config.ts",
-    "test:watch": "vitest --config vitest.config.ts",
-    "test:unit": "vitest run --config vitest.config.ts",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
-    "test:coverage": "vitest run --config vitest.config.ts --coverage",
-    "test:ci": "vitest run --config vitest.config.ts --reporter=verbose && playwright test --reporter=github",
-    "lint": "tsc --noEmit"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "type-check": "turbo run type-check",
+    "db:generate": "cd apps/web && npx drizzle-kit generate",
+    "db:push": "cd apps/web && npx drizzle-kit push",
+    "db:studio": "cd apps/web && npx drizzle-kit studio",
+    "docker:dev": "docker-compose up -d",
+    "docker:dev:tools": "docker-compose --profile tools up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
   "devDependencies": {
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/exporter-logs-otlp-http": "^0.212.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.212.0",
-    "@opentelemetry/sdk-node": "^0.212.0",
-    "@percy/playwright": "^1.0.10",
-    "@playwright/test": "^1.44.0",
-    "@sessionforge/shared-types": "file:../../packages/shared-types",
-    "@testcontainers/postgresql": "^11.12.0",
-    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.0.0",
-    "@types/supertest": "^6.0.2",
-    "@types/ws": "^8.5.10",
-    "@vitest/coverage-v8": "^1.5.0",
-    "bcryptjs": "^2.4.3",
-    "browserstack-node-sdk": "^1.49.12",
-    "drizzle-orm": "^0.30.0",
-    "jose": "^5.2.0",
-    "mailosaur": "^11.0.2",
-    "postgres": "^3.4.0",
-    "supertest": "^7.0.0",
-    "testcontainers": "^11.12.0",
-    "toxiproxy-node-client": "^4.0.0",
+    "turbo": "^2.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.5.0",
-    "ws": "^8.17.0",
-    "zod": "^3.23.0"
+    "checkly": "latest",
+    "jiti": "^2"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
   }
 }

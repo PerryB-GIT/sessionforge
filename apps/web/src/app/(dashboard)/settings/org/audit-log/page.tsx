@@ -67,11 +67,11 @@ export default function AuditLogPage() {
       const params = new URLSearchParams({ page: String(pageNum) })
       if (filter !== 'all') params.set('action', filter)
       const res = await fetch(`/api/org/audit-log?${params}`)
-      const j = await res.json()
       if (res.status === 403) {
         setPlanError(true)
         return
       }
+      const j = await res.json()
       const newRows: AuditRow[] = j.data ?? []
       setHasMore(newRows.length === 50)
       setRows((prev) => (replace ? newRows : [...prev, ...newRows]))

@@ -70,6 +70,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const plan = (userRow?.plan ?? 'free') as PlanTier
     const limits = PLAN_LIMITS[plan]
 
+    // historyDays > 0 check: all current plans use positive integers (1/30/90/365).
+    // If a future plan uses 0 as a sentinel for unlimited history, this guard correctly
+    // skips the age check (0 > 0 is false), so the behaviour would remain correct.
     if (record.stoppedAt && limits.historyDays > 0) {
       const ageMs = Date.now() - new Date(record.stoppedAt).getTime()
       const ageDays = ageMs / (1000 * 60 * 60 * 24)

@@ -538,7 +538,7 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       const { sessionId, exitCode } = msg
       await flushSessionStats(sessionId, sessionStats)
       await query(`UPDATE sessions SET status = 'stopped', exit_code = $1, stopped_at = NOW() WHERE id = $2`, [exitCode, sessionId])
-      const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
+      const rows = await query(`SELECT machine_id, user_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
       if (rows[0]) {
         await publishToDashboard(userId, { type: 'session_updated', session: { id: sessionId, status: 'stopped', machineId: rows[0].machine_id } })
         // Archive recording to GCS if the machine has an org (enterprise plan check happens at playback)
@@ -561,7 +561,11 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         const logKey = RedisKeys.sessionLogs(sessionId)
         const lines = await redisLib.lrange(logKey, 0, -1)
         if (lines.length > 0) {
-          await archiveSessionLogs(sessionId, userId, lines)
+          // Use user_id from the session row rather than the WebSocket-authenticated userId.
+          // In the agent→server message flow the outer userId is the machine owner resolved
+          // via the API key; sourcing it from the session row is more correct and defensive.
+          // Fallback to the WS-auth userId in case the row is somehow absent.
+          await archiveSessionLogs(sessionId, rows[0]?.user_id ?? userId, lines)
         }
       } catch (err) {
         console.error('[gcs-logs] archive failed for session', sessionId, ':', err)

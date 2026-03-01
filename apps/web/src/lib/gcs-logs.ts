@@ -40,6 +40,12 @@ export async function fetchLogsFromGCS(
   offset: number,
   limit: number
 ): Promise<{ lines: string[]; total: number }> {
+  // If GCS is not configured (e.g. local dev), return empty result silently rather
+  // than throwing and producing noisy error logs in the caller's catch block.
+  if (!process.env.GCS_BUCKET_LOGS) {
+    return { lines: [], total: 0 }
+  }
+
   const file = getBucket().file(`session-logs/${userId}/${sessionId}.ndjson.gz`)
 
   const [exists] = await file.exists()

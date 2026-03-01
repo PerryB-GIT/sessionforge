@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { db, apiKeys } from '@/db'
 import { generateApiKey } from '@/lib/api-keys'
+import { logAuditEvent } from '@/lib/audit'
 import type { ApiResponse, ApiError } from '@sessionforge/shared-types'
 
 const createKeySchema = z.object({
@@ -45,14 +46,20 @@ export async function GET(req: NextRequest) {
       .where(eq(apiKeys.userId, session.user.id))
       .orderBy(apiKeys.createdAt)
 
-    return NextResponse.json(
-      { data: rows, error: null } satisfies ApiResponse<typeof rows>,
-      { status: 200 }
-    )
+    return NextResponse.json({ data: rows, error: null } satisfies ApiResponse<typeof rows>, {
+      status: 200,
+    })
   } catch (err) {
     console.error('[GET /api/keys] unhandled error:', err)
     return NextResponse.json(
-      { data: null, error: { code: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unknown error', statusCode: 500 } },
+      {
+        data: null,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : 'Unknown error',
+          statusCode: 500,
+        },
+      },
       { status: 500 }
     )
   }
@@ -109,6 +116,7 @@ export async function POST(req: NextRequest) {
         name: apiKeys.name,
         keyPrefix: apiKeys.keyPrefix,
         scopes: apiKeys.scopes,
+        orgId: apiKeys.orgId,
         createdAt: apiKeys.createdAt,
       })
 
@@ -122,6 +130,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    if (created.orgId) {
+      const ip =
+        req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+        req.headers.get('x-real-ip') ??
+        undefined
+      logAuditEvent(created.orgId, session.user.id, 'api_key.created', {
+        targetId: created.id,
+        metadata: { name: created.name },
+        ip,
+      }).catch(() => {})
+    }
+
     // Return the full key ONLY once at creation time
     return NextResponse.json(
       {
@@ -133,7 +153,14 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('[POST /api/keys] unhandled error:', err)
     return NextResponse.json(
-      { data: null, error: { code: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unknown error', statusCode: 500 } },
+      {
+        data: null,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : 'Unknown error',
+          statusCode: 500,
+        },
+      },
       { status: 500 }
     )
   }

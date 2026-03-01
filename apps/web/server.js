@@ -555,6 +555,17 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       } catch (err) {
         console.error('[webhooks] delivery error on session.stopped:', err)
       }
+      try {
+        const { redis: redisLib, RedisKeys } = await import('./src/lib/redis.js')
+        const { archiveSessionLogs } = await import('./src/lib/gcs-logs.js')
+        const logKey = RedisKeys.sessionLogs(sessionId)
+        const lines = await redisLib.lrange(logKey, 0, -1)
+        if (lines.length > 0) {
+          await archiveSessionLogs(sessionId, userId, lines)
+        }
+      } catch (err) {
+        console.error('[gcs-logs] archive failed for session', sessionId, ':', err)
+      }
       break
     }
 

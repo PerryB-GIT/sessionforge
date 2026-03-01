@@ -13,12 +13,16 @@ import {
   ChevronRight,
   Activity,
   CreditCard,
+  Webhook,
 } from 'lucide-react'
+import { useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store'
 import { Logo } from '@/components/ui/Logo'
+import { isFeatureAvailable } from '@sessionforge/shared-types'
+import type { PlanTier } from '@sessionforge/shared-types'
 
-const navItems = [
+const baseNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/machines', label: 'Machines', icon: Monitor },
   { href: '/sessions', label: 'Sessions', icon: Terminal },
@@ -30,6 +34,15 @@ export function Sidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const wsStatus = useStore((s) => s.wsStatus)
+  const { data: session } = useSession()
+  const userPlan = ((session?.user as { plan?: string } | undefined)?.plan ?? 'free') as PlanTier
+
+  const navItems = [
+    ...baseNavItems,
+    ...(isFeatureAvailable(userPlan, 'webhooks')
+      ? [{ href: '/webhooks', label: 'Webhooks', icon: Webhook }]
+      : []),
+  ]
 
   return (
     <aside
@@ -45,9 +58,7 @@ export function Sidebar() {
             <Logo size={32} />
           </div>
           {!collapsed && (
-            <span className="text-sm font-semibold text-white whitespace-nowrap">
-              SessionForge
-            </span>
+            <span className="text-sm font-semibold text-white whitespace-nowrap">SessionForge</span>
           )}
         </Link>
       </div>
@@ -85,9 +96,7 @@ export function Sidebar() {
         </ul>
 
         {/* Divider */}
-        {!collapsed && (
-          <div className="my-4 border-t border-[#1e1e2e]" />
-        )}
+        {!collapsed && <div className="my-4 border-t border-[#1e1e2e]" />}
 
         {/* Bottom items */}
         {!collapsed && (

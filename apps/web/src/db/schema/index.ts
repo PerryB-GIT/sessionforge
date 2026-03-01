@@ -11,7 +11,6 @@ import {
   jsonb,
   uniqueIndex,
   index,
-  jsonb,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 
@@ -430,7 +429,9 @@ export const notifications = pgTable(
   },
   (table) => ({
     userIdIdx: index('notifications_user_id_idx').on(table.userId),
-    unreadIdx: index('notifications_unread_idx').on(table.userId).where(sql`${table.readAt} IS NULL`),
+    unreadIdx: index('notifications_unread_idx')
+      .on(table.userId)
+      .where(sql`${table.readAt} IS NULL`),
   })
 )
 

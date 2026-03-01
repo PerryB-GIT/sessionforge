@@ -27,5 +27,9 @@
   },
   "dependencies": {
     "pdf-lib": "^1.17.1"
+  },
+  "lint-staged": {
+    "apps/web/src/**/*.{ts,tsx}": "npx eslint --fix",
+    "**/*.{ts,tsx,js,jsx,json,md}": "npx prettier --write"
   }
 }

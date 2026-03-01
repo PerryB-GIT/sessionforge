@@ -29,18 +29,20 @@ const profileSchema = z.object({
   email: z.string().email('Invalid email address'),
 })
 
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Must contain uppercase')
-    .regex(/[0-9]/, 'Must contain number'),
-  confirmPassword: z.string(),
-}).refine((d) => d.newPassword === d.confirmPassword, {
-  message: 'Passwords do not match',
-  path: ['confirmPassword'],
-})
+const passwordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/[A-Z]/, 'Must contain uppercase')
+      .regex(/[0-9]/, 'Must contain number'),
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  })
 
 type ProfileForm = z.infer<typeof profileSchema>
 type PasswordForm = z.infer<typeof passwordSchema>
@@ -105,7 +107,10 @@ export default function SettingsPage() {
       const res = await fetch('/api/user/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword: data.currentPassword, newPassword: data.newPassword }),
+        body: JSON.stringify({
+          currentPassword: data.currentPassword,
+          newPassword: data.newPassword,
+        }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -236,10 +241,26 @@ export default function SettingsPage() {
             {notifPrefs &&
               (
                 [
-                  { key: 'sessionCrashed' as const, label: 'Session crashed', description: 'Alert when a session crashes unexpectedly' },
-                  { key: 'machineOffline' as const, label: 'Machine offline', description: 'Alert when a machine goes offline' },
-                  { key: 'sessionStarted' as const, label: 'Session started', description: 'Notify when a new session starts' },
-                  { key: 'weeklyDigest' as const, label: 'Weekly digest', description: 'Weekly summary of session activity' },
+                  {
+                    key: 'sessionCrashed' as const,
+                    label: 'Session crashed',
+                    description: 'Alert when a session crashes unexpectedly',
+                  },
+                  {
+                    key: 'machineOffline' as const,
+                    label: 'Machine offline',
+                    description: 'Alert when a machine goes offline',
+                  },
+                  {
+                    key: 'sessionStarted' as const,
+                    label: 'Session started',
+                    description: 'Notify when a new session starts',
+                  },
+                  {
+                    key: 'weeklyDigest' as const,
+                    label: 'Weekly digest',
+                    description: 'Weekly summary of session activity',
+                  },
                 ] as const
               ).map(({ key, label, description }) => (
                 <div key={key} className="flex items-center justify-between">
@@ -256,8 +277,7 @@ export default function SettingsPage() {
                     className="h-4 w-4 rounded border-[#1e1e2e] accent-purple-500 cursor-pointer"
                   />
                 </div>
-              ))
-            }
+              ))}
           </div>
           <Button
             size="sm"
@@ -308,8 +328,8 @@ export default function SettingsPage() {
               <AlertDialogHeader>
                 <AlertDialogTitle className="text-white">Delete your account?</AlertDialogTitle>
                 <AlertDialogDescription className="text-gray-400">
-                  This will permanently delete all your machines, sessions, API keys, and account data. This
-                  action cannot be undone. Type your email address to confirm.
+                  This will permanently delete all your machines, sessions, API keys, and account
+                  data. This action cannot be undone. Type your email address to confirm.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <Input
@@ -325,7 +345,7 @@ export default function SettingsPage() {
                 <AlertDialogAction
                   className="bg-red-600 hover:bg-red-700 text-white"
                   disabled={deleteConfirmEmail !== session?.user?.email || isDeletingAccount}
-                  onClick={async (e) => {
+                  onClick={async (e: { preventDefault: () => void }) => {
                     e.preventDefault()
                     setIsDeletingAccount(true)
                     try {

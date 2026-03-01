@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f "package.json" ]; then
-            npm ci --include-workspace-root --workspaces
+            npm install --prefer-offline
           else
             echo "No package.json found — skipping install."
           fi
@@ -58,7 +58,7 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f "package.json" ]; then
-            npm ci --include-workspace-root --workspaces
+            npm install --prefer-offline
           else
             echo "No package.json found — skipping install."
           fi
@@ -156,7 +156,7 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f "package.json" ]; then
-            npm ci --include-workspace-root --workspaces
+            npm install --prefer-offline
           else
             echo "No package.json found — skipping install."
           fi

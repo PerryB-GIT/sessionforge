@@ -249,7 +249,10 @@ function handleAgentWs(ws, userId, remoteAddress) {
   let pingTimer = null
   let watchdogTimer = null
   let pollTimer = null
-  let agentPollLastId = '$'
+  // Use a timestamp-based ID rather than '$' so non-blocking xread works correctly.
+  // '$' with the Upstash REST API always returns null (it means "newer than the absolute
+  // latest at query time"), whereas a concrete millisecond ID means "newer than this".
+  let agentPollLastId = `${Date.now()}-0`
   // Per-session stats accumulator: sessionId -> { peakMemory, cpuTotal, cpuSamples }
   const sessionStats = {}
 

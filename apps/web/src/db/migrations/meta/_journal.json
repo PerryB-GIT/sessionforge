@@ -22,6 +22,13 @@
       "when": 1772380354056,
       "tag": "0002_fluffy_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772371897663,
+      "tag": "0003_tough_firelord",
+      "breakpoints": true
     }
   ]
 }

@@ -396,6 +396,41 @@ export const ipAllowlists = pgTable(
   })
 )
 
+// ─── Notification Types ────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'session_crashed',
+  'machine_offline',
+])
+
+// ─── Notifications ─────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: notificationTypeEnum('type').notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    body: text('body').notNull(),
+    resourceId: varchar('resource_id', { length: 255 }),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('notifications_user_id_idx').on(table.userId),
+    readAtIdx: index('notifications_read_at_idx').on(table.readAt),
+  })
+)
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, { fields: [notifications.userId], references: [users.id] }),
+}))
+
 // ─── Relations ─────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -407,6 +442,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   passwordResetTokens: many(passwordResetTokens),
   supportTickets: many(supportTickets),
   auditLogs: many(auditLogs),
+  notifications: many(notifications),
 }))
 
 export const organizationsRelations = relations(organizations, ({ one, many }) => ({

@@ -15,6 +15,13 @@
       "when": 1772311465561,
       "tag": "0001_vengeful_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772380354056,
+      "tag": "0002_fluffy_reaper",
+      "breakpoints": true
     }
   ]
 }

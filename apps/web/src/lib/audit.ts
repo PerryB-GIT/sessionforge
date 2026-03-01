@@ -24,12 +24,16 @@ export async function logAuditEvent(
     ip?: string
   }
 ): Promise<void> {
-  await db.insert(auditLogs).values({
-    orgId,
-    userId: userId ?? undefined,
-    action,
-    targetId: options?.targetId,
-    metadata: options?.metadata,
-    ip: options?.ip,
-  })
+  try {
+    await db.insert(auditLogs).values({
+      orgId,
+      userId: userId ?? undefined,
+      action,
+      targetId: options?.targetId,
+      metadata: options?.metadata,
+      ip: options?.ip,
+    })
+  } catch (err) {
+    console.error('[audit] failed to write audit log:', err)
+  }
 }

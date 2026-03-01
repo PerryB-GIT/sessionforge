@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { eq, and, gte, lte } from 'drizzle-orm'
+import { eq, and, gte, lte, desc } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { db, auditLogs, orgMembers, organizations, users } from '@/db'
 import { isFeatureAvailable } from '@sessionforge/shared-types'
@@ -48,7 +48,8 @@ export async function GET(req: NextRequest) {
   }
 
   const params = req.nextUrl.searchParams
-  const page = Math.max(0, Number(params.get('page') ?? '0'))
+  const rawPage = Number(params.get('page') ?? '0')
+  const page = Number.isFinite(rawPage) ? Math.max(0, Math.floor(rawPage)) : 0
   const actionFilter = params.get('action')
   const userIdFilter = params.get('userId')
   const startDate = params.get('startDate')
@@ -57,8 +58,14 @@ export async function GET(req: NextRequest) {
   const conditions = [eq(auditLogs.orgId, membership.orgId)]
   if (actionFilter) conditions.push(eq(auditLogs.action, actionFilter))
   if (userIdFilter) conditions.push(eq(auditLogs.userId, userIdFilter))
-  if (startDate) conditions.push(gte(auditLogs.createdAt, new Date(startDate)))
-  if (endDate) conditions.push(lte(auditLogs.createdAt, new Date(endDate)))
+  if (startDate) {
+    const d = new Date(startDate)
+    if (!Number.isNaN(d.getTime())) conditions.push(gte(auditLogs.createdAt, d))
+  }
+  if (endDate) {
+    const d = new Date(endDate)
+    if (!Number.isNaN(d.getTime())) conditions.push(lte(auditLogs.createdAt, d))
+  }
 
   const rows = await db
     .select({
@@ -75,7 +82,7 @@ export async function GET(req: NextRequest) {
     .from(auditLogs)
     .leftJoin(users, eq(users.id, auditLogs.userId))
     .where(and(...conditions))
-    .orderBy(auditLogs.createdAt)
+    .orderBy(desc(auditLogs.createdAt))
     .limit(PAGE_SIZE)
     .offset(page * PAGE_SIZE)
 

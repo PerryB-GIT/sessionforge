@@ -507,6 +507,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   supportTickets: many(supportTickets),
   auditLogs: many(auditLogs),
   notifications: many(notifications),
+  webhooks: many(webhooks),
 }))
 
 export const organizationsRelations = relations(organizations, ({ one, many }) => ({
@@ -518,6 +519,7 @@ export const organizationsRelations = relations(organizations, ({ one, many }) =
   ssoConfig: one(ssoConfigs, { fields: [organizations.id], references: [ssoConfigs.orgId] }),
   auditLogs: many(auditLogs),
   ipAllowlists: many(ipAllowlists),
+  webhooks: many(webhooks),
 }))
 
 export const orgMembersRelations = relations(orgMembers, ({ one }) => ({

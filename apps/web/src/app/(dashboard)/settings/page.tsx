@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -12,6 +12,17 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { SupportTicketForm } from '@/components/SupportTicketForm'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -46,6 +57,9 @@ export default function SettingsPage() {
     weeklyDigest: boolean
   } | null>(null)
   const [isSavingNotifs, setIsSavingNotifs] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('')
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
 
   useEffect(() => {
     fetch('/api/user/notifications')
@@ -286,7 +300,52 @@ export default function SettingsPage() {
           <CardDescription>Irreversible and destructive actions</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button variant="destructive">Delete Account</Button>
+          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive">Delete Account</Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="border-[#1e1e2e] bg-[#0a0a0f]">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-white">Delete your account?</AlertDialogTitle>
+                <AlertDialogDescription className="text-gray-400">
+                  This will permanently delete all your machines, sessions, API keys, and account data. This
+                  action cannot be undone. Type your email address to confirm.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <Input
+                placeholder={session?.user?.email ?? 'your@email.com'}
+                value={deleteConfirmEmail}
+                onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                className="mt-2"
+              />
+              <AlertDialogFooter>
+                <AlertDialogCancel className="border-[#1e1e2e] bg-[#111118] text-gray-300 hover:bg-[#1e1e2e]">
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  disabled={deleteConfirmEmail !== session?.user?.email || isDeletingAccount}
+                  onClick={async (e) => {
+                    e.preventDefault()
+                    setIsDeletingAccount(true)
+                    try {
+                      const res = await fetch('/api/user', { method: 'DELETE' })
+                      if (!res.ok) {
+                        const j = await res.json()
+                        toast.error(j.error?.message ?? 'Failed to delete account')
+                        return
+                      }
+                      await signOut({ callbackUrl: '/' })
+                    } finally {
+                      setIsDeletingAccount(false)
+                    }
+                  }}
+                >
+                  {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardContent>
       </Card>
     </div>

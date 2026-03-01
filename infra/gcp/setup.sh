@@ -131,23 +131,13 @@ gcloud sql users create sessionforge \
   --quiet 2>/dev/null || echo "  User already exists, skipping password reset."
 
 # ---------------------------------------------------------------------------
-# Step 4: Create Redis (Memorystore)
+# Step 4: Redis — using Upstash (external managed, not GCP Memorystore)
 # ---------------------------------------------------------------------------
 echo ""
-echo "[4/8] Creating Redis Memorystore (sessionforge-redis-${ENV_SUFFIX})..."
-REDIS_SIZE=$([ "$IS_STAGING" = true ] && echo "1" || echo "2")
-
-gcloud redis instances create "sessionforge-redis-${ENV_SUFFIX}" \
-  --size="$REDIS_SIZE" \
-  --region="$REGION" \
-  --tier=BASIC \
-  --project="$PROJECT_ID" \
-  --quiet 2>/dev/null || echo "  Redis instance already exists, skipping."
-
-REDIS_HOST=$(gcloud redis instances describe "sessionforge-redis-${ENV_SUFFIX}" \
-  --region="$REGION" \
-  --project="$PROJECT_ID" \
-  --format="value(host)")
+echo "[4/8] Redis: using Upstash (no GCP resource to create)."
+echo "  Populate secrets manually after setup:"
+echo "    sessionforge-upstash-redis-url   — REST URL from Upstash console"
+echo "    sessionforge-upstash-redis-token — REST token from Upstash console"
 
 # ---------------------------------------------------------------------------
 # Step 5: Create GCS bucket for session logs
@@ -183,7 +173,6 @@ echo "[6/8] Creating Secret Manager secrets..."
 
 SECRETS=(
   "sessionforge-db-url"
-  "sessionforge-redis-url"
   "sessionforge-nextauth-secret"
   "sessionforge-nextauth-url"
   "sessionforge-google-client-id"
@@ -191,6 +180,9 @@ SECRETS=(
   "sessionforge-github-client-id"
   "sessionforge-github-client-secret"
   "sessionforge-resend-api-key"
+  "sessionforge-upstash-redis-url"
+  "sessionforge-upstash-redis-token"
+  "sessionforge-sentry-dsn"
   "sessionforge-stripe-secret-key"
   "sessionforge-stripe-webhook-secret"
   "sessionforge-stripe-pro-price-id"
@@ -219,16 +211,12 @@ DB_SOCKET_URL="postgresql://sessionforge:${DB_PASSWORD}@/sessionforge?host=/clou
 printf '%s' "$DB_SOCKET_URL" | gcloud secrets versions add sessionforge-db-url \
   --data-file=- --project="$PROJECT_ID" --quiet
 
-# Populate Redis URL
-REDIS_URL="redis://${REDIS_HOST}:6379"
-printf '%s' "$REDIS_URL" | gcloud secrets versions add sessionforge-redis-url \
-  --data-file=- --project="$PROJECT_ID" --quiet
-
 # ---------------------------------------------------------------------------
 # Step 7: Create VPC Serverless Connector (for Cloud SQL private IP)
 # ---------------------------------------------------------------------------
 echo ""
 echo "[7/8] Creating Serverless VPC Access connector..."
+gcloud services enable vpcaccess.googleapis.com --project="$PROJECT_ID" --quiet
 gcloud compute networks vpc-access connectors create sessionforge-connector \
   --region="$REGION" \
   --subnet=default \
@@ -265,7 +253,10 @@ echo "  - sessionforge-google-client-id"
 echo "  - sessionforge-google-client-secret"
 echo "  - sessionforge-github-client-id"
 echo "  - sessionforge-github-client-secret"
-echo "  - sessionforge-resend-api-key"
+echo "  - sessionforge-resend-api-key        (Resend dashboard — re_...)"
+echo "  - sessionforge-upstash-redis-url     (Upstash console — REST URL)"
+echo "  - sessionforge-upstash-redis-token   (Upstash console — REST token)"
+echo "  - sessionforge-sentry-dsn            (Sentry project settings)"
 echo "  - sessionforge-stripe-secret-key"
 echo "  - sessionforge-stripe-webhook-secret"
 echo "  - sessionforge-stripe-pro-price-id"

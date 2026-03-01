@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState, useEffect } from 'react'
+import { useSession, signOut } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -12,6 +12,17 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { SupportTicketForm } from '@/components/SupportTicketForm'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -39,6 +50,23 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [notifPrefs, setNotifPrefs] = useState<{
+    sessionCrashed: boolean
+    machineOffline: boolean
+    sessionStarted: boolean
+    weeklyDigest: boolean
+  } | null>(null)
+  const [isSavingNotifs, setIsSavingNotifs] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('')
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/user/notifications')
+      .then((r) => r.json())
+      .then((j) => setNotifPrefs(j.data))
+      .catch(() => {})
+  }, [])
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -205,28 +233,59 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {[
-              { label: 'Session crashed', description: 'Alert when a session crashes unexpectedly', defaultChecked: true },
-              { label: 'Machine offline', description: 'Alert when a machine goes offline', defaultChecked: true },
-              { label: 'Session started', description: 'Notify when a new session starts', defaultChecked: false },
-              { label: 'Weekly digest', description: 'Weekly summary of session activity', defaultChecked: true },
-            ].map(({ label, description, defaultChecked }) => (
-              <div key={label} className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-white">{label}</p>
-                  <p className="text-xs text-gray-500">{description}</p>
+            {notifPrefs &&
+              (
+                [
+                  { key: 'sessionCrashed' as const, label: 'Session crashed', description: 'Alert when a session crashes unexpectedly' },
+                  { key: 'machineOffline' as const, label: 'Machine offline', description: 'Alert when a machine goes offline' },
+                  { key: 'sessionStarted' as const, label: 'Session started', description: 'Notify when a new session starts' },
+                  { key: 'weeklyDigest' as const, label: 'Weekly digest', description: 'Weekly summary of session activity' },
+                ] as const
+              ).map(({ key, label, description }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white">{label}</p>
+                    <p className="text-xs text-gray-500">{description}</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs[key]}
+                    onChange={(e) =>
+                      setNotifPrefs((prev) => (prev ? { ...prev, [key]: e.target.checked } : prev))
+                    }
+                    className="h-4 w-4 rounded border-[#1e1e2e] accent-purple-500 cursor-pointer"
+                  />
                 </div>
-                <input
-                  type="checkbox"
-                  defaultChecked={defaultChecked}
-                  className="h-4 w-4 rounded border-[#1e1e2e] accent-purple-500 cursor-pointer"
-                />
-              </div>
-            ))}
+              ))
+            }
           </div>
-          <Button size="sm" className="mt-4">
+          <Button
+            size="sm"
+            className="mt-4"
+            isLoading={isSavingNotifs}
+            disabled={!notifPrefs || isSavingNotifs}
+            onClick={async () => {
+              if (!notifPrefs) return
+              setIsSavingNotifs(true)
+              try {
+                const res = await fetch('/api/user/notifications', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(notifPrefs),
+                })
+                if (!res.ok) {
+                  const j = await res.json()
+                  toast.error(j.error?.message ?? 'Failed to save preferences')
+                  return
+                }
+                toast.success('Notification preferences saved!')
+              } finally {
+                setIsSavingNotifs(false)
+              }
+            }}
+          >
             <Save className="h-4 w-4" />
-            Save Preferences
+            {isSavingNotifs ? 'Saving...' : 'Save Preferences'}
           </Button>
         </CardContent>
       </Card>
@@ -241,7 +300,52 @@ export default function SettingsPage() {
           <CardDescription>Irreversible and destructive actions</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button variant="destructive">Delete Account</Button>
+          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive">Delete Account</Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="border-[#1e1e2e] bg-[#0a0a0f]">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-white">Delete your account?</AlertDialogTitle>
+                <AlertDialogDescription className="text-gray-400">
+                  This will permanently delete all your machines, sessions, API keys, and account data. This
+                  action cannot be undone. Type your email address to confirm.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <Input
+                placeholder={session?.user?.email ?? 'your@email.com'}
+                value={deleteConfirmEmail}
+                onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                className="mt-2"
+              />
+              <AlertDialogFooter>
+                <AlertDialogCancel className="border-[#1e1e2e] bg-[#111118] text-gray-300 hover:bg-[#1e1e2e]">
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  disabled={deleteConfirmEmail !== session?.user?.email || isDeletingAccount}
+                  onClick={async (e) => {
+                    e.preventDefault()
+                    setIsDeletingAccount(true)
+                    try {
+                      const res = await fetch('/api/user', { method: 'DELETE' })
+                      if (!res.ok) {
+                        const j = await res.json()
+                        toast.error(j.error?.message ?? 'Failed to delete account')
+                        return
+                      }
+                      await signOut({ callbackUrl: '/' })
+                    } finally {
+                      setIsDeletingAccount(false)
+                    }
+                  }}
+                >
+                  {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardContent>
       </Card>
     </div>

@@ -23,13 +23,14 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "checkly": "latest",
+    "husky": "^9.0.0",
+    "jiti": "^2",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0",
-    "checkly": "latest",
-    "jiti": "^2",
-    "husky": "^9.0.0",
-    "lint-staged": "^15.0.0",
-    "prettier": "^3.0.0"
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "pdf-lib": "^1.17.1"

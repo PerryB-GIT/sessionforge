@@ -50,6 +50,12 @@ export const users = pgTable('users', {
   stripeCustomerId: varchar('stripe_customer_id', { length: 255 }),
   emailVerified: timestamp('email_verified', { withTimezone: true }),
   onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
+  notificationPreferences: jsonb('notification_preferences').$type<{
+    sessionCrashed: boolean
+    machineOffline: boolean
+    sessionStarted: boolean
+    weeklyDigest: boolean
+  }>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -396,6 +402,37 @@ export const ipAllowlists = pgTable(
   })
 )
 
+// ─── Notification Types ────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'session_crashed',
+  'machine_offline',
+])
+
+// ─── Notifications ─────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: notificationTypeEnum('type').notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    body: text('body').notNull(),
+    resourceId: varchar('resource_id', { length: 255 }),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('notifications_user_id_idx').on(table.userId),
+    unreadIdx: index('notifications_unread_idx').on(table.userId).where(sql`${table.readAt} IS NULL`),
+  })
+)
+
 // ─── Relations ─────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -407,6 +444,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   passwordResetTokens: many(passwordResetTokens),
   supportTickets: many(supportTickets),
   auditLogs: many(auditLogs),
+  notifications: many(notifications),
 }))
 
 export const organizationsRelations = relations(organizations, ({ one, many }) => ({
@@ -471,3 +509,8 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
 export const ipAllowlistsRelations = relations(ipAllowlists, ({ one }) => ({
   org: one(organizations, { fields: [ipAllowlists.orgId], references: [organizations.id] }),
 }))
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, { fields: [notifications.userId], references: [users.id] }),
+}))
+

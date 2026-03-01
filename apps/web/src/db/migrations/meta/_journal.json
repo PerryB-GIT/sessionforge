@@ -22,6 +22,27 @@
       "when": 1772380354056,
       "tag": "0002_fluffy_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772371897663,
+      "tag": "0003_tough_firelord",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772372246248,
+      "tag": "0004_marvelous_vertigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772372359620,
+      "tag": "0005_panoramic_mindworm",
+      "breakpoints": true
     }
   ]
 }

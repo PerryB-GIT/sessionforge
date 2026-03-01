@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import IPCIDR from 'ip-cidr'
 import { auth } from '@/lib/auth'
 import { db, organizations, orgMembers, ipAllowlists } from '@/db'
 import { isFeatureAvailable } from '@sessionforge/shared-types'
@@ -14,7 +15,15 @@ export const dynamic = 'force-dynamic'
 const cidrSchema = z.object({
   cidr: z
     .string()
-    .regex(/^[\d.]+\/\d+$|^[\da-f:]+\/\d+$/i, 'Must be a valid CIDR (e.g. 192.168.1.0/24)'),
+    .regex(/^[\d.]+\/\d+$|^[\da-f:]+\/\d+$/i, 'Must be a valid CIDR (e.g. 192.168.1.0/24)')
+    .refine((cidr) => {
+      try {
+        new IPCIDR(cidr)
+        return true
+      } catch {
+        return false
+      }
+    }, 'Invalid CIDR — check the address and prefix length'),
   label: z.string().max(255).optional(),
 })
 

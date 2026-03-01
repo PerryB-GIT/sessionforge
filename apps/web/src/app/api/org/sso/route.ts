@@ -115,24 +115,6 @@ export async function POST(req: NextRequest) {
 
   const data = parsed.data
 
-  // Build update payload — only include clientSecret if provided (don't overwrite with empty)
-  const updatePayload: Record<string, unknown> = {
-    provider: data.provider,
-    enabled: data.enabled ?? false,
-    updatedAt: new Date(),
-  }
-  if (data.provider === 'oidc') {
-    updatePayload.clientId = data.clientId ?? null
-    updatePayload.issuerUrl = data.issuerUrl || null
-    if (data.clientSecret) updatePayload.clientSecret = data.clientSecret
-    updatePayload.samlIdpMetadataUrl = null
-  } else {
-    updatePayload.samlIdpMetadataUrl = data.samlIdpMetadataUrl || null
-    updatePayload.clientId = null
-    updatePayload.issuerUrl = null
-    updatePayload.clientSecret = null
-  }
-
   const existing = await db
     .select({ id: ssoConfigs.id })
     .from(ssoConfigs)
@@ -140,13 +122,40 @@ export async function POST(req: NextRequest) {
     .limit(1)
 
   if (existing.length > 0) {
-    await db.update(ssoConfigs).set(updatePayload).where(eq(ssoConfigs.orgId, membership.orgId))
+    // Build typed update payload — Partial<typeof ssoConfigs.$inferInsert> gives
+    // compile-time column validation (no unknown key typos slip through).
+    if (data.provider === 'oidc') {
+      const oidcUpdate: Partial<typeof ssoConfigs.$inferInsert> = {
+        provider: 'oidc',
+        enabled: data.enabled ?? false,
+        clientId: data.clientId ?? null,
+        issuerUrl: data.issuerUrl || null,
+        samlIdpMetadataUrl: null,
+        updatedAt: new Date(),
+      }
+      // Only overwrite clientSecret when a new value is supplied
+      if (data.clientSecret) oidcUpdate.clientSecret = data.clientSecret
+      await db.update(ssoConfigs).set(oidcUpdate).where(eq(ssoConfigs.orgId, membership.orgId))
+    } else {
+      await db
+        .update(ssoConfigs)
+        .set({
+          provider: 'saml',
+          enabled: data.enabled ?? false,
+          samlIdpMetadataUrl: data.samlIdpMetadataUrl || null,
+          clientId: null,
+          issuerUrl: null,
+          clientSecret: null,
+          updatedAt: new Date(),
+        } satisfies Partial<typeof ssoConfigs.$inferInsert>)
+        .where(eq(ssoConfigs.orgId, membership.orgId))
+    }
   } else {
     await db.insert(ssoConfigs).values({
       orgId: membership.orgId,
       provider: data.provider,
-      clientId: data.clientId,
-      clientSecret: data.clientSecret,
+      clientId: data.clientId ?? null,
+      clientSecret: data.clientSecret ?? null,
       issuerUrl: data.issuerUrl || null,
       samlIdpMetadataUrl: data.samlIdpMetadataUrl || null,
       enabled: data.enabled ?? false,

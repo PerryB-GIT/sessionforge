@@ -48,7 +48,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { token: s
 
   const [deleted] = await db
     .delete(orgInvites)
-    .where(and(eq(orgInvites.id, params.token), eq(orgInvites.orgId, org.id)))
+    .where(and(eq(orgInvites.token, params.token), eq(orgInvites.orgId, org.id)))
     .returning({ id: orgInvites.id })
 
   if (!deleted) {

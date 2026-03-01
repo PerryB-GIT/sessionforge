@@ -7,7 +7,13 @@ import { auth } from '@/lib/auth'
 import { db, sessions, machines } from '@/db'
 import { redis, RedisKeys } from '@/lib/redis'
 import { checkSessionLimit, checkMachineLimit, PlanLimitError } from '@/lib/plan-enforcement'
-import type { ApiResponse, ApiError, PaginatedResponse, StartSessionRequest } from '@sessionforge/shared-types'
+import { requireOrgRole, orgAuthErrorResponse } from '@/lib/org-auth'
+import type {
+  ApiResponse,
+  ApiError,
+  PaginatedResponse,
+  StartSessionRequest,
+} from '@sessionforge/shared-types'
 import type { CloudToAgentMessage } from '@sessionforge/shared-types'
 
 // ─── GET /api/sessions ─────────────────────────────────────────────────────────
@@ -28,7 +34,12 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
   const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') ?? '20', 10)))
   const machineId = searchParams.get('machineId')
-  const statusFilter = searchParams.get('status') as 'running' | 'stopped' | 'crashed' | 'paused' | null
+  const statusFilter = searchParams.get('status') as
+    | 'running'
+    | 'stopped'
+    | 'crashed'
+    | 'paused'
+    | null
   const offset = (page - 1) * pageSize
 
   const whereConditions = [eq(sessions.userId, session.user.id)]
@@ -71,10 +82,9 @@ export async function GET(req: NextRequest) {
     hasMore: page * pageSize < total,
   }
 
-  return NextResponse.json(
-    { data: response, error: null } satisfies ApiResponse<typeof response>,
-    { status: 200 }
-  )
+  return NextResponse.json({ data: response, error: null } satisfies ApiResponse<typeof response>, {
+    status: 200,
+  })
 }
 
 // ─── POST /api/sessions ────────────────────────────────────────────────────────
@@ -119,7 +129,7 @@ export async function POST(req: NextRequest) {
 
   // Verify machine belongs to user and is online
   const [machine] = await db
-    .select({ id: machines.id, status: machines.status })
+    .select({ id: machines.id, status: machines.status, orgId: machines.orgId })
     .from(machines)
     .where(and(eq(machines.id, machineId), eq(machines.userId, session.user.id)))
     .limit(1)
@@ -146,6 +156,19 @@ export async function POST(req: NextRequest) {
       } satisfies ApiError,
       { status: 422 }
     )
+  }
+
+  // If this is an org machine, require at least member role in that org
+  if (machine.orgId) {
+    try {
+      await requireOrgRole(session, machine.orgId, 'member')
+    } catch (err) {
+      const { status, code, message } = orgAuthErrorResponse(err)
+      return NextResponse.json(
+        { data: null, error: { code, message, statusCode: status } },
+        { status }
+      )
+    }
   }
 
   // Enforce plan limits
@@ -182,7 +205,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         data: null,
-        error: { code: 'INTERNAL_ERROR', message: 'Failed to create session record', statusCode: 500 },
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to create session record',
+          statusCode: 500,
+        },
       } satisfies ApiError,
       { status: 500 }
     )

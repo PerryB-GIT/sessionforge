@@ -7,6 +7,7 @@ import { db, organizations, orgMembers, users, orgInvites } from '@/db'
 import { sendInviteEmail } from '@/lib/email'
 import { requireFeature, FeatureNotAvailableError } from '@/lib/plan-enforcement'
 import { logAuditEvent } from '@/lib/audit'
+import { requireOrgRole, orgAuthErrorResponse } from '@/lib/org-auth'
 import type { ApiResponse, ApiError } from '@sessionforge/shared-types'
 
 export const dynamic = 'force-dynamic'
@@ -130,6 +131,17 @@ export async function POST(req: NextRequest) {
         error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 },
       } satisfies ApiError,
       { status: 404 }
+    )
+  }
+
+  // Enforce admin role for inviting members
+  try {
+    await requireOrgRole(session, org.id, 'admin')
+  } catch (err) {
+    const { status, code, message } = orgAuthErrorResponse(err)
+    return NextResponse.json(
+      { data: null, error: { code, message, statusCode: status } },
+      { status }
     )
   }
 

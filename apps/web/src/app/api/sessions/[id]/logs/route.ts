@@ -3,9 +3,11 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { eq, and } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
-import { db, sessions } from '@/db'
+import { db, sessions, users } from '@/db'
 import { redis, RedisKeys, SESSION_LOG_MAX_LINES } from '@/lib/redis'
 import type { ApiResponse, ApiError } from '@sessionforge/shared-types'
+import { PLAN_LIMITS } from '@sessionforge/shared-types'
+import type { PlanTier } from '@sessionforge/shared-types'
 
 interface SessionLogsResponse {
   sessionId: string
@@ -16,10 +18,7 @@ interface SessionLogsResponse {
 
 // ─── GET /api/sessions/:id/logs ────────────────────────────────────────────────
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json(
@@ -35,9 +34,9 @@ export async function GET(
   const limit = Math.min(SESSION_LOG_MAX_LINES, parseInt(searchParams.get('limit') ?? '500', 10))
   const offset = parseInt(searchParams.get('offset') ?? '0', 10)
 
-  // Verify session ownership
+  // Verify session ownership — also select stoppedAt for history gate
   const [record] = await db
-    .select({ id: sessions.id, status: sessions.status })
+    .select({ id: sessions.id, status: sessions.status, stoppedAt: sessions.stoppedAt })
     .from(sessions)
     .where(and(eq(sessions.id, params.id), eq(sessions.userId, session.user.id)))
     .limit(1)
@@ -59,11 +58,59 @@ export async function GET(
   const rawLines = await redis.lrange(logKey, offset, offset + limit - 1)
   const total = await redis.llen(logKey)
 
-  // STUB: For sessions older than SESSION_LOG_TTL_SECONDS, logs would be fetched from GCS:
-  // if (rawLines.length === 0 && record.status !== 'running') {
-  //   const gcsLines = await fetchLogsFromGCS(params.id, { offset, limit })
-  //   return NextResponse.json({ data: { ...gcsLines, source: 'gcs' }, error: null })
-  // }
+  // Redis is empty — check if session is stopped and fetch from GCS
+  if (record.status !== 'running' && rawLines.length === 0) {
+    // Plan history gate
+    const [userRow] = await db
+      .select({ plan: users.plan })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1)
+
+    const plan = (userRow?.plan ?? 'free') as PlanTier
+    const limits = PLAN_LIMITS[plan]
+
+    // historyDays > 0 check: all current plans use positive integers (1/30/90/365).
+    // If a future plan uses 0 as a sentinel for unlimited history, this guard correctly
+    // skips the age check (0 > 0 is false), so the behaviour would remain correct.
+    if (record.stoppedAt && limits.historyDays > 0) {
+      const ageMs = Date.now() - new Date(record.stoppedAt).getTime()
+      const ageDays = ageMs / (1000 * 60 * 60 * 24)
+      if (ageDays > limits.historyDays) {
+        return NextResponse.json(
+          {
+            data: null,
+            error: {
+              code: 'HISTORY_LIMIT',
+              message: `Session logs older than ${limits.historyDays} days require a higher plan`,
+              statusCode: 403,
+            },
+          } satisfies ApiError,
+          { status: 403 }
+        )
+      }
+    }
+
+    // Fetch from GCS
+    try {
+      const { fetchLogsFromGCS } = await import('@/lib/gcs-logs')
+      const gcsResult = await fetchLogsFromGCS(params.id, session.user.id, offset, limit)
+      if (gcsResult.lines.length > 0) {
+        return NextResponse.json({
+          data: {
+            sessionId: params.id,
+            lines: gcsResult.lines,
+            total: gcsResult.total,
+            source: 'gcs',
+          },
+          error: null,
+        })
+      }
+    } catch (err) {
+      console.error('[GET /api/sessions/:id/logs] GCS fetch failed:', err)
+      // Fall through to empty response
+    }
+  }
 
   const response: SessionLogsResponse = {
     sessionId: params.id,

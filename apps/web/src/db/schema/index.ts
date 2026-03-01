@@ -50,6 +50,12 @@ export const users = pgTable('users', {
   stripeCustomerId: varchar('stripe_customer_id', { length: 255 }),
   emailVerified: timestamp('email_verified', { withTimezone: true }),
   onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
+  notificationPreferences: jsonb('notification_preferences').$type<{
+    sessionCrashed: boolean
+    machineOffline: boolean
+    sessionStarted: boolean
+    weeklyDigest: boolean
+  }>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

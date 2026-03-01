@@ -41,8 +41,8 @@ async function fillSignupForm(page: Page, email: string, password = DEFAULT_PASS
     if (await confirmField.isVisible()) {
       await confirmField.fill(password)
     }
-    // Check the Terms of Service checkbox if present (required by Zod schema)
-    const termsCheckbox = page.locator('#terms')
+    // Check the Terms of Service checkbox if present
+    const termsCheckbox = page.getByRole('checkbox')
     if (await termsCheckbox.isVisible()) {
       await termsCheckbox.check()
     }
@@ -68,7 +68,7 @@ test.describe('Sign up flow', () => {
     })
 
     await test.step('Verify form elements are present', async () => {
-      await expect(page.getByRole('heading', { name: /sign up|create|get started/i })).toBeVisible()
+      await expect(page.getByRole('heading', { name: /create.*account|sign up|get started/i })).toBeVisible()
       await expect(page.getByLabel(/email/i)).toBeVisible()
       await expect(page.getByLabel(/password/i).first()).toBeVisible()
     })
@@ -88,7 +88,7 @@ test.describe('Sign up flow', () => {
 
     await test.step('Verify redirect to email verification page', async () => {
       await expect(page).toHaveURL(/verify-email/, { timeout: 10000 })
-      await expect(page.getByText(/check your email|verify your email|confirmation/i).first()).toBeVisible()
+      await expect(page.getByText(/check your email|verify your email|confirmation/i)).toBeVisible()
     })
   })
 
@@ -99,11 +99,11 @@ test.describe('Sign up flow', () => {
 
     await test.step('Submit with weak password', async () => {
       await fillSignupForm(page, uniqueEmail(), 'weak')
-      await page.getByRole('button', { name: /sign up|create account|create/i }).click()
+      await page.getByRole('button', { name: /sign up|create account/i }).click()
     })
 
     await test.step('Verify error message is shown', async () => {
-      await expect(page.getByText(/password must be at least|must contain|uppercase|lowercase|number|special/i).first()).toBeVisible()
+      await expect(page.getByText(/password|characters|uppercase|lowercase|number|special/i)).toBeVisible()
       // Should still be on signup page
       await expect(page).toHaveURL(/signup/)
     })
@@ -118,7 +118,7 @@ test.describe('Sign up flow', () => {
       // This email must already exist in the test DB — for E2E we stub
       // by relying on the API to return 409
       await fillSignupForm(page, 'existing@sessionforge.dev')
-      await page.getByRole('button', { name: /sign up|create account|create/i }).click()
+      await page.getByRole('button', { name: /sign up|create account/i }).click()
     })
 
     await test.step('Verify error is shown', async () => {

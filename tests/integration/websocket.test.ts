@@ -9,18 +9,20 @@
  *   - 'session_output' → forwarded to Redis pub/sub
  *   - Disconnect → machine status set to 'offline'
  *
- * STUB: These tests use the mock WS server from helpers/ws.ts.
- * Once the Backend agent builds the real WebSocket handler at /api/ws/agent,
- * replace the mock server with a real HTTP server + WS connection.
+ * These tests use the real mock WS server from helpers/ws.ts.
+ * The server is a thin ws.WebSocketServer that runs the same handler logic
+ * that the real backend WS handler at /api/ws/agent will implement.
  *
- * Real-world wiring:
+ * When the Backend agent builds the real /api/ws/agent handler, the
+ * createMockWsServer() calls can be replaced with:
+ *
  *   import { createServer } from 'http'
  *   import { NextServer } from 'next/dist/server/next'
  *   const server = createServer(nextApp.getRequestHandler())
  *   const wsUrl = `ws://localhost:${server.address().port}/api/ws/agent`
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   createMockWsServer,
   createMockAgentClient,
@@ -152,7 +154,7 @@ afterEach(async () => {
 describe('Agent WebSocket connection', () => {
   it('accepts a connection without requiring auth headers in the mock (stub: real impl rejects unauthenticated)', async () => {
     /**
-     * STUB: The real endpoint at /api/ws/agent validates the API key from
+     * The real endpoint at /api/ws/agent validates the API key from
      * the Authorization header before completing the WebSocket upgrade.
      * Unauthenticated connections receive a 401 HTTP response (not 101).
      *

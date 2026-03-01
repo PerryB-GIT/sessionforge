@@ -12,37 +12,31 @@
  * Replace mocked steps with real WebSocket stimuli once backend is built.
  */
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import { STORAGE_STATE } from '../setup/global-setup'
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
-
-// ---------------------------------------------------------------------------
-// Auth helper
-// STUB: Replace with storageState once persistent auth is set up.
-// ---------------------------------------------------------------------------
-
-async function loginAsTestUser(page: Page) {
-  await page.goto(`${BASE_URL}/login`)
-  await page.getByLabel(/email/i).fill('test@sessionforge.dev')
-  await page.getByLabel(/password/i).fill('E2eTestPass123!')
-  await page.getByRole('button', { name: /sign in|log in/i }).click()
-  await page.waitForURL(/dashboard/, { timeout: 15000 })
-}
 
 // ---------------------------------------------------------------------------
 // Session lifecycle
 // ---------------------------------------------------------------------------
 
 test.describe('Session lifecycle', () => {
-  test.beforeEach(async ({ page }) => {
+  test.use({ storageState: STORAGE_STATE })
+
+  test.beforeEach(async () => {
     test.skip(
       process.env.CI === 'true',
       'STUB: Requires seeded user + online machine. Enable once backend is deployed.'
     )
-    await loginAsTestUser(page)
   })
 
   test('navigating to dashboard shows Machines page link', async ({ page }) => {
+    await test.step('Navigate to dashboard', async () => {
+      await page.goto(`${BASE_URL}/dashboard`)
+      await expect(page).toHaveURL(/dashboard/, { timeout: 10000 })
+    })
+
     await test.step('Verify dashboard navigation includes Machines', async () => {
       await expect(
         page.getByRole('link', { name: /machines/i })
@@ -52,7 +46,7 @@ test.describe('Session lifecycle', () => {
 
   test('Machines page renders a machine grid after login', async ({ page }) => {
     await test.step('Navigate to Machines page', async () => {
-      await page.getByRole('link', { name: /machines/i }).click()
+      await page.goto(`${BASE_URL}/machines`)
       await expect(page).toHaveURL(/machines/, { timeout: 5000 })
     })
 
@@ -67,7 +61,7 @@ test.describe('Session lifecycle', () => {
     test.skip(true, 'STUB: requires an online machine in test DB')
 
     await test.step('Navigate to Machines page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
     })
 
     await test.step('Click the first machine card', async () => {
@@ -83,7 +77,7 @@ test.describe('Session lifecycle', () => {
     test.skip(true, 'STUB: requires an online machine in test DB')
 
     await test.step('Navigate to machine detail page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
       await page.locator('[data-testid="machine-card"]').first().click()
     })
 
@@ -106,7 +100,7 @@ test.describe('Session lifecycle', () => {
     test.skip(true, 'STUB: requires a real WebSocket connection to a live machine')
 
     await test.step('Navigate to machine, open Sessions tab, start session', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
       await page.locator('[data-testid="machine-card"]').first().click()
       await page.getByRole('tab', { name: /sessions/i }).click()
       await page.getByRole('button', { name: /start session|new session/i }).click()
@@ -125,7 +119,7 @@ test.describe('Session lifecycle', () => {
 
     await test.step('Ensure terminal is open', async () => {
       // Navigate to an active session terminal
-      await page.goto(`${BASE_URL}/dashboard/sessions/stub-session-id`)
+      await page.goto(`${BASE_URL}/sessions/stub-session-id`)
     })
 
     await test.step('Type in terminal', async () => {
@@ -145,7 +139,7 @@ test.describe('Session lifecycle', () => {
     test.skip(true, 'STUB: requires a running session')
 
     await test.step('Navigate to an active session', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
       await page.locator('[data-testid="machine-card"]').first().click()
       await page.getByRole('tab', { name: /sessions/i }).click()
     })
@@ -174,7 +168,7 @@ test.describe('Session lifecycle', () => {
 test.describe('Session pages - unauthenticated access', () => {
   test('accessing a session page while logged out redirects to login', async ({ page }) => {
     await test.step('Navigate to a session page without auth', async () => {
-      await page.goto(`${BASE_URL}/dashboard/sessions/any-session-id`)
+      await page.goto(`${BASE_URL}/sessions/any-session-id`)
     })
 
     await test.step('Verify redirect to login', async () => {
@@ -188,17 +182,23 @@ test.describe('Session pages - unauthenticated access', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Session list view', () => {
-  test.beforeEach(async ({ page }) => {
+  test.use({ storageState: STORAGE_STATE })
+
+  test.beforeEach(async () => {
     test.skip(
       process.env.CI === 'true',
       'STUB: Requires seeded user. Enable once backend is deployed.'
     )
-    await loginAsTestUser(page)
   })
 
   test('Sessions overview page is reachable from the sidebar', async ({ page }) => {
+    await test.step('Navigate to dashboard first', async () => {
+      await page.goto(`${BASE_URL}/dashboard`)
+      await expect(page).toHaveURL(/dashboard/, { timeout: 10000 })
+    })
+
     await test.step('Click Sessions link in sidebar/nav', async () => {
-      const sessionsLink = page.getByRole('link', { name: /sessions/i })
+      const sessionsLink = page.getByRole('link', { name: /^sessions$/i })
       if (await sessionsLink.isVisible()) {
         await sessionsLink.click()
         await expect(page).toHaveURL(/sessions/, { timeout: 5000 })
@@ -208,7 +208,7 @@ test.describe('Session list view', () => {
 
   test('sessions list shows session status badges', async ({ page }) => {
     await test.step('Navigate to sessions page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/sessions`)
+      await page.goto(`${BASE_URL}/sessions`)
     })
 
     await test.step('Verify page renders (even if empty)', async () => {

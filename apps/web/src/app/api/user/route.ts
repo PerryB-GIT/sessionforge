@@ -142,9 +142,10 @@ export async function DELETE() {
       .where(eq(users.id, userId))
       .limit(1)
 
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-04-10' })
+
     if (userRow?.stripeCustomerId) {
       try {
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-04-10' })
         const subs = await stripe.subscriptions.list({
           customer: userRow.stripeCustomerId,
           status: 'active',
@@ -160,7 +161,7 @@ export async function DELETE() {
 
     // 2. Delete orgs where user is the sole owner
     const ownedOrgs = await db
-      .select({ id: organizations.id })
+      .select({ id: organizations.id, stripeSubscriptionId: organizations.stripeSubscriptionId })
       .from(organizations)
       .where(eq(organizations.ownerId, userId))
 
@@ -178,6 +179,14 @@ export async function DELETE() {
         .limit(1)
 
       if (otherOwners.length === 0) {
+        // Cancel org Stripe subscription if present
+        if (org.stripeSubscriptionId) {
+          try {
+            await stripe.subscriptions.cancel(org.stripeSubscriptionId)
+          } catch (stripeOrgErr) {
+            console.error('[DELETE /api/user] org Stripe cancel failed:', stripeOrgErr)
+          }
+        }
         await db.delete(organizations).where(eq(organizations.id, org.id))
       }
     }

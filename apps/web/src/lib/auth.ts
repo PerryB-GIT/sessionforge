@@ -5,7 +5,7 @@ import Google from 'next-auth/providers/google'
 import GitHub from 'next-auth/providers/github'
 import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
-import { db, users } from '@/db'
+import { db, users, orgMembers } from '@/db'
 import { z } from 'zod'
 
 // ─── Sign-in Rate Limiter ──────────────────────────────────────────────────────
@@ -66,7 +66,10 @@ export const authConfig: NextAuthConfig = {
       async authorize(rawCredentials, request) {
         // Rate limit by IP: 10 attempts per 15-minute window
         const ip =
-          (request as Request | undefined)?.headers?.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+          (request as Request | undefined)?.headers
+            ?.get('x-forwarded-for')
+            ?.split(',')[0]
+            ?.trim() ??
           (request as Request | undefined)?.headers?.get('x-real-ip') ??
           'unknown'
         const allowed = await checkLoginRateLimit(ip)
@@ -166,7 +169,14 @@ export const authConfig: NextAuthConfig = {
       if (user) {
         // Initial sign in: enrich token from DB
         const [dbUser] = await db
-          .select({ id: users.id, plan: users.plan, email: users.email, name: users.name, emailVerified: users.emailVerified, onboardingCompletedAt: users.onboardingCompletedAt })
+          .select({
+            id: users.id,
+            plan: users.plan,
+            email: users.email,
+            name: users.name,
+            emailVerified: users.emailVerified,
+            onboardingCompletedAt: users.onboardingCompletedAt,
+          })
           .from(users)
           .where(eq(users.email, user.email!.toLowerCase()))
           .limit(1)
@@ -178,13 +188,22 @@ export const authConfig: NextAuthConfig = {
           token.name = dbUser.name
           token.emailVerified = dbUser.emailVerified?.toISOString() ?? null
           token.onboardingCompletedAt = dbUser.onboardingCompletedAt?.toISOString() ?? null
+
+          // Attach orgId so middleware can enforce IP allowlist without a DB call
+          const [membership] = await db
+            .select({ orgId: orgMembers.orgId })
+            .from(orgMembers)
+            .where(eq(orgMembers.userId, dbUser.id))
+            .limit(1)
+          if (membership) token.orgId = membership.orgId
         }
       }
 
       // Handle session update trigger (e.g. plan upgrade, onboarding completion)
       if (trigger === 'update') {
         if (session?.plan) token.plan = session.plan
-        if (session?.onboardingCompletedAt) token.onboardingCompletedAt = session.onboardingCompletedAt
+        if (session?.onboardingCompletedAt)
+          token.onboardingCompletedAt = session.onboardingCompletedAt
       }
 
       return token

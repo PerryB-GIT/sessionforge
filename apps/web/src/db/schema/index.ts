@@ -423,13 +423,9 @@ export const notifications = pgTable(
   },
   (table) => ({
     userIdIdx: index('notifications_user_id_idx').on(table.userId),
-    readAtIdx: index('notifications_read_at_idx').on(table.readAt),
+    unreadIdx: index('notifications_unread_idx').on(table.userId).where(sql`${table.readAt} IS NULL`),
   })
 )
-
-export const notificationsRelations = relations(notifications, ({ one }) => ({
-  user: one(users, { fields: [notifications.userId], references: [users.id] }),
-}))
 
 // ─── Relations ─────────────────────────────────────────────────────────────────
 
@@ -507,3 +503,8 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
 export const ipAllowlistsRelations = relations(ipAllowlists, ({ one }) => ({
   org: one(organizations, { fields: [ipAllowlists.orgId], references: [organizations.id] }),
 }))
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, { fields: [notifications.userId], references: [users.id] }),
+}))
+

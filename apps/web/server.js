@@ -258,10 +258,15 @@ function handleAgentWs(ws, userId, remoteAddress) {
     try {
       const [newLastId, messages] = await readStream(StreamKeys.agent(machineId), agentPollLastId)
       agentPollLastId = newLastId
+      if (messages.length > 0) {
+        console.log(`[ws/agent] poll: delivering ${messages.length} msg(s) to machine ${machineId}`)
+      }
       for (const msg of messages) {
         if (ws.readyState === WebSocket.OPEN) ws.send(msg)
       }
-    } catch { /* transient */ }
+    } catch (pollErr) {
+      console.error('[ws/agent] poll error:', pollErr?.message ?? pollErr)
+    }
     if (ws.readyState === WebSocket.OPEN) {
       pollTimer = setTimeout(pollAgentCommands, POLL_INTERVAL_MS)
     }
@@ -284,7 +289,10 @@ function handleAgentWs(ws, userId, remoteAddress) {
       await handleAgentMessage(msg, userId, remoteAddress, sessionStats, (id) => {
         machineId = id
         lastHeartbeatAt = Date.now()
-        if (!pollTimer) pollAgentCommands()
+        if (!pollTimer) {
+          console.log(`[ws/agent] starting poll for machine ${id}`)
+          pollAgentCommands()
+        }
       })
       if (msg.type === 'heartbeat') lastHeartbeatAt = Date.now()
     } catch (err) {

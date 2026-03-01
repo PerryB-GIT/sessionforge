@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, or } from 'drizzle-orm'
 import { db, webhooks, webhookDeliveries } from '@/db'
 
 export type WebhookEvent =
@@ -22,13 +22,18 @@ export function generateWebhookSecret(): string {
 export async function deliverWebhook(
   event: WebhookEvent,
   payload: Record<string, unknown>,
-  userId: string
+  userId: string,
+  orgId?: string
 ): Promise<void> {
-  // Find all enabled webhooks for this user that subscribe to this event
+  // Find all enabled webhooks for this user (and org, if provided) that subscribe to this event
+  const ownerCondition = orgId
+    ? or(eq(webhooks.userId, userId), eq(webhooks.orgId, orgId))
+    : eq(webhooks.userId, userId)
+
   const targets = await db
     .select()
     .from(webhooks)
-    .where(and(eq(webhooks.userId, userId), eq(webhooks.enabled, true)))
+    .where(and(ownerCondition, eq(webhooks.enabled, true)))
 
   const subscribedTargets = targets.filter(
     (w) => (w.events as string[]).includes(event) || (w.events as string[]).includes('*')
@@ -63,7 +68,12 @@ async function attemptDelivery(
     })
     .returning()
 
-  await sendWithRetry(webhook.url, body, signature, delivery.id, 1)
+  if (!delivery) {
+    console.error('[webhook-delivery] Failed to create delivery record for webhook', webhook.id)
+    return
+  }
+
+  await sendWithRetry(webhook.url, body, signature, delivery.id, 1, event)
 }
 
 async function sendWithRetry(
@@ -71,7 +81,8 @@ async function sendWithRetry(
   body: string,
   signature: string,
   deliveryId: string,
-  attempt: number
+  attempt: number,
+  event: WebhookEvent
 ): Promise<void> {
   const MAX_ATTEMPTS = 3
   const RETRY_DELAYS_MS = [60_000, 300_000, 1_800_000] // 1min, 5min, 30min
@@ -85,7 +96,7 @@ async function sendWithRetry(
       headers: {
         'Content-Type': 'application/json',
         'X-SessionForge-Signature': signature,
-        'X-SessionForge-Event': 'webhook',
+        'X-SessionForge-Event': event,
         'User-Agent': 'SessionForge-Webhooks/1.0',
       },
       body,
@@ -106,8 +117,10 @@ async function sendWithRetry(
       .where(eq(webhookDeliveries.id, deliveryId))
 
     if (!res.ok && attempt < MAX_ATTEMPTS) {
+      // TODO: setTimeout retries are lost on container restart.
+      // A background sweep job should pick up 'pending' deliveries on startup.
       setTimeout(
-        () => sendWithRetry(url, body, signature, deliveryId, attempt + 1),
+        () => sendWithRetry(url, body, signature, deliveryId, attempt + 1, event),
         RETRY_DELAYS_MS[attempt - 1]
       )
     }
@@ -122,8 +135,10 @@ async function sendWithRetry(
       .where(eq(webhookDeliveries.id, deliveryId))
 
     if (attempt < MAX_ATTEMPTS) {
+      // TODO: setTimeout retries are lost on container restart.
+      // A background sweep job should pick up 'pending' deliveries on startup.
       setTimeout(
-        () => sendWithRetry(url, body, signature, deliveryId, attempt + 1),
+        () => sendWithRetry(url, body, signature, deliveryId, attempt + 1, event),
         RETRY_DELAYS_MS[attempt - 1]
       )
     }

@@ -1,19 +1,21 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 interface AsciinemaPlayerLoaderProps {
   url: string
 }
 
 export function AsciinemaPlayerLoader({ url }: AsciinemaPlayerLoaderProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     let player: { dispose?: () => void } | null = null
+    let cancelled = false
 
     import('asciinema-player').then(({ create }) => {
-      const container = document.getElementById('asciinema-player-container')
-      if (!container) return
-      player = create(url, container, {
+      if (cancelled || !containerRef.current) return
+      player = create(url, containerRef.current, {
         theme: 'monokai',
         autoPlay: false,
         loop: false,
@@ -21,9 +23,10 @@ export function AsciinemaPlayerLoader({ url }: AsciinemaPlayerLoaderProps) {
     })
 
     return () => {
+      cancelled = true
       player?.dispose?.()
     }
   }, [url])
 
-  return <div id="asciinema-player-container" />
+  return <div ref={containerRef} />
 }

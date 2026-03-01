@@ -41,7 +41,20 @@ export async function POST(req: NextRequest) {
       const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
       const { success } = await ratelimit.limit(ip)
       if (!success) {
-        return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 })
+        const windowSeconds = Math.floor(RATE_LIMIT_WINDOW_MS / 1000)
+        const resetTimestamp = Math.floor(Date.now() / 1000) + windowSeconds
+        return NextResponse.json(
+          { error: 'Too many requests. Try again later.' },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(windowSeconds),
+              'X-RateLimit-Limit': String(RATE_LIMIT_REQUESTS),
+              'X-RateLimit-Remaining': '0',
+              'X-RateLimit-Reset': String(resetTimestamp),
+            },
+          }
+        )
       }
     }
 

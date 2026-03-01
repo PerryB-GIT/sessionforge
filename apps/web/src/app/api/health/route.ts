@@ -37,8 +37,11 @@ export async function GET() {
   }
 
   const status = healthy ? 200 : 503
+  // Only expose aggregate status to unauthenticated callers.
+  // Internal topology (which services are running, their individual status)
+  // must not be leaked in public responses.
   return NextResponse.json(
-    { status: healthy ? 'ok' : 'degraded', checks, ts: Date.now() },
+    { status: healthy ? 'ok' : 'degraded' },
     { status }
   )
 }

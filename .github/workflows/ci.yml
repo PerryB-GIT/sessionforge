@@ -28,12 +28,9 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f "package.json" ]; then
-            npm ci
+            npm ci --include-workspace-root --workspaces
           else
             echo "No package.json found — skipping install."
-          fi
-          if [ -f "apps/web/package.json" ]; then
-            cd apps/web && npm install --prefer-offline
           fi
 
       - name: Run ESLint
@@ -61,12 +58,9 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f "package.json" ]; then
-            npm ci
+            npm ci --include-workspace-root --workspaces
           else
             echo "No package.json found — skipping install."
-          fi
-          if [ -f "apps/web/package.json" ]; then
-            cd apps/web && npm install --prefer-offline
           fi
 
       - name: Run TypeScript compiler
@@ -162,12 +156,9 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f "package.json" ]; then
-            npm ci
+            npm ci --include-workspace-root --workspaces
           else
             echo "No package.json found — skipping install."
-          fi
-          if [ -f "apps/web/package.json" ]; then
-            cd apps/web && npm install --prefer-offline
           fi
 
       - name: Build Next.js app

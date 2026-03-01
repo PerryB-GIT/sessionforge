@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -39,6 +39,20 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [notifPrefs, setNotifPrefs] = useState<{
+    sessionCrashed: boolean
+    machineOffline: boolean
+    sessionStarted: boolean
+    weeklyDigest: boolean
+  } | null>(null)
+  const [isSavingNotifs, setIsSavingNotifs] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/user/notifications')
+      .then((r) => r.json())
+      .then((j) => setNotifPrefs(j.data))
+      .catch(() => {})
+  }, [])
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -205,28 +219,59 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {[
-              { label: 'Session crashed', description: 'Alert when a session crashes unexpectedly', defaultChecked: true },
-              { label: 'Machine offline', description: 'Alert when a machine goes offline', defaultChecked: true },
-              { label: 'Session started', description: 'Notify when a new session starts', defaultChecked: false },
-              { label: 'Weekly digest', description: 'Weekly summary of session activity', defaultChecked: true },
-            ].map(({ label, description, defaultChecked }) => (
-              <div key={label} className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-white">{label}</p>
-                  <p className="text-xs text-gray-500">{description}</p>
+            {notifPrefs &&
+              (
+                [
+                  { key: 'sessionCrashed' as const, label: 'Session crashed', description: 'Alert when a session crashes unexpectedly' },
+                  { key: 'machineOffline' as const, label: 'Machine offline', description: 'Alert when a machine goes offline' },
+                  { key: 'sessionStarted' as const, label: 'Session started', description: 'Notify when a new session starts' },
+                  { key: 'weeklyDigest' as const, label: 'Weekly digest', description: 'Weekly summary of session activity' },
+                ] as const
+              ).map(({ key, label, description }) => (
+                <div key={key} className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white">{label}</p>
+                    <p className="text-xs text-gray-500">{description}</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs[key]}
+                    onChange={(e) =>
+                      setNotifPrefs((prev) => (prev ? { ...prev, [key]: e.target.checked } : prev))
+                    }
+                    className="h-4 w-4 rounded border-[#1e1e2e] accent-purple-500 cursor-pointer"
+                  />
                 </div>
-                <input
-                  type="checkbox"
-                  defaultChecked={defaultChecked}
-                  className="h-4 w-4 rounded border-[#1e1e2e] accent-purple-500 cursor-pointer"
-                />
-              </div>
-            ))}
+              ))
+            }
           </div>
-          <Button size="sm" className="mt-4">
+          <Button
+            size="sm"
+            className="mt-4"
+            isLoading={isSavingNotifs}
+            disabled={!notifPrefs || isSavingNotifs}
+            onClick={async () => {
+              if (!notifPrefs) return
+              setIsSavingNotifs(true)
+              try {
+                const res = await fetch('/api/user/notifications', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(notifPrefs),
+                })
+                if (!res.ok) {
+                  const j = await res.json()
+                  toast.error(j.error?.message ?? 'Failed to save preferences')
+                  return
+                }
+                toast.success('Notification preferences saved!')
+              } finally {
+                setIsSavingNotifs(false)
+              }
+            }}
+          >
             <Save className="h-4 w-4" />
-            Save Preferences
+            {isSavingNotifs ? 'Saving...' : 'Save Preferences'}
           </Button>
         </CardContent>
       </Card>

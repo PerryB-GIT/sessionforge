@@ -18,10 +18,14 @@ const http = require('http')
 const { parse } = require('url')
 const net = require('net')
 const path = require('path')
+const zlib = require('zlib')
+const { promisify } = require('util')
 const { WebSocketServer } = require('ws')
 const { Redis } = require('@upstash/redis')
 const { createHash } = require('crypto')
 const postgres = require('postgres')
+
+const gzip = promisify(zlib.gzip)
 
 // ─── Next.js standalone ───────────────────────────────────────────────────────
 
@@ -50,6 +54,79 @@ const StreamKeys = {
 
 const SESSION_LOG_MAX_LINES = 2000
 const SESSION_LOG_TTL_SECONDS = 7 * 24 * 60 * 60
+
+// ─── Session Recording ────────────────────────────────────────────────────────
+// Plain-JS equivalents of src/lib/recording.ts — server.js is CJS and cannot
+// import TypeScript modules directly at runtime.
+
+const RECORDING_BUCKET = process.env.GCS_BUCKET_LOGS ?? 'sessionforge-logs'
+const RECORDING_TTL_SECONDS = 365 * 24 * 60 * 60 // 1 year
+
+// In-memory map: sessionId -> { startedAt: Date }
+// Populated on session_started, consumed on session_stopped / session_crashed.
+const sessionStartTimes = {}
+
+function recordingRedisKey(sessionId) {
+  return `recording:${sessionId}`
+}
+
+/**
+ * Append one terminal output frame (base64-encoded) to the Redis recording buffer.
+ * Mirrors recording.ts:appendRecordingFrame.
+ */
+async function appendRecordingFrame(sessionId, base64Data, sessionStartedAt) {
+  try {
+    const t = (Date.now() - sessionStartedAt.getTime()) / 1000
+    const text = Buffer.from(base64Data, 'base64').toString('utf8')
+    const frame = JSON.stringify([t, 'o', text])
+    const key = recordingRedisKey(sessionId)
+    await redis.lpush(key, frame)
+    await redis.expire(key, RECORDING_TTL_SECONDS)
+  } catch (err) {
+    console.error('[recording] appendRecordingFrame error:', err)
+  }
+}
+
+/**
+ * Archive the Redis recording buffer for a session to GCS as asciinema v2 .cast.gz.
+ * Mirrors recording.ts:archiveSessionRecording.
+ */
+async function archiveSessionRecording(sessionId, orgId, startedAt, width = 220, height = 50) {
+  try {
+    const key = recordingRedisKey(sessionId)
+    const frames = await redis.lrange(key, 0, -1)
+    if (!frames || frames.length === 0) return
+
+    // lpush stores newest first — reverse for chronological order
+    const chronological = [...frames].reverse()
+    const lastFrame = JSON.parse(chronological[chronological.length - 1])
+    const durationSeconds = lastFrame[0]
+
+    const header = JSON.stringify({
+      version: 2,
+      width,
+      height,
+      timestamp: Math.floor(startedAt.getTime() / 1000),
+      duration: durationSeconds,
+      title: `Session ${sessionId}`,
+    })
+
+    const cast = [header, ...chronological].join('\n') + '\n'
+    const compressed = await gzip(Buffer.from(cast, 'utf8'))
+
+    const { Storage } = require('@google-cloud/storage')
+    const storage = new Storage()
+    const gcsPath = `session-recordings/${orgId}/${sessionId}.cast.gz`
+    await storage.bucket(RECORDING_BUCKET).file(gcsPath).save(compressed, {
+      metadata: { contentType: 'application/gzip', contentEncoding: 'gzip' },
+    })
+
+    await redis.del(key)
+    console.log(`[recording] archived session ${sessionId} → gs://${RECORDING_BUCKET}/${gcsPath}`)
+  } catch (err) {
+    console.error('[recording] archiveSessionRecording error:', err)
+  }
+}
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
 
@@ -387,6 +464,8 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         `UPDATE sessions SET pid = $1, process_name = $2, workdir = $3, status = 'running', started_at = $4 WHERE id = $5`,
         [s.pid, s.processName, s.workdir, new Date(s.startedAt), s.id]
       )
+      // Track session start time for recording frame timestamps
+      sessionStartTimes[s.id] = new Date(s.startedAt)
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [s.id])
       if (rows[0]) await publishToDashboard(userId, { type: 'session_updated', session: { id: s.id, status: 'running', machineId: rows[0].machine_id } })
       break
@@ -397,7 +476,16 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       await flushSessionStats(sessionId, sessionStats)
       await query(`UPDATE sessions SET status = 'stopped', exit_code = $1, stopped_at = NOW() WHERE id = $2`, [exitCode, sessionId])
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
-      if (rows[0]) await publishToDashboard(userId, { type: 'session_updated', session: { id: sessionId, status: 'stopped', machineId: rows[0].machine_id } })
+      if (rows[0]) {
+        await publishToDashboard(userId, { type: 'session_updated', session: { id: sessionId, status: 'stopped', machineId: rows[0].machine_id } })
+        // Archive recording to GCS if the machine has an org (enterprise plan check happens at playback)
+        const orgRows = await query(`SELECT org_id FROM machines WHERE id = $1 LIMIT 1`, [rows[0].machine_id]).catch(() => [])
+        if (orgRows[0]?.org_id) {
+          const startedAt = sessionStartTimes[sessionId] ?? new Date()
+          delete sessionStartTimes[sessionId]
+          archiveSessionRecording(sessionId, orgRows[0].org_id, startedAt).catch(console.error)
+        }
+      }
       break
     }
 
@@ -409,6 +497,13 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       if (rows[0]) {
         await publishToDashboard(userId, { type: 'session_updated', session: { id: sessionId, status: 'crashed', machineId: rows[0].machine_id } })
         await publishToDashboard(userId, { type: 'alert_fired', alertId: crypto.randomUUID(), message: `Session crashed: ${error}`, severity: 'warning' })
+        // Archive recording to GCS even on crash
+        const orgRows = await query(`SELECT org_id FROM machines WHERE id = $1 LIMIT 1`, [rows[0].machine_id]).catch(() => [])
+        if (orgRows[0]?.org_id) {
+          const startedAt = sessionStartTimes[sessionId] ?? new Date()
+          delete sessionStartTimes[sessionId]
+          archiveSessionRecording(sessionId, orgRows[0].org_id, startedAt).catch(console.error)
+        }
       }
       break
     }
@@ -419,6 +514,9 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       await redis.rpush(logKey, data)
       await redis.ltrim(logKey, -SESSION_LOG_MAX_LINES, -1)
       await redis.expire(logKey, SESSION_LOG_TTL_SECONDS)
+      // Append frame to recording buffer (fire-and-forget; errors are logged inside)
+      const startedAt = sessionStartTimes[sessionId]
+      if (startedAt) appendRecordingFrame(sessionId, data, startedAt).catch(console.error)
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
       const ownerUserId = await getMachineUserId(rows[0]?.machine_id)
       if (ownerUserId) await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })

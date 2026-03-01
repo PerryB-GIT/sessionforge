@@ -17,5 +17,10 @@ export async function POST() {
     .where(eq(users.id, session.user.id))
     .limit(1)
 
-  return NextResponse.json({ ok: true, plan: user?.plan ?? 'free' })
+  const plan = user?.plan ?? 'free'
+
+  // Return the fresh plan. The client (StripeRedirectHandler / useSession)
+  // must call useSession().update({ plan }) with this value — that triggers
+  // the jwt() callback with trigger='update', which re-issues the cookie.
+  return NextResponse.json({ ok: true, plan })
 }

@@ -1,18 +1,16 @@
 'use client'
 
-import { useEffect } from 'react'
 import Link from 'next/link'
 import { Monitor, Terminal, Activity, TrendingUp, ArrowRight, Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { MachineStatusBadge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Button } from '@/components/ui/button'
 import { SessionList } from '@/components/sessions/SessionList'
 import { useMachines } from '@/hooks/useMachines'
 import { useSessions } from '@/hooks/useSessions'
 import { useWebSocket } from '@/hooks/useWebSocket'
-import { useStore } from '@/store'
 import { formatRelativeTime } from '@/lib/utils'
+import { useSession } from 'next-auth/react'
 
 const PLAN_LIMITS = {
   free: { machines: 1, sessions: 3 },
@@ -30,7 +28,14 @@ interface StatCardProps {
   color?: string
 }
 
-function StatCard({ title, value, icon: Icon, description, trend, color = 'text-purple-400' }: StatCardProps) {
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  description,
+  trend,
+  color = 'text-purple-400',
+}: StatCardProps) {
   return (
     <Card>
       <CardContent className="p-5">
@@ -60,8 +65,9 @@ export default function DashboardPage() {
   const { sessions, isLoading: sessionsLoading } = useSessions()
   useWebSocket() // Initialize WS connection for real-time updates
 
-  const user = useStore((s) => s.user)
-  const plan = (user?.plan ?? 'free') as keyof typeof PLAN_LIMITS
+  const { data: authSession } = useSession()
+  const plan = ((authSession?.user as { plan?: string })?.plan ??
+    'free') as keyof typeof PLAN_LIMITS
   const limits = PLAN_LIMITS[plan]
 
   const onlineMachines = machines.filter((m) => m.status === 'online')
@@ -80,7 +86,11 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-lg font-semibold text-white">Overview</h2>
           <p className="text-sm text-gray-400">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            {new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+            })}
           </p>
         </div>
         <Link
@@ -98,7 +108,9 @@ export default function DashboardPage() {
           title="Total Machines"
           value={machines.length}
           icon={Monitor}
-          description={limits.machines === -1 ? 'Unlimited plan' : `${limits.machines} max on ${plan}`}
+          description={
+            limits.machines === -1 ? 'Unlimited plan' : `${limits.machines} max on ${plan}`
+          }
           color="text-purple-400"
         />
         <StatCard
@@ -143,7 +155,10 @@ export default function DashboardPage() {
             {machinesLoading ? (
               <div className="space-y-0">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center gap-3 px-5 py-3 border-t border-[#1e1e2e] animate-pulse">
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 px-5 py-3 border-t border-[#1e1e2e] animate-pulse"
+                  >
                     <div className="h-6 w-6 rounded bg-[#1e1e2e]" />
                     <div className="flex-1 space-y-1">
                       <div className="h-3 w-24 rounded bg-[#1e1e2e]" />
@@ -186,7 +201,9 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-white truncate">{machine.name}</div>
-                      <div className="text-xs text-gray-500">{formatRelativeTime(machine.lastSeen)}</div>
+                      <div className="text-xs text-gray-500">
+                        {formatRelativeTime(machine.lastSeen)}
+                      </div>
                     </div>
                     <MachineStatusBadge status={machine.status} />
                   </Link>
@@ -228,7 +245,11 @@ export default function DashboardPage() {
               <Progress
                 value={machineUsagePct}
                 indicatorClassName={
-                  machineUsagePct >= 90 ? 'bg-red-400' : machineUsagePct >= 70 ? 'bg-yellow-400' : 'bg-purple-500'
+                  machineUsagePct >= 90
+                    ? 'bg-red-400'
+                    : machineUsagePct >= 70
+                      ? 'bg-yellow-400'
+                      : 'bg-purple-500'
                 }
               />
             </div>
@@ -243,7 +264,11 @@ export default function DashboardPage() {
                 <Progress
                   value={sessionUsagePct}
                   indicatorClassName={
-                    sessionUsagePct >= 90 ? 'bg-red-400' : sessionUsagePct >= 70 ? 'bg-yellow-400' : 'bg-purple-500'
+                    sessionUsagePct >= 90
+                      ? 'bg-red-400'
+                      : sessionUsagePct >= 70
+                        ? 'bg-yellow-400'
+                        : 'bg-purple-500'
                   }
                 />
               </div>

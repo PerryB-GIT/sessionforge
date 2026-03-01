@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { db, organizations } from '@/db'
+import { requireOrgRole, orgAuthErrorResponse } from '@/lib/org-auth'
 import type { ApiResponse, ApiError } from '@sessionforge/shared-types'
 
 export const dynamic = 'force-dynamic'
@@ -15,20 +16,31 @@ export async function GET() {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json(
-        { data: null, error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 } } satisfies ApiError,
+        {
+          data: null,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 },
+        } satisfies ApiError,
         { status: 401 }
       )
     }
 
     const [org] = await db
-      .select({ id: organizations.id, name: organizations.name, slug: organizations.slug, plan: organizations.plan })
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        slug: organizations.slug,
+        plan: organizations.plan,
+      })
       .from(organizations)
       .where(eq(organizations.ownerId, session.user.id))
       .limit(1)
 
     if (!org) {
       return NextResponse.json(
-        { data: null, error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 } } satisfies ApiError,
+        {
+          data: null,
+          error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 },
+        } satisfies ApiError,
         { status: 404 }
       )
     }
@@ -37,7 +49,14 @@ export async function GET() {
   } catch (err) {
     console.error('[GET /api/org] unhandled error:', err)
     return NextResponse.json(
-      { data: null, error: { code: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unknown error', statusCode: 500 } },
+      {
+        data: null,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : 'Unknown error',
+          statusCode: 500,
+        },
+      },
       { status: 500 }
     )
   }
@@ -47,7 +66,11 @@ export async function GET() {
 
 const patchSchema = z.object({
   name: z.string().min(2).max(255).optional(),
-  slug: z.string().min(2).regex(/^[a-z0-9-]+$/, 'Only lowercase letters, numbers, and hyphens').optional(),
+  slug: z
+    .string()
+    .min(2)
+    .regex(/^[a-z0-9-]+$/, 'Only lowercase letters, numbers, and hyphens')
+    .optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -55,7 +78,10 @@ export async function PATCH(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json(
-        { data: null, error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 } } satisfies ApiError,
+        {
+          data: null,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 },
+        } satisfies ApiError,
         { status: 401 }
       )
     }
@@ -64,7 +90,14 @@ export async function PATCH(req: NextRequest) {
     const parsed = patchSchema.safeParse(body)
     if (!parsed.success) {
       return NextResponse.json(
-        { data: null, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid input', statusCode: 400 } } satisfies ApiError,
+        {
+          data: null,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: parsed.error.errors[0]?.message ?? 'Invalid input',
+            statusCode: 400,
+          },
+        } satisfies ApiError,
         { status: 400 }
       )
     }
@@ -72,8 +105,39 @@ export async function PATCH(req: NextRequest) {
     const updates = parsed.data
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
-        { data: null, error: { code: 'VALIDATION_ERROR', message: 'No fields to update', statusCode: 400 } } satisfies ApiError,
+        {
+          data: null,
+          error: { code: 'VALIDATION_ERROR', message: 'No fields to update', statusCode: 400 },
+        } satisfies ApiError,
         { status: 400 }
+      )
+    }
+
+    // Fetch the org to get its id for the RBAC check
+    const [org] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(eq(organizations.ownerId, session.user.id))
+      .limit(1)
+
+    if (!org) {
+      return NextResponse.json(
+        {
+          data: null,
+          error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 },
+        } satisfies ApiError,
+        { status: 404 }
+      )
+    }
+
+    // Enforce owner role to update org settings
+    try {
+      await requireOrgRole(session, org.id, 'owner')
+    } catch (err) {
+      const { status, code, message } = orgAuthErrorResponse(err)
+      return NextResponse.json(
+        { data: null, error: { code, message, statusCode: status } },
+        { status }
       )
     }
 
@@ -87,7 +151,10 @@ export async function PATCH(req: NextRequest) {
 
       if (conflict) {
         return NextResponse.json(
-          { data: null, error: { code: 'CONFLICT', message: 'That URL slug is already taken', statusCode: 409 } } satisfies ApiError,
+          {
+            data: null,
+            error: { code: 'CONFLICT', message: 'That URL slug is already taken', statusCode: 409 },
+          } satisfies ApiError,
           { status: 409 }
         )
       }
@@ -101,7 +168,10 @@ export async function PATCH(req: NextRequest) {
 
     if (!updated) {
       return NextResponse.json(
-        { data: null, error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 } } satisfies ApiError,
+        {
+          data: null,
+          error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 },
+        } satisfies ApiError,
         { status: 404 }
       )
     }
@@ -110,7 +180,14 @@ export async function PATCH(req: NextRequest) {
   } catch (err) {
     console.error('[PATCH /api/org] unhandled error:', err)
     return NextResponse.json(
-      { data: null, error: { code: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : 'Unknown error', statusCode: 500 } },
+      {
+        data: null,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : 'Unknown error',
+          statusCode: 500,
+        },
+      },
       { status: 500 }
     )
   }

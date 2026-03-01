@@ -11,41 +11,29 @@
  * rather than completing a real payment.
  */
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import { STORAGE_STATE } from '../setup/global-setup'
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
 const STRIPE_CHECKOUT_URL_PATTERN = /checkout\.stripe\.com|stripe\.com\/pay/
-
-// ---------------------------------------------------------------------------
-// Auth helper
-// STUB: Replace with storageState once persistent auth is set up.
-// ---------------------------------------------------------------------------
-
-async function loginAsTestUser(page: Page, plan: 'free' | 'pro' = 'free') {
-  await page.goto(`${BASE_URL}/login`)
-  const email = plan === 'pro' ? 'pro@sessionforge.dev' : 'test@sessionforge.dev'
-  await page.getByLabel(/email/i).fill(email)
-  await page.getByLabel(/password/i).fill('E2eTestPass123!')
-  await page.getByRole('button', { name: /sign in|log in/i }).click()
-  await page.waitForURL(/dashboard/, { timeout: 15000 })
-}
 
 // ---------------------------------------------------------------------------
 // Billing / settings page
 // ---------------------------------------------------------------------------
 
 test.describe('Billing page', () => {
-  test.beforeEach(async ({ page }) => {
+  test.use({ storageState: STORAGE_STATE })
+
+  test.beforeEach(async () => {
     test.skip(
       process.env.CI === 'true',
       'STUB: Requires seeded users + Stripe test keys. Enable once backend is deployed.'
     )
-    await loginAsTestUser(page)
   })
 
   test('billing page is accessible from settings', async ({ page }) => {
     await test.step('Navigate to settings', async () => {
-      await page.goto(`${BASE_URL}/dashboard/settings`)
+      await page.goto(`${BASE_URL}/settings/org`)
       // Or find settings in nav
     })
 
@@ -54,7 +42,7 @@ test.describe('Billing page', () => {
       if (await billingLink.isVisible()) {
         await billingLink.click()
       } else {
-        await page.goto(`${BASE_URL}/dashboard/settings/billing`)
+        await page.goto(`${BASE_URL}/settings/org`)
       }
     })
 
@@ -67,7 +55,7 @@ test.describe('Billing page', () => {
 
   test('billing page displays plan feature comparison', async ({ page }) => {
     await test.step('Navigate to billing page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/settings/billing`)
+      await page.goto(`${BASE_URL}/settings/org`)
     })
 
     await test.step('Verify plan options are shown', async () => {
@@ -81,7 +69,7 @@ test.describe('Billing page', () => {
     test.skip(true, 'STUB: requires Stripe test mode keys and mocked checkout session creation')
 
     await test.step('Navigate to billing page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/settings/billing`)
+      await page.goto(`${BASE_URL}/settings/org`)
     })
 
     await test.step('Click Upgrade to Pro button', async () => {
@@ -99,7 +87,7 @@ test.describe('Billing page', () => {
 
   test('upgrade button is visible for free plan users', async ({ page }) => {
     await test.step('Navigate to billing page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/settings/billing`)
+      await page.goto(`${BASE_URL}/settings/org`)
     })
 
     await test.step('Verify upgrade CTA is shown', async () => {
@@ -115,19 +103,20 @@ test.describe('Billing page', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Plan limit enforcement in UI', () => {
-  test.beforeEach(async ({ page }) => {
+  test.use({ storageState: STORAGE_STATE })
+
+  test.beforeEach(async () => {
     test.skip(
       process.env.CI === 'true',
       'STUB: Requires seeded free user at machine limit. Enable once backend is deployed.'
     )
-    await loginAsTestUser(page, 'free')
   })
 
   test('STUB: Add Machine button shows upgrade prompt when free plan limit is reached', async ({ page }) => {
     test.skip(true, 'STUB: requires user with 1 machine (free plan limit)')
 
     await test.step('Navigate to Machines page at limit', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
     })
 
     await test.step('Attempt to add another machine', async () => {
@@ -148,7 +137,7 @@ test.describe('Plan limit enforcement in UI', () => {
     test.skip(true, 'STUB: requires settings page with SSO configuration')
 
     await test.step('Navigate to security/auth settings', async () => {
-      await page.goto(`${BASE_URL}/dashboard/settings/security`)
+      await page.goto(`${BASE_URL}/settings/org`)
     })
 
     await test.step('Verify SSO option shows upgrade required', async () => {
@@ -165,7 +154,7 @@ test.describe('Plan limit enforcement in UI', () => {
     test.skip(true, 'STUB: requires API settings page')
 
     await test.step('Navigate to API settings', async () => {
-      await page.goto(`${BASE_URL}/dashboard/settings/api`)
+      await page.goto(`${BASE_URL}/settings/org`)
     })
 
     await test.step('Verify upgrade prompt for API access', async () => {
@@ -181,19 +170,20 @@ test.describe('Plan limit enforcement in UI', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Billing portal', () => {
-  test.beforeEach(async ({ page }) => {
+  test.use({ storageState: STORAGE_STATE })
+
+  test.beforeEach(async () => {
     test.skip(
       process.env.CI === 'true',
       'STUB: Requires Stripe customer + billing portal session. Enable once backend is deployed.'
     )
-    await loginAsTestUser(page, 'pro')
   })
 
   test('STUB: pro user can access the Stripe billing portal', async ({ page }) => {
     test.skip(true, 'STUB: requires Stripe test customer with active subscription')
 
     await test.step('Navigate to billing page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/settings/billing`)
+      await page.goto(`${BASE_URL}/settings/org`)
     })
 
     await test.step('Click Manage Subscription / Billing Portal', async () => {
@@ -209,7 +199,7 @@ test.describe('Billing portal', () => {
     test.skip(true, 'STUB: requires seeded pro user')
 
     await test.step('Navigate to billing page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/settings/billing`)
+      await page.goto(`${BASE_URL}/settings/org`)
     })
 
     await test.step('Verify Pro badge is shown', async () => {

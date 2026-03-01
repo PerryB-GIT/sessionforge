@@ -11,40 +11,28 @@
  * rather than running a real agent binary.
  */
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import { STORAGE_STATE } from '../setup/global-setup'
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
-
-// ---------------------------------------------------------------------------
-// Shared auth helper
-// STUB: Replace with storageState once the auth E2E creates a persistent session.
-// ---------------------------------------------------------------------------
-
-async function loginAsTestUser(page: Page) {
-  await page.goto(`${BASE_URL}/login`)
-  await page.getByLabel(/email/i).fill('test@sessionforge.dev')
-  await page.getByLabel(/password/i).fill('E2eTestPass123!')
-  await page.getByRole('button', { name: /sign in|log in/i }).click()
-  // Wait for dashboard to load
-  await page.waitForURL(/dashboard/, { timeout: 15000 })
-}
 
 // ---------------------------------------------------------------------------
 // Machine setup wizard
 // ---------------------------------------------------------------------------
 
 test.describe('Machine setup wizard', () => {
-  test.beforeEach(async ({ page }) => {
+  test.use({ storageState: STORAGE_STATE })
+
+  test.beforeEach(async () => {
     test.skip(
       process.env.CI === 'true',
       'STUB: Requires seeded user + running backend. Enable once backend is deployed.'
     )
-    await loginAsTestUser(page)
   })
 
   test('navigating to Machines page shows empty state with Add Machine button', async ({ page }) => {
     await test.step('Navigate to Machines page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
       await expect(page).toHaveURL(/machines/)
     })
 
@@ -57,7 +45,7 @@ test.describe('Machine setup wizard', () => {
 
   test('clicking Add Machine opens the setup wizard', async ({ page }) => {
     await test.step('Navigate to Machines page', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
     })
 
     await test.step('Click Add Machine', async () => {
@@ -73,7 +61,7 @@ test.describe('Machine setup wizard', () => {
 
   test('setup wizard shows an install command containing an API key', async ({ page }) => {
     await test.step('Navigate to Machines page and open wizard', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
       await page.getByRole('button', { name: /add machine|new machine|connect agent/i }).click()
     })
 
@@ -90,7 +78,7 @@ test.describe('Machine setup wizard', () => {
 
   test('install command can be copied to clipboard', async ({ page }) => {
     await test.step('Navigate to Machines page and open wizard', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
       await page.getByRole('button', { name: /add machine|new machine|connect agent/i }).click()
     })
 
@@ -140,7 +128,7 @@ test.describe('Machine setup wizard', () => {
   test('machine card shows online/offline status indicator', async ({ page }) => {
     await test.step('Navigate to Machines page with a seeded machine', async () => {
       // STUB: Seed a machine via API before this test
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
     })
 
     await test.step('Verify status indicator is visible on machine card', async () => {
@@ -159,9 +147,9 @@ test.describe('Machine setup wizard', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Machine pages - unauthenticated access', () => {
-  test('accessing /dashboard/machines while logged out redirects to login', async ({ page }) => {
+  test('accessing /machines while logged out redirects to login', async ({ page }) => {
     await test.step('Navigate to machines page without session', async () => {
-      await page.goto(`${BASE_URL}/dashboard/machines`)
+      await page.goto(`${BASE_URL}/machines`)
     })
 
     await test.step('Verify redirect to login', async () => {

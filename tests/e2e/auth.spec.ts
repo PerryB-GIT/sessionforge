@@ -41,6 +41,11 @@ async function fillSignupForm(page: Page, email: string, password = DEFAULT_PASS
     if (await confirmField.isVisible()) {
       await confirmField.fill(password)
     }
+    // Check the Terms of Service checkbox if present
+    const termsCheckbox = page.getByRole('checkbox')
+    if (await termsCheckbox.isVisible()) {
+      await termsCheckbox.check()
+    }
   })
 }
 
@@ -63,7 +68,7 @@ test.describe('Sign up flow', () => {
     })
 
     await test.step('Verify form elements are present', async () => {
-      await expect(page.getByRole('heading', { name: /sign up|create account|get started/i })).toBeVisible()
+      await expect(page.getByRole('heading', { name: /create.*account|sign up|get started/i })).toBeVisible()
       await expect(page.getByLabel(/email/i)).toBeVisible()
       await expect(page.getByLabel(/password/i).first()).toBeVisible()
     })

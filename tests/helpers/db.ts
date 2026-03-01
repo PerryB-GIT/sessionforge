@@ -195,6 +195,19 @@ const SCHEMA_SQL = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 
+  CREATE TABLE IF NOT EXISTS org_invites (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    email       VARCHAR(255) NOT NULL,
+    token       VARCHAR(64) NOT NULL UNIQUE,
+    role        member_role NOT NULL DEFAULT 'member',
+    invited_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    accepted_at TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (org_id, email)
+  );
+
   CREATE TABLE IF NOT EXISTS support_tickets (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -274,6 +287,7 @@ async function truncateAllTables(): Promise<void> {
       verification_tokens,
       sessions_auth,
       password_reset_tokens,
+      org_invites,
       org_members,
       machines,
       organizations,

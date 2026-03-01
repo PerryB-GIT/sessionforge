@@ -1,0 +1,158 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #7C3AED;
+  padding: 12pt 28pt;
+}
+.header h2 { color: #FFFFFF; font-size: 16pt; margin: 0; }
+.header p { color: #64748B; font-size: 9pt; margin: 2pt 0 0 0; }
+.content { flex: 1; padding: 12pt 20pt 10pt; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+thead tr { background: #161B27; }
+th {
+  color: #94A3B8; font-weight: bold; padding: 6pt 7pt; text-align: left;
+  border-bottom: 1pt solid #1E293B; font-size: 7.5pt; letter-spacing: 0.5pt;
+}
+th.center { text-align: center; }
+tbody tr { border-bottom: 1pt solid #161B27; }
+tbody tr:hover { background: #0F172A; }
+td { padding: 5pt 7pt; color: #CBD5E1; vertical-align: middle; }
+td.product { color: #F1F5F9; font-weight: bold; }
+td.product.us { color: #A78BFA; }
+td.cat { color: #94A3B8; font-size: 8pt; }
+td.price { color: #64748B; font-size: 8pt; }
+td.center { text-align: center; }
+.yes { color: #22C55E; font-weight: bold; font-size: 11pt; }
+.no { color: #1E293B; font-size: 11pt; }
+.partial { color: #F59E0B; font-size: 9pt; }
+.threat-high { display: inline-block; background: #DC262633; color: #FCA5A5; font-size: 7pt; padding: 1pt 5pt; border-radius: 3pt; margin-left: 4pt; }
+.threat-med { display: inline-block; background: #D9770633; color: #FCD34D; font-size: 7pt; padding: 1pt 5pt; border-radius: 3pt; margin-left: 4pt; }
+.threat-low { display: inline-block; background: #16A34A22; color: #86EFAC; font-size: 7pt; padding: 1pt 5pt; border-radius: 3pt; margin-left: 4pt; }
+.us-row { background: #1E0D3B; }
+.us-row td { border-top: 1pt solid #7C3AED; border-bottom: 1pt solid #7C3AED; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h2>Competitive Landscape — At a Glance</h2>
+  <p>31 competitors researched · 8 categories · February 2026</p>
+</div>
+<div class="content">
+<table>
+  <thead>
+    <tr>
+      <th>Product</th>
+      <th>Category</th>
+      <th>Starting Price</th>
+      <th class="center">Fleet View</th>
+      <th class="center">Terminal I/O</th>
+      <th class="center">CPU/Mem</th>
+      <th class="center">SSH Keys</th>
+      <th class="center">Claude-Aware</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="product">claudecodeui <span class="threat-high">HIGH</span></td>
+      <td class="cat">Claude Code GUI</td>
+      <td class="price">Free (OSS)</td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="yes">✓</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="yes">✓</span></td>
+    </tr>
+    <tr>
+      <td class="product">1Code (YC) <span class="threat-high">HIGH</span></td>
+      <td class="cat">Claude Code Platform</td>
+      <td class="price">Undisclosed</td>
+      <td class="center"><span class="partial">~</span></td>
+      <td class="center"><span class="partial">~</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="yes">✓</span></td>
+    </tr>
+    <tr>
+      <td class="product">Warp Terminal <span class="threat-med">MED</span></td>
+      <td class="cat">AI Terminal</td>
+      <td class="price">Free / Team</td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="yes">✓</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="partial">~</span></td>
+    </tr>
+    <tr>
+      <td class="product">GitHub Codespaces <span class="threat-med">MED</span></td>
+      <td class="cat">Cloud IDE</td>
+      <td class="price">$0.18/hr</td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+    </tr>
+    <tr>
+      <td class="product">Coder <span class="threat-med">MED</span></td>
+      <td class="cat">Self-hosted CDE</td>
+      <td class="price">Free (OSS)</td>
+      <td class="center"><span class="partial">~</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+    </tr>
+    <tr>
+      <td class="product">AgentOps <span class="threat-low">LOW</span></td>
+      <td class="cat">Agent Observability</td>
+      <td class="price">$40/mo</td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="partial">~</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="partial">~</span></td>
+    </tr>
+    <tr>
+      <td class="product">TeamViewer <span class="threat-low">LOW</span></td>
+      <td class="cat">Remote Desktop</td>
+      <td class="price">$50.90/mo</td>
+      <td class="center"><span class="partial">~</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+    </tr>
+    <tr>
+      <td class="product">Devin / E2B / Modal <span class="threat-low">LOW</span></td>
+      <td class="cat">Agent/Compute Cloud</td>
+      <td class="price">$20–$250/mo</td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+      <td class="center"><span class="no">✗</span></td>
+    </tr>
+    <tr class="us-row">
+      <td class="product us">SessionForge</td>
+      <td class="cat" style="color: #A78BFA;">Session Management</td>
+      <td class="price" style="color: #A78BFA;">Free / $19/mo Pro</td>
+      <td class="center"><span class="yes">✓</span></td>
+      <td class="center"><span class="yes">✓</span></td>
+      <td class="center"><span class="yes">✓</span></td>
+      <td class="center"><span class="yes">✓</span></td>
+      <td class="center"><span class="yes">✓</span></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+</body>
+</html>

@@ -1,0 +1,129 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #7C3AED;
+  padding: 14pt 28pt; display: flex; align-items: center; justify-content: space-between;
+}
+.header h2 { color: #FFFFFF; font-size: 17pt; margin: 0; }
+.header .pill { background: #7C3AED; border-radius: 12pt; padding: 3pt 12pt; }
+.header .pill p { color: #FFFFFF; font-size: 9pt; margin: 0; font-weight: bold; }
+.content { flex: 1; display: flex; padding: 20pt 28pt; gap: 20pt; }
+.col { flex: 1; }
+.section-label { color: #06B6D4; font-size: 8pt; letter-spacing: 2pt; text-transform: uppercase; margin: 0 0 10pt 0; font-weight: bold; }
+.one-liner {
+  background: #0F172A; border: 1pt solid #7C3AED; border-radius: 8pt;
+  padding: 14pt 16pt; margin-bottom: 16pt;
+  border-left: 4pt solid #7C3AED;
+}
+.one-liner p { color: #E2E8F0; font-size: 12pt; margin: 0; line-height: 1.5; font-style: italic; }
+.analogy-box {
+  background: #06B6D422; border: 1pt solid #06B6D4; border-radius: 8pt;
+  padding: 12pt 16pt;
+}
+.analogy-box p { color: #7DD3FC; font-size: 11pt; margin: 0; line-height: 1.5; font-style: italic; }
+.themes { display: flex; flex-direction: column; gap: 8pt; }
+.theme {
+  background: #161B27; border-radius: 6pt; padding: 7pt 12pt;
+  display: flex; align-items: flex-start; gap: 10pt;
+}
+.num { color: #7C3AED; font-size: 16pt; font-weight: bold; min-width: 18pt; margin: 0; line-height: 1; }
+.theme-text { flex: 1; }
+.theme-title { color: #F1F5F9; font-size: 10pt; font-weight: bold; margin: 0 0 2pt 0; }
+.theme-sub { color: #64748B; font-size: 9pt; margin: 0; }
+.market {
+  display: flex; gap: 10pt; margin-bottom: 14pt;
+}
+.market-stat {
+  flex: 1; background: #161B27; border-radius: 6pt; padding: 10pt 12pt; text-align: center;
+}
+.market-stat .big { color: #7C3AED; font-size: 16pt; font-weight: bold; margin: 0; }
+.market-stat .label { color: #64748B; font-size: 8pt; margin: 0; }
+.market-stat .arrow { color: #22C55E; font-size: 9pt; margin: 0; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h2>Our Positioning</h2>
+  <div class="pill"><p>START HERE</p></div>
+</div>
+<div class="content">
+  <div class="col" style="flex: 1.1;">
+    <p class="section-label">Core Message</p>
+    <div class="one-liner">
+      <p>"The only browser-based fleet management dashboard purpose-built for Claude Code — monitor, control, and manage AI coding sessions across all your remote machines from one place."</p>
+    </div>
+    <div class="analogy-box">
+      <p>"Like Datadog Fleet Automation, but for your AI coding agents instead of your monitoring agents."</p>
+    </div>
+    <div class="market" style="margin-top: 14pt;">
+      <div class="market-stat">
+        <p class="big">$3.9B</p>
+        <p class="label">Remote Desktop Market</p>
+        <p class="arrow">→ $14.7B by 2034</p>
+      </div>
+      <div class="market-stat">
+        <p class="big">$4.5B</p>
+        <p class="label">AI Dev Tools Market</p>
+        <p class="arrow">→ $10B by 2030</p>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <p class="section-label">6 Universal Win Themes</p>
+    <div class="themes">
+      <div class="theme">
+        <p class="num">1</p>
+        <div class="theme-text">
+          <p class="theme-title">You Already Have Machines</p>
+          <p class="theme-sub">No vendor cloud — works on your VPS, VM, or servers</p>
+        </div>
+      </div>
+      <div class="theme">
+        <p class="num">2</p>
+        <div class="theme-text">
+          <p class="theme-title">Only Claude Code-Native Fleet Dashboard</p>
+          <p class="theme-sub">Every competitor is Claude-blind</p>
+        </div>
+      </div>
+      <div class="theme">
+        <p class="num">3</p>
+        <div class="theme-text">
+          <p class="theme-title">The Datadog Analogy</p>
+          <p class="theme-sub">Fleet management for AI agents, not monitoring agents</p>
+        </div>
+      </div>
+      <div class="theme">
+        <p class="num">4</p>
+        <div class="theme-text">
+          <p class="theme-title">Lightweight by Design</p>
+          <p class="theme-sub">Agent binary + dashboard. No Terraform, no DevOps team</p>
+        </div>
+      </div>
+      <div class="theme">
+        <p class="num">5</p>
+        <div class="theme-text">
+          <p class="theme-title">Outer Loop Clarity</p>
+          <p class="theme-sub">AgentOps = inner loop (what Claude thinks). Us = outer loop (is it alive)</p>
+        </div>
+      </div>
+      <div class="theme">
+        <p class="num">6</p>
+        <div class="theme-text">
+          <p class="theme-title">Data Sovereignty</p>
+          <p class="theme-sub">Code stays on your machines — not 1Code's or Codespaces' cloud</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

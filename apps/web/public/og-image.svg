@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#0a0a0f"/>
+
+  <!-- Subtle radial gradient glow -->
+  <radialGradient id="glow" cx="50%" cy="45%" r="50%">
+    <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.12"/>
+    <stop offset="100%" stop-color="#0a0a0f" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Border frame -->
+  <rect x="1" y="1" width="1198" height="628" rx="0" fill="none" stroke="#1e1e2e" stroke-width="2"/>
+
+  <!-- Logo mark: rounded square + lightning bolt -->
+  <rect x="516" y="200" width="64" height="64" rx="14" fill="#8B5CF6"/>
+  <!-- Lightning bolt inside logo -->
+  <polygon
+    points="548,213 536,237 546,237 544,251 556,227 546,227"
+    fill="white"
+  />
+
+  <!-- SessionForge wordmark -->
+  <text
+    x="600"
+    y="310"
+    font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+    font-size="64"
+    font-weight="700"
+    fill="white"
+    text-anchor="middle"
+    letter-spacing="-1"
+  >SessionForge</text>
+
+  <!-- Tagline -->
+  <text
+    x="600"
+    y="370"
+    font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+    font-size="28"
+    font-weight="400"
+    fill="#9ca3af"
+    text-anchor="middle"
+    letter-spacing="0.5"
+  >Manage Claude from anywhere</text>
+
+  <!-- Decorative divider line -->
+  <line x1="480" y1="400" x2="720" y2="400" stroke="#1e1e2e" stroke-width="1"/>
+
+  <!-- URL tag -->
+  <text
+    x="600"
+    y="435"
+    font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+    font-size="18"
+    fill="#4b5563"
+    text-anchor="middle"
+    letter-spacing="1"
+  >sessionforge.dev</text>
+</svg>

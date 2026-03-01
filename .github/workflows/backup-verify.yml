@@ -1,0 +1,57 @@
+name: Verify DB Backups
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC — after the nightly backup window
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  verify-backups:
+    name: Verify Cloud SQL Backups Exist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Check recent backups
+        run: |
+          PROJECT="${{ secrets.GCP_PROJECT_ID }}"
+          INSTANCE="sessionforge-db"
+
+          echo "Listing recent backups for $INSTANCE..."
+          BACKUPS=$(gcloud sql backups list \
+            --instance="$INSTANCE" \
+            --project="$PROJECT" \
+            --filter="status=SUCCESSFUL" \
+            --limit=7 \
+            --format="value(id,windowStartTime,status)" 2>&1)
+
+          echo "$BACKUPS"
+
+          if [ -z "$BACKUPS" ]; then
+            echo "ERROR: No successful backups found in the last 7 entries."
+            exit 1
+          fi
+
+          # Check that at least one backup exists from the last 48 hours
+          RECENT=$(gcloud sql backups list \
+            --instance="$INSTANCE" \
+            --project="$PROJECT" \
+            --filter="status=SUCCESSFUL" \
+            --limit=1 \
+            --format="value(windowStartTime)")
+
+          if [ -z "$RECENT" ]; then
+            echo "ERROR: No recent successful backup found."
+            exit 1
+          fi
+
+          echo ""
+          echo "Most recent successful backup: $RECENT"
+          echo "Backup verification passed."

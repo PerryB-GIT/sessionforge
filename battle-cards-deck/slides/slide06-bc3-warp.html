@@ -1,0 +1,104 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #D97706;
+  padding: 10pt 28pt; display: flex; align-items: center; gap: 12pt;
+}
+.badge { background: #D9770633; border: 1pt solid #D97706; border-radius: 4pt; padding: 2pt 8pt; }
+.badge p { color: #FCD34D; font-size: 8pt; margin: 0; font-weight: bold; letter-spacing: 1pt; }
+.header h2 { color: #FFFFFF; font-size: 15pt; margin: 0; flex: 1; }
+.header .threat { color: #FCD34D; font-size: 9pt; margin: 0; }
+.content { flex: 1; display: flex; padding: 10pt 20pt 8pt; gap: 14pt; overflow: hidden; }
+.col { flex: 1; display: flex; flex-direction: column; gap: 8pt; }
+.section { background: #161B27; border-radius: 6pt; padding: 8pt 11pt; }
+.section-label { color: #06B6D4; font-size: 7pt; letter-spacing: 2pt; text-transform: uppercase; margin: 0 0 5pt 0; font-weight: bold; }
+.item { color: #94A3B8; font-size: 8pt; margin: 0 0 3pt 0; padding-left: 8pt; position: relative; line-height: 1.45; }
+.item::before { content: "✓"; color: #22C55E; position: absolute; left: 0; font-size: 7pt; top: 1pt; }
+.item.bad::before { content: "✗"; color: #EF4444; }
+.item .em { color: #FCD34D; font-weight: bold; }
+.analogy {
+  background: #06B6D422; border: 1pt solid #06B6D4; border-radius: 6pt;
+  padding: 8pt 11pt;
+}
+.analogy p { color: #7DD3FC; font-size: 9pt; margin: 0; line-height: 1.5; }
+.analogy .label { color: #06B6D4; font-size: 7pt; letter-spacing: 1pt; text-transform: uppercase; font-weight: bold; margin: 0 0 4pt 0; }
+.quote-box {
+  background: #0F172A; border: 1pt solid #7C3AED; border-left: 3pt solid #7C3AED;
+  border-radius: 6pt; padding: 8pt 11pt;
+}
+.quote-box p { color: #C4B5FD; font-size: 8.5pt; margin: 0; line-height: 1.55; font-style: italic; }
+.objections { display: flex; flex-direction: column; gap: 4pt; }
+.obj { display: flex; align-items: flex-start; gap: 6pt; }
+.obj-q { color: #64748B; font-size: 7.5pt; flex: 1; font-style: italic; }
+.obj-a { color: #CBD5E1; font-size: 7.5pt; flex: 1.1; }
+.divider { width: 100%; height: 1pt; background: #1E293B; margin: 3pt 0; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>BATTLE CARD 3</p></div>
+  <h2>vs. Warp Terminal</h2>
+  <p class="threat">THREAT LEVEL: MEDIUM-HIGH</p>
+</div>
+<div class="content">
+  <div class="col">
+    <div class="section">
+      <p class="section-label">Where They Win</p>
+      <p class="item">Most advanced AI integration of any terminal (OpenAI, Anthropic, Google)</p>
+      <p class="item">Session sharing to browser viewers — closest analogue to SessionForge</p>
+      <p class="item">Strong Slack/Linear/GitHub Actions integrations</p>
+      <p class="item">"Live steering" of running agent sessions</p>
+    </div>
+    <div class="section">
+      <p class="section-label">Their Critical Gap</p>
+      <p class="item bad"><span class="em">Desktop app first</span> — installed ON the machine, not a remote management dashboard</p>
+      <p class="item bad"><span class="em">Single machine focus</span> — no multi-machine fleet view</p>
+      <p class="item bad">Session sharing is view-only for external viewers; management still requires being in Warp</p>
+      <p class="item bad">No CPU/memory monitoring across machines, no SSH key management fleet</p>
+    </div>
+    <div class="analogy">
+      <p class="label">The Key Distinction</p>
+      <p>"Warp is where you <b>work</b>. SessionForge is how you <b>manage the fleet</b> you work on."</p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="quote-box">
+      <p>"Warp is an amazing terminal for your local machine. SessionForge is what you open on your laptop to see what's happening across five remote servers running Claude Code — without installing anything locally. Open a browser tab, see all your machines, see all their sessions, monitor resources, restart crashed sessions."</p>
+    </div>
+    <div class="section" style="flex:1;">
+      <p class="section-label">Objection Handling</p>
+      <div class="objections">
+        <div class="obj">
+          <p class="obj-q">"Warp already does session sharing"</p>
+          <p class="obj-a">Warp shares one terminal to viewers. SessionForge aggregates all machines and sessions into one management dashboard. Sharing vs. fleet management.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">"Warp has AI built in"</p>
+          <p class="obj-a">Warp's AI helps you in the terminal. SessionForge's focus is operational — is the session alive, is the machine healthy, can I restart it. Different jobs.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">"We like Warp for collaboration"</p>
+          <p class="obj-a">Keep Warp for collaborative coding sessions. Use SessionForge for production fleet management of Claude Code agents.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">"Warp is free"</p>
+          <p class="obj-a">SessionForge has a free tier too. And it gives you fleet management that Warp doesn't.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

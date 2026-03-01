@@ -1,0 +1,45 @@
+{
+  "cookies": [
+    {
+      "name": "GAESA",
+      "value": "Cp4BMDBkYTZjZDJjNDkyZjc0NzUxZGUyMDRmNTFlZjM1ZGI1ZGY5M2NlMTI1MDk4NWUxOTcxNDczN2IzN2QxOTI4ZWUxNGIyMThkNTNhMTg1NjM2MDg3ZTc5ZjRkOTBjNDI1ZDVmYTM1ODZiYzgwZTVmYWU1OTdlYzNiMzFiNDk0M2FhODExMWM4MjEyOTMzZGUxMTEwNTFiMGNhMDFjNjQQ-pGsosoz",
+      "domain": "sessionforge.dev",
+      "path": "/",
+      "expires": 1774874901.251736,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Host-authjs.csrf-token",
+      "value": "0258bf8896097a67e28ca4a12b0d7e761b7ca618c31f6e59b91e93d041e699fe%7C35330211141c80f125d38e246d9575a5d2511f5fb7d15f027bd4c1777c1c31e7",
+      "domain": "sessionforge.dev",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Secure-authjs.callback-url",
+      "value": "https%3A%2F%2Flocalhost%3A3001",
+      "domain": "sessionforge.dev",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Secure-authjs.session-token",
+      "value": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiZlpVYV9MY3BtdFo3Z2VfN3hpdUczcGh4LVJzMk5pcklBOEZldkhzN1FlWUVCdkU3M3M4R2JFNzVEUXdaczB3aWxySjc1N3RBX3oxbEppYnE5ZWhRTncifQ..cnysbzXyCTTo33WbOGKIaQ.1zM75czBo9n8og0-yBmX7Dr45gQUgp5ZiGFRESnfSddnf1JcfiEKz1EgWTClilEeUPhHdBuN9mbkLDVR-Qi-1GmgoAQqfKzPof4JWdBBQFuzzqgj7TY8am-nuXg8vKAEK3EV_puRvBZ2jtiteFpLyl8s8_l9zMT8BeRVwURnK_rSKKeGT-TYIkewYtp-5RRddW43xrCdtOnUbMgONKM7MK2jxWObxQPcclATz1gvaTK5R69H5HoFRFzyadXmjartxArhqKOeDur0eu8kQyiERRxb66CIgMAUDdIv9wfmFIZbnicxg4nIxsyVsvYtG7-W6to6yLxtCUmWye1RDUeHr1AgFFofgPjA6gK6MkA6tQvKmBwDNcg0vt0YddLNFrHzvYB1L50ONoB8P4Q-BiQtZA.jd9O2sRCU5YhTaL-Tw2vCdelHXf85JjVDXr0f4TmhmE",
+      "domain": "sessionforge.dev",
+      "path": "/",
+      "expires": 1774874902.249158,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

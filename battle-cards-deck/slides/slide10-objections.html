@@ -1,0 +1,90 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #7C3AED;
+  padding: 10pt 28pt; display: flex; align-items: center; gap: 12pt;
+}
+.badge { background: #7C3AED33; border: 1pt solid #7C3AED; border-radius: 4pt; padding: 2pt 10pt; }
+.badge p { color: #C4B5FD; font-size: 8pt; margin: 0; font-weight: bold; letter-spacing: 1pt; }
+.header h2 { color: #FFFFFF; font-size: 16pt; margin: 0; }
+.content { flex: 1; display: flex; padding: 10pt 20pt 10pt; gap: 14pt; overflow: hidden; }
+.col { flex: 1; display: flex; flex-direction: column; gap: 6pt; }
+.obj-row {
+  display: flex; align-items: stretch; gap: 0;
+  background: #161B27; border-radius: 5pt; overflow: hidden;
+}
+.obj-q-wrap {
+  background: #0F172A; padding: 7pt 10pt; flex: 1.1;
+  border-right: 1pt solid #1E293B;
+}
+.obj-q { color: #64748B; font-size: 7.5pt; font-style: italic; line-height: 1.4; margin: 0; }
+.obj-a-wrap { padding: 7pt 10pt; flex: 1.4; }
+.obj-a { color: #CBD5E1; font-size: 7.5pt; line-height: 1.4; margin: 0; }
+.obj-a .em { color: #A78BFA; font-weight: bold; }
+.divider { width: 100%; height: 1pt; background: #1E293B; }
+.col-label { color: #7C3AED; font-size: 7pt; letter-spacing: 2pt; text-transform: uppercase; font-weight: bold; margin: 0 0 6pt 0; display: flex; gap: 20pt; }
+.col-label span { flex: 1; }
+.security-box {
+  background: #7C3AED1A; border: 1pt solid #7C3AED; border-radius: 6pt;
+  padding: 8pt 11pt; margin-top: 2pt;
+}
+.security-box .lbl { color: #A78BFA; font-size: 7pt; letter-spacing: 1pt; text-transform: uppercase; font-weight: bold; margin: 0 0 4pt 0; }
+.security-box p { color: #C4B5FD; font-size: 8pt; margin: 0; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>UNIVERSAL OBJECTIONS</p></div>
+  <h2>Every Objection. Every Counter.</h2>
+</div>
+<div class="content">
+  <div class="col">
+    <div class="col-label"><span>Objection</span><span>SessionForge Counter</span></div>
+    <div class="obj-row">
+      <div class="obj-q-wrap"><p class="obj-q">"We'll just SSH in to check"</p></div>
+      <div class="obj-a-wrap"><p class="obj-a">One machine: fine. Three machines at 3am: use a dashboard. Time per SSH × machines × days.</p></div>
+    </div>
+    <div class="obj-row">
+      <div class="obj-q-wrap"><p class="obj-q">"Claude Code handles this itself"</p></div>
+      <div class="obj-a-wrap"><p class="obj-a">Claude Code is the agent. SessionForge manages the sessions it runs in — you wouldn't expect VS Code to manage your server fleet.</p></div>
+    </div>
+    <div class="obj-row">
+      <div class="obj-q-wrap"><p class="obj-q">"The free tools do what we need"</p></div>
+      <div class="obj-a-wrap"><p class="obj-a">Our free tier is also free. And it gives you <span class="em">multi-machine fleet management</span> the free tools don't have.</p></div>
+    </div>
+    <div class="obj-row">
+      <div class="obj-q-wrap"><p class="obj-q">"We're not ready to pay for tooling"</p></div>
+      <div class="obj-a-wrap"><p class="obj-a">Free tier: 1 machine, 3 sessions, no credit card. Upgrade when you need more.</p></div>
+    </div>
+    <div class="obj-row">
+      <div class="obj-q-wrap"><p class="obj-q">"We already use [X monitoring tool]"</p></div>
+      <div class="obj-a-wrap"><p class="obj-a">Does [X] let you start/stop Claude Code sessions from a browser? No? That's the gap.</p></div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="col-label" style="opacity:0;"><span>.</span></div>
+    <div class="obj-row">
+      <div class="obj-q-wrap"><p class="obj-q">"We'll build this ourselves"</p></div>
+      <div class="obj-a-wrap"><p class="obj-a">Session management + terminal streaming + resource monitoring + SSH key management = months of engineering. SessionForge Pro is <span class="em">$19/month.</span></p></div>
+    </div>
+    <div class="obj-row">
+      <div class="obj-q-wrap"><p class="obj-q">"Our team is small, we manage fine"</p></div>
+      <div class="obj-a-wrap"><p class="obj-a">SessionForge pays off at 2 machines. How many hours/month do you spend SSHing in to check on Claude?</p></div>
+    </div>
+    <div class="security-box">
+      <p class="lbl">Security Objection — Handle with Care</p>
+      <p>"We don't want a third party on our machines" — <b>The SessionForge agent dials out from your machine. No inbound ports, no third-party SSH access, no code leaves your servers.</b> Your infrastructure, your control, your data.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

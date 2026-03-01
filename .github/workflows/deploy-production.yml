@@ -1,0 +1,130 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy-production" to confirm'
+        required: true
+        type: string
+      reason:
+        description: "Reason for deployment"
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  REGION: us-central1
+  SERVICE: sessionforge
+
+jobs:
+  validate:
+    name: Validate Confirmation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation input
+        run: |
+          if [ "${{ inputs.confirm }}" != "deploy-production" ]; then
+            echo "ERROR: Confirmation must be exactly 'deploy-production'"
+            exit 1
+          fi
+          echo "Confirmation accepted. Reason: ${{ inputs.reason }}"
+
+  build-and-push:
+    name: Build & Push to Artifact Registry
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Ensure Artifact Registry repository exists
+        run: |
+          gcloud artifacts repositories describe sessionforge \
+            --location=${{ env.REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --quiet 2>/dev/null || \
+          gcloud artifacts repositories create sessionforge \
+            --repository-format=docker \
+            --location=${{ env.REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --description="SessionForge container images" \
+            --quiet
+
+      - name: Set image name
+        id: image
+        run: |
+          SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sessionforge/web"
+          echo "image=${IMAGE}:prod-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Image: ${IMAGE}:prod-${SHA}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.image.outputs.image }}
+            ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sessionforge/web:production-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Cloud Run (Production)
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        run: |
+          # Use the stable production-latest tag to avoid secret-masking issues
+          # with SHA-tagged image names passed via job outputs.
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sessionforge/web:production-latest"
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image "$IMAGE" \
+            --region ${{ env.REGION }} \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 10 \
+            --memory 512Mi \
+            --cpu 1 \
+            --port 3000 \
+            --set-env-vars "NODE_ENV=production,CORALOGIX_APP_NAME=sessionforge,CORALOGIX_ENDPOINT=https://ingress.coralogix.com,GRAFANA_OTLP_ENDPOINT=https://otlp-gateway-prod-us-east-0.grafana.net/otlp,NEXT_PUBLIC_APP_URL=https://sessionforge.dev,CORALOGIX_API_KEY=placeholder,GRAFANA_API_KEY=placeholder,GRAFANA_ORG_ID=placeholder" \
+            --set-secrets "DATABASE_URL=sessionforge-db-url:latest,REDIS_URL=sessionforge-redis-url:latest,NEXTAUTH_SECRET=sessionforge-nextauth-secret:latest,AUTH_SECRET=sessionforge-nextauth-secret:latest,E2E_TEST_SECRET=sessionforge-e2e-test-secret:latest,NEXTAUTH_URL=sessionforge-nextauth-url:latest,GITHUB_CLIENT_ID=sessionforge-github-client-id:latest,GITHUB_CLIENT_SECRET=sessionforge-github-client-secret:latest,GOOGLE_CLIENT_ID=sessionforge-google-client-id:latest,GOOGLE_CLIENT_SECRET=sessionforge-google-client-secret:latest,UPSTASH_REDIS_REST_URL=sessionforge-upstash-rest-url:latest,UPSTASH_REDIS_REST_TOKEN=sessionforge-upstash-rest-token:latest,STRIPE_SECRET_KEY=sessionforge-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=sessionforge-stripe-webhook-secret:latest,STRIPE_PRICE_PRO=sessionforge-stripe-price-pro:latest,STRIPE_PRICE_TEAM=sessionforge-stripe-price-team:latest,STRIPE_PRICE_ENTERPRISE=sessionforge-stripe-price-enterprise:latest,RESEND_API_KEY=sessionforge-resend-api-key:latest,AUTH_RESEND_KEY=sessionforge-resend-api-key:latest" \
+            --quiet
+
+      - name: Output production URL
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE }} \
+            --region ${{ env.REGION }} \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --format "value(status.url)")
+          echo "Production URL: $URL"

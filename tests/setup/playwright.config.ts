@@ -58,20 +58,12 @@ export default defineConfig({
 
   projects: isPostDeploy
     ? [
-        // --- Post-deploy projects ---
-        // "setup" project runs global-setup-like login; actual setup is in globalSetup above.
-        // "unauthenticated" — no stored session (for redirect tests, OAuth checks)
+        // --- Post-deploy project ---
+        // Runs all auth-post-deploy tests with the authenticated session from global-setup.
+        // Tests that need to be unauthenticated use test.use({ storageState: { cookies: [], origins: [] } })
+        // at the describe-block level to clear the session for those specific tests.
         {
-          name: 'post-deploy-unauthenticated',
-          testMatch: '**/auth-post-deploy.spec.ts',
-          use: {
-            ...devices['Desktop Chrome'],
-            baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'https://sessionforge.dev',
-          },
-        },
-        // "authenticated" — reuses session from global-setup.ts
-        {
-          name: 'post-deploy-authenticated',
+          name: 'post-deploy',
           testMatch: '**/auth-post-deploy.spec.ts',
           use: {
             ...devices['Desktop Chrome'],

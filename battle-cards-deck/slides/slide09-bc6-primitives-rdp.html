@@ -1,0 +1,98 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #16A34A;
+  padding: 10pt 28pt; display: flex; align-items: center; gap: 12pt;
+}
+.badge { background: #16A34A22; border: 1pt solid #16A34A; border-radius: 4pt; padding: 2pt 8pt; }
+.badge p { color: #86EFAC; font-size: 8pt; margin: 0; font-weight: bold; letter-spacing: 1pt; }
+.header h2 { color: #FFFFFF; font-size: 15pt; margin: 0; flex: 1; }
+.header .threat { color: #86EFAC; font-size: 9pt; margin: 0; }
+.content { flex: 1; display: flex; padding: 10pt 20pt 8pt; gap: 14pt; overflow: hidden; }
+.col { flex: 1; display: flex; flex-direction: column; gap: 8pt; }
+.section { background: #161B27; border-radius: 6pt; padding: 8pt 11pt; }
+.section-label { color: #06B6D4; font-size: 7pt; letter-spacing: 2pt; text-transform: uppercase; margin: 0 0 5pt 0; font-weight: bold; }
+.comp-header { color: #A78BFA; font-size: 9pt; font-weight: bold; margin: 0 0 4pt 0; }
+.item { color: #94A3B8; font-size: 7.5pt; margin: 0 0 3pt 0; padding-left: 8pt; position: relative; line-height: 1.4; }
+.item::before { content: "✗"; color: #EF4444; position: absolute; left: 0; font-size: 7pt; top: 1pt; }
+.item .em { color: #FCA5A5; font-weight: bold; }
+.divider { width: 100%; height: 1pt; background: #1E293B; margin: 5pt 0; }
+.quote-box {
+  background: #0F172A; border: 1pt solid #7C3AED; border-left: 3pt solid #7C3AED;
+  border-radius: 6pt; padding: 7pt 11pt;
+}
+.quote-box p { color: #C4B5FD; font-size: 8pt; margin: 0; line-height: 1.5; font-style: italic; }
+.quote-box .label { color: #7C3AED; font-size: 7pt; letter-spacing: 1pt; text-transform: uppercase; margin: 0 0 3pt 0; font-weight: bold; }
+.tip-box { background: #22C55E11; border: 1pt solid #22C55E; border-radius: 5pt; padding: 6pt 10pt; }
+.tip-box p { color: #86EFAC; font-size: 7.5pt; margin: 0; line-height: 1.4; }
+.objections { display: flex; flex-direction: column; gap: 3pt; }
+.obj { display: flex; align-items: flex-start; gap: 6pt; }
+.obj-q { color: #64748B; font-size: 7pt; flex: 1; font-style: italic; }
+.obj-a { color: #CBD5E1; font-size: 7pt; flex: 1.1; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>BATTLE CARDS 9 & 10</p></div>
+  <h2>vs. tmate / ngrok &amp; TeamViewer / AnyDesk</h2>
+  <p class="threat">THREAT LEVEL: LOW</p>
+</div>
+<div class="content">
+  <div class="col">
+    <div class="section">
+      <p class="comp-header">tmate / ngrok / ttyd — "Primitives"</p>
+      <p class="item"><span class="em">These are primitives, not products</span> — purely CLI, no dashboard</p>
+      <p class="item">One terminal at a time — no fleet management</p>
+      <p class="item">ngrok: 2-hour session limit, 1 GB bandwidth, ephemeral URLs on free tier</p>
+      <p class="item">No session lifecycle management, no SSH key management, no audit logs</p>
+      <p class="item">No CPU/memory monitoring — just a pipe, not a platform</p>
+    </div>
+    <div class="quote-box">
+      <p class="label">Primitives counter</p>
+      <p>"tmate answers 'how do I show someone my terminal right now.' SessionForge answers 'how do I manage all my Claude Code sessions across all my machines from a browser without SSHing into each one.' Primitives vs. fleet platform."</p>
+    </div>
+    <div class="tip-box">
+      <p><b>Bonus:</b> ngrok can actually be a connectivity layer <b>under</b> SessionForge for machines behind NAT. Position as complementary, not competitive — we ride on ngrok where needed.</p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="section">
+      <p class="comp-header">TeamViewer / AnyDesk / Parsec — "Wrong Shape"</p>
+      <p class="item"><span class="em">GUI remote desktop is wrong for headless server + Claude Code management</span></p>
+      <p class="item">$25–230/month for functionality that doesn't match the problem</p>
+      <p class="item">IT asset-centric fleet (device inventory, OS versions) — not developer session-centric</p>
+      <p class="item">No terminal I/O streaming, no Claude Code awareness, no session log capture</p>
+      <p class="item">AnyDesk Oct 2025 license change creating customer confusion and frustration</p>
+      <p class="item">TeamViewer aggressively flags free accounts as commercial</p>
+    </div>
+    <div class="quote-box">
+      <p class="label">Remote desktop counter</p>
+      <p>"TeamViewer shows you a desktop. You don't need a desktop — you need Claude Code's terminal output, know if the process is alive, and hit restart when it crashes. It's like using a tow truck to move a bicycle."</p>
+    </div>
+    <div class="section">
+      <p class="section-label">Objection Handling</p>
+      <div class="objections">
+        <div class="obj">
+          <p class="obj-q">"IT already rolled out TeamViewer company-wide"</p>
+          <p class="obj-a">Keep TeamViewer for IT support. SessionForge is developer tooling — separate buying decision, different budget, different buyer.</p>
+        </div>
+        <div class="divider" style="margin:3pt 0;"></div>
+        <div class="obj">
+          <p class="obj-q">"I just SSH in when I need to check"</p>
+          <p class="obj-a">Works perfectly for one machine. SessionForge pays off the moment you have more than one. What's your time worth per SSH session × how many machines × how many days?</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

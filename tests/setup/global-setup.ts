@@ -4,8 +4,10 @@
  * Responsibilities:
  *   1. Verify the production site is reachable.
  *   2. Register a disposable test user via the public /api/auth/register endpoint.
- *   3. Log in with credentials to get a real session cookie.
- *   4. Save the browser storage state so tests can reuse the authenticated session
+ *      Pass x-e2e-test-secret so the API returns the verificationToken directly.
+ *   3. Verify the user's email via GET /api/auth/verify-email?token=<token>.
+ *   4. Log in with credentials to get a real session cookie.
+ *   5. Save the browser storage state so tests can reuse the authenticated session
  *      without repeating login for each spec.
  *
  * The test user email/password are written to environment variables that are read
@@ -21,15 +23,21 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'https://sessionforge.dev'
 const AUTH_DIR = path.join(__dirname, '.auth')
 export const STORAGE_STATE = path.join(AUTH_DIR, 'user.json')
 
-// Deterministic but unique-per-run test credentials
-const RUN_ID = Date.now()
-export const TEST_EMAIL = `e2e-pd-${RUN_ID}@sessionforge.dev`
-export const TEST_PASSWORD = 'E2eProdPass1!'
-export const TEST_NAME = 'E2E Post-Deploy User'
-
 // Secret header that unlocks the verificationToken in the register response.
 // Must match E2E_TEST_SECRET env var set on Cloud Run.
 const E2E_TEST_SECRET = process.env.E2E_TEST_SECRET ?? ''
+
+// If E2E_TEST_SECRET is not available, fall back to the pre-seeded fallback user.
+// Otherwise create a fresh user for this run.
+const USE_FALLBACK_USER = !E2E_TEST_SECRET
+const RUN_ID = Date.now()
+export const TEST_EMAIL = USE_FALLBACK_USER
+  ? (process.env.E2E_FALLBACK_EMAIL ?? 'e2e-fallback@sessionforge.dev')
+  : (process.env.E2E_TEST_EMAIL ?? `e2e-pd-${RUN_ID}@sessionforge.dev`)
+export const TEST_PASSWORD = USE_FALLBACK_USER
+  ? (process.env.E2E_FALLBACK_PASSWORD ?? 'E2eTestPass123!')
+  : 'E2eProdPass1!'
+export const TEST_NAME = 'E2E Post-Deploy User'
 
 async function globalSetup(config: FullConfig) {
   // Ensure auth directory exists
@@ -58,49 +66,58 @@ async function globalSetup(config: FullConfig) {
   console.log('[global-setup] Site is healthy.')
 
   // ------------------------------------------------------------------
-  // Step 2: Register test user + verify email via token
+  // Step 2: Register test user (skip if using pre-seeded fallback user)
   // ------------------------------------------------------------------
-  console.log(`[global-setup] Registering test user: ${TEST_EMAIL}`)
-  const registerHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (E2E_TEST_SECRET) {
-    registerHeaders['x-e2e-test-secret'] = E2E_TEST_SECRET
-  }
+  if (USE_FALLBACK_USER) {
+    console.log(`[global-setup] E2E_TEST_SECRET not set — using pre-seeded fallback user: ${TEST_EMAIL}`)
+  } else {
+    console.log(`[global-setup] Registering test user: ${TEST_EMAIL}`)
 
-  const registerRes = await context.request.post(`${BASE_URL}/api/auth/register`, {
-    data: { name: TEST_NAME, email: TEST_EMAIL, password: TEST_PASSWORD },
-    headers: registerHeaders,
-  })
+    const registerRes = await context.request.post(`${BASE_URL}/api/auth/register`, {
+      data: { name: TEST_NAME, email: TEST_EMAIL, password: TEST_PASSWORD },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-e2e-test-secret': E2E_TEST_SECRET,
+      },
+    })
 
-  if (!registerRes.ok() && registerRes.status() !== 409) {
-    const body = await registerRes.text()
-    await browser.close()
-    throw new Error(
-      `[global-setup] Failed to register test user (${registerRes.status()}): ${body}`
-    )
-  }
+    if (!registerRes.ok() && registerRes.status() !== 409) {
+      const body = await registerRes.text()
+      await browser.close()
+      throw new Error(
+        `[global-setup] Failed to register test user (${registerRes.status()}): ${body}`
+      )
+    }
 
-  // If the register response contains a verificationToken (E2E test mode),
-  // use it to verify the email immediately so credentials login works.
-  if (registerRes.ok()) {
-    const registerBody = await registerRes.json()
-    // Register response shape: { success, userId, verificationToken? }
-    const verificationToken = (registerBody?.verificationToken ?? registerBody?.data?.verificationToken) as string | undefined
+    console.log('[global-setup] Test user registered (or already existed).')
+
+    // ------------------------------------------------------------------
+    // Step 3: Verify email via token returned in register response
+    // ------------------------------------------------------------------
+    const registerBody = await registerRes.json().catch(() => ({}))
+    const verificationToken: string | undefined =
+      registerBody.verificationToken ?? registerBody?.data?.verificationToken
+
     if (verificationToken) {
-      console.log('[global-setup] Got verificationToken from register — verifying email...')
-      // The verify-email endpoint does a redirect; we follow it and ignore the destination.
-      await context.request.get(`${BASE_URL}/api/auth/verify-email?token=${verificationToken}`, {
-        maxRedirects: 5,
-      })
-      console.log('[global-setup] Email verified via token.')
-    } else if (E2E_TEST_SECRET) {
-      console.warn('[global-setup] E2E_TEST_SECRET was set but no verificationToken in response — login may fail if email is unverified.')
+      console.log('[global-setup] Verifying email via token...')
+      const verifyRes = await context.request.get(
+        `${BASE_URL}/api/auth/verify-email?token=${verificationToken}`,
+        { maxRedirects: 0 }
+      )
+      if (verifyRes.status() !== 302 && !verifyRes.ok()) {
+        console.warn(`[global-setup] Email verify returned ${verifyRes.status()} — continuing anyway`)
+      } else {
+        console.log('[global-setup] Email verified.')
+      }
+    } else if (registerRes.status() === 409) {
+      console.log('[global-setup] User already existed — assuming email already verified.')
+    } else {
+      console.warn('[global-setup] No verificationToken in register response. Login may fail.')
     }
   }
 
-  console.log('[global-setup] Test user registered (or already existed).')
-
   // ------------------------------------------------------------------
-  // Step 3: Log in and capture session storage state
+  // Step 4: Log in and capture session storage state
   // ------------------------------------------------------------------
   console.log('[global-setup] Logging in to capture session state...')
   await page.goto(`${BASE_URL}/login`)
@@ -108,24 +125,31 @@ async function globalSetup(config: FullConfig) {
   await page.getByLabel(/password/i).fill(TEST_PASSWORD)
   await page.getByRole('button', { name: /sign in|log in/i }).click()
 
-  // Wait for redirect — new users land on /onboarding before /dashboard
-  await page.waitForURL(/dashboard|onboarding/, { timeout: 30_000 })
+  // Wait for redirect to dashboard or onboarding (new users hit /onboarding first)
+  await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 30_000 })
+  console.log('[global-setup] Login successful, on:', page.url())
 
-  // If the user was sent to /onboarding (first-login redirect), complete it
-  // via the API so the saved session state has onboarding done and lands on /dashboard
+  // If redirected to /onboarding, complete it via API then sign out and back in
+  // so the session JWT refreshes and picks up onboardingCompletedAt.
   if (page.url().includes('/onboarding')) {
-    console.log('[global-setup] New user redirected to /onboarding — completing via API...')
+    console.log('[global-setup] New user on /onboarding — completing via API...')
     const onboardingRes = await context.request.post(`${BASE_URL}/api/onboarding/complete`, {
       headers: { 'Content-Type': 'application/json' },
     })
     if (!onboardingRes.ok()) {
       console.warn(`[global-setup] /api/onboarding/complete returned ${onboardingRes.status()} — continuing anyway`)
     }
-    await page.goto(`${BASE_URL}/dashboard`)
-    await page.waitForURL(/dashboard/, { timeout: 15_000 })
+    // Sign out, then sign back in so the new session JWT reflects onboardingCompletedAt
+    await context.request.get(`${BASE_URL}/api/auth/signout`)
+    await context.clearCookies()
+    await page.goto(`${BASE_URL}/login`)
+    await page.waitForSelector('input[type="email"], [aria-label*="email" i]', { timeout: 15_000 })
+    await page.getByLabel(/email/i).fill(TEST_EMAIL)
+    await page.getByLabel(/password/i).fill(TEST_PASSWORD)
+    await page.getByRole('button', { name: /sign in|log in/i }).click()
+    await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 20_000 })
+    console.log('[global-setup] After onboarding complete, on:', page.url())
   }
-
-  console.log('[global-setup] Login successful, on dashboard.')
 
   // Save auth state
   await context.storageState({ path: STORAGE_STATE })

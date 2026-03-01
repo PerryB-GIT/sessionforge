@@ -51,6 +51,7 @@ jobs:
           POST_DEPLOY: "true"
           PLAYWRIGHT_BASE_URL: ${{ github.event.inputs.base_url || 'https://sessionforge.dev' }}
           # These secrets must be set in the repo / environment settings
+          E2E_TEST_SECRET: ${{ secrets.E2E_TEST_SECRET }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
         run: >

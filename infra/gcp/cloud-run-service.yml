@@ -1,0 +1,142 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: sessionforge-production
+  annotations:
+    # Allow unauthenticated requests - auth handled by application layer
+    run.googleapis.com/ingress: all
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scaling: scale to zero when no traffic
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        # Use Cloud SQL via connection string, not Cloud SQL proxy sidecar
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      serviceAccountName: sessionforge-cloudrun-sa@sessionforge-487719.iam.gserviceaccount.com
+      containers:
+        - name: sessionforge
+          image: ghcr.io/sessionforge/sessionforge:production-latest
+          ports:
+            - name: http1
+              containerPort: 3000
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: "1"
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            # All sensitive values come from Secret Manager
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-db-url
+                  key: latest
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-redis-url
+                  key: latest
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-nextauth-secret
+                  key: latest
+            - name: NEXTAUTH_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-nextauth-url
+                  key: latest
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-google-client-id
+                  key: latest
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-google-client-secret
+                  key: latest
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-github-client-id
+                  key: latest
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-github-client-secret
+                  key: latest
+            # Added: ANTHROPIC_API_KEY — required for support ticket AI draft (Claude Haiku)
+            # Secret must be created in Secret Manager before deploying:
+            #   gcloud secrets create sessionforge-anthropic-api-key --replication-policy=automatic
+            #   echo -n "sk-ant-xxxx" | gcloud secrets versions add sessionforge-anthropic-api-key --data-file=-
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-anthropic-api-key
+                  key: latest
+            # Added: PERRY_EMAIL — support review email destination
+            # Secret must be created: gcloud secrets create sessionforge-perry-email
+            - name: PERRY_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-perry-email
+                  key: latest
+            # Added: SUPPORT_PERRY_REVIEW — enable review emails in production
+            - name: SUPPORT_PERRY_REVIEW
+              value: "true"
+            # Removed: RESEND_API_KEY — Resend provider removed in revision 00054-fd6
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-secret-key
+                  key: latest
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-webhook-secret
+                  key: latest
+            - name: STRIPE_PRO_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-pro-price-id
+                  key: latest
+            - name: STRIPE_TEAM_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-team-price-id
+                  key: latest
+            - name: STRIPE_ENTERPRISE_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-stripe-enterprise-price-id
+                  key: latest
+            - name: GCS_BUCKET_NAME
+              value: sessionforge-session-logs-prod
+            - name: GOOGLE_CLOUD_PROJECT
+              value: sessionforge-487719
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            failureThreshold: 10
+            periodSeconds: 5
+  traffic:
+    - percent: 100
+      latestRevision: true

@@ -1,0 +1,108 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html { background: #0D1117; }
+body {
+  width: 720pt; height: 405pt; margin: 0; padding: 0;
+  background: #0D1117; font-family: Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+.header {
+  background: #161B27; border-bottom: 2pt solid #DC2626;
+  padding: 10pt 28pt; display: flex; align-items: center; gap: 12pt;
+}
+.badge { background: #DC262633; border: 1pt solid #DC2626; border-radius: 4pt; padding: 2pt 8pt; }
+.badge p { color: #FCA5A5; font-size: 8pt; margin: 0; font-weight: bold; letter-spacing: 1pt; }
+.header h2 { color: #FFFFFF; font-size: 15pt; margin: 0; flex: 1; }
+.header .threat { color: #FCA5A5; font-size: 9pt; margin: 0; }
+.content { flex: 1; display: flex; padding: 10pt 20pt 8pt; gap: 14pt; overflow: hidden; }
+.col { flex: 1; display: flex; flex-direction: column; gap: 8pt; }
+.section { background: #161B27; border-radius: 6pt; padding: 8pt 11pt; }
+.section-label { color: #06B6D4; font-size: 7pt; letter-spacing: 2pt; text-transform: uppercase; margin: 0 0 5pt 0; font-weight: bold; }
+.competitor { display: flex; align-items: flex-start; gap: 8pt; margin-bottom: 5pt; }
+.competitor:last-child { margin-bottom: 0; }
+.comp-name { color: #A78BFA; font-size: 8.5pt; font-weight: bold; min-width: 80pt; }
+.comp-gap { color: #94A3B8; font-size: 8pt; flex: 1; }
+.comp-gap span { color: #FCA5A5; }
+.win-text { color: #E2E8F0; font-size: 8.5pt; line-height: 1.5; margin: 0; }
+.quote-box {
+  background: #0F172A; border: 1pt solid #7C3AED; border-left: 3pt solid #7C3AED;
+  border-radius: 6pt; padding: 8pt 11pt;
+}
+.quote-box p { color: #C4B5FD; font-size: 8.5pt; margin: 0; line-height: 1.55; font-style: italic; }
+.objections { display: flex; flex-direction: column; gap: 4pt; }
+.obj { display: flex; align-items: flex-start; gap: 6pt; }
+.obj-q { color: #64748B; font-size: 7.5pt; flex: 1; font-style: italic; }
+.obj-a { color: #CBD5E1; font-size: 7.5pt; flex: 1.1; }
+.landmine { background: #D9770622; border: 1pt solid #F59E0B; border-radius: 4pt; padding: 6pt 10pt; }
+.landmine p { color: #FCD34D; font-size: 7.5pt; margin: 0; line-height: 1.5; }
+.landmine p b { color: #FBBF24; }
+.divider { width: 100%; height: 1pt; background: #1E293B; margin: 2pt 0; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="badge"><p>BATTLE CARD 1</p></div>
+  <h2>vs. claudecodeui / opcode / claude-code-ui</h2>
+  <p class="threat">THREAT LEVEL: HIGH</p>
+</div>
+<div class="content">
+  <div class="col">
+    <div class="section">
+      <p class="section-label">Critical Gaps (Their Weakness)</p>
+      <div class="competitor">
+        <p class="comp-name">claudecodeui</p>
+        <p class="comp-gap"><span>Single machine only</span> — no fleet view. Great mobile UX, zero multi-machine support.</p>
+      </div>
+      <div class="competitor">
+        <p class="comp-name">opcode / Claudia</p>
+        <p class="comp-gap"><span>Desktop app only</span> — not browser-accessible from a remote device or another machine.</p>
+      </div>
+      <div class="competitor">
+        <p class="comp-name">claude-code-ui</p>
+        <p class="comp-gap"><span>Local only</span> — can't reach remote machines at all. Kanban for one machine.</p>
+      </div>
+      <div class="divider"></div>
+      <div class="competitor">
+        <p class="comp-name">All three</p>
+        <p class="comp-gap"><span>No CPU/memory monitoring, no SSH key management, no multi-machine aggregation.</span></p>
+      </div>
+    </div>
+    <div class="quote-box">
+      <p>"claudecodeui is great if you want to access <b>one</b> machine's Claude Code from mobile. SessionForge is what you need when you have Claude Code running on three servers and you want one browser tab showing all of them — which sessions are active, which machines are under load, restart anything that crashed."</p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="section">
+      <p class="section-label">Objection Handling</p>
+      <div class="objections">
+        <div class="obj">
+          <p class="obj-q">"claudecodeui is free and does what I need"</p>
+          <p class="obj-a">For one machine, yes. The moment you add a second machine, you need SessionForge's fleet view. Our free tier covers your first machine at zero cost.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">"opcode is really polished"</p>
+          <p class="obj-a">opcode is a great desktop app — if you're always at your local machine. SessionForge works from any browser on any machine you own.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">"I don't need to monitor resources"</p>
+          <p class="obj-a">You will the first time a runaway Claude session saturates a server at 3am and you're not there to catch it.</p>
+        </div>
+        <div class="divider"></div>
+        <div class="obj">
+          <p class="obj-q">"I can just SSH in"</p>
+          <p class="obj-a">For one machine, yes. For a fleet, you want a dashboard.</p>
+        </div>
+      </div>
+    </div>
+    <div class="landmine">
+      <p><b>Landmine:</b> Don't dismiss these tools — respect the OSS community. Position on fleet scale, not feature features. Acknowledge their polish (especially opcode). Win on multi-machine and remote-access dimensions.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

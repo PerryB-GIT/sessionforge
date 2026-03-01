@@ -1,11 +1,10 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Bell, Search, User, LogOut, Settings, ChevronDown } from 'lucide-react'
+import { Search, User, LogOut, Settings, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { NotificationsPanel } from './NotificationsPanel'
 
 const routeTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -51,11 +50,7 @@ export function Header({ onCommandPalette }: { onCommandPalette?: () => void }) 
         </button>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-purple-500" />
-          <span className="sr-only">Notifications</span>
-        </Button>
+        <NotificationsPanel />
 
         {/* User menu */}
         <div className="relative">

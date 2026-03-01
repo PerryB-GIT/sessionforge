@@ -36,7 +36,7 @@ jobs:
       - name: Run ESLint
         run: |
           if [ -d "apps/web/src" ]; then
-            cd apps/web && npx next lint
+            cd apps/web && ../../node_modules/.bin/next lint
           else
             echo "No apps/web source on this branch — skipping lint."
           fi
@@ -66,7 +66,7 @@ jobs:
       - name: Run TypeScript compiler
         run: |
           if [ -f "apps/web/tsconfig.json" ] && [ -d "apps/web/src" ]; then
-            cd apps/web && npx tsc --noEmit
+            cd apps/web && ../../node_modules/.bin/tsc --noEmit
           else
             echo "No apps/web source found on this branch — skipping typecheck."
           fi
@@ -164,7 +164,7 @@ jobs:
       - name: Build Next.js app
         run: |
           if [ -d "apps/web/src" ]; then
-            cd apps/web && npx next build
+            cd apps/web && ../../node_modules/.bin/next build
           else
             echo "No Next.js app source on this branch — skipping build."
           fi

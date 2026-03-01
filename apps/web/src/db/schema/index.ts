@@ -11,6 +11,7 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  jsonb,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 
@@ -433,6 +434,67 @@ export const notifications = pgTable(
   })
 )
 
+// ─── Webhook Delivery Status ──────────────────────────────────────────────────
+
+export const webhookDeliveryStatusEnum = pgEnum('webhook_delivery_status', [
+  'pending',
+  'delivered',
+  'failed',
+])
+
+// ─── Webhooks ─────────────────────────────────────────────────────────────────
+
+export const webhooks = pgTable(
+  'webhooks',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    url: varchar('url', { length: 2048 }).notNull(),
+    secret: varchar('secret', { length: 64 }).notNull(),
+    events: text('events')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('webhooks_user_id_idx').on(table.userId),
+  })
+)
+
+// ─── Webhook Deliveries ───────────────────────────────────────────────────────
+
+export const webhookDeliveries = pgTable(
+  'webhook_deliveries',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    webhookId: uuid('webhook_id')
+      .notNull()
+      .references(() => webhooks.id, { onDelete: 'cascade' }),
+    event: varchar('event', { length: 64 }).notNull(),
+    payload: jsonb('payload').notNull(),
+    status: webhookDeliveryStatusEnum('status').notNull().default('pending'),
+    responseCode: integer('response_code'),
+    responseBody: text('response_body'),
+    attempts: integer('attempts').notNull().default(0),
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    webhookIdIdx: index('webhook_deliveries_webhook_id_idx').on(table.webhookId),
+    statusIdx: index('webhook_deliveries_status_idx').on(table.status),
+  })
+)
+
 // ─── Relations ─────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -514,3 +576,12 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, { fields: [notifications.userId], references: [users.id] }),
 }))
 
+export const webhooksRelations = relations(webhooks, ({ one, many }) => ({
+  user: one(users, { fields: [webhooks.userId], references: [users.id] }),
+  org: one(organizations, { fields: [webhooks.orgId], references: [organizations.id] }),
+  deliveries: many(webhookDeliveries),
+}))
+
+export const webhookDeliveriesRelations = relations(webhookDeliveries, ({ one }) => ({
+  webhook: one(webhooks, { fields: [webhookDeliveries.webhookId], references: [webhooks.id] }),
+}))

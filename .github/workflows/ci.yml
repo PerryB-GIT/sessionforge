@@ -23,12 +23,12 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: "**/package-lock.json"
+          cache-dependency-path: "package-lock.json"
 
       - name: Install dependencies
         run: |
           if [ -f "package.json" ]; then
-            npm install --prefer-offline
+            npm ci
           else
             echo "No package.json found — skipping install."
           fi
@@ -36,7 +36,7 @@ jobs:
       - name: Run ESLint
         run: |
           if [ -d "apps/web/src" ]; then
-            cd apps/web && npx next lint --no-cache
+            cd apps/web && npx next lint
           else
             echo "No apps/web source on this branch — skipping lint."
           fi
@@ -53,12 +53,12 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: "**/package-lock.json"
+          cache-dependency-path: "package-lock.json"
 
       - name: Install dependencies
         run: |
           if [ -f "package.json" ]; then
-            npm install --prefer-offline
+            npm ci
           else
             echo "No package.json found — skipping install."
           fi
@@ -151,12 +151,12 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: "**/package-lock.json"
+          cache-dependency-path: "package-lock.json"
 
       - name: Install dependencies
         run: |
           if [ -f "package.json" ]; then
-            npm install --prefer-offline
+            npm ci
           else
             echo "No package.json found — skipping install."
           fi

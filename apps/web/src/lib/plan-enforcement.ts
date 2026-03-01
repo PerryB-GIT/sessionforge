@@ -82,12 +82,7 @@ export async function checkSessionLimit(userId: string): Promise<void> {
   const [result] = await db
     .select({ count: count() })
     .from(sessions)
-    .where(
-      and(
-        eq(sessions.userId, userId),
-        eq(sessions.status, 'running')
-      )
-    )
+    .where(and(eq(sessions.userId, userId), eq(sessions.status, 'running')))
 
   const current = result?.count ?? 0
 
@@ -98,7 +93,7 @@ export async function checkSessionLimit(userId: string): Promise<void> {
       'SESSION_LIMIT_EXCEEDED',
       limits.sessions,
       current,
-      plan === 'free' ? 'pro' : 'team'
+      plan === 'free' ? 'pro' : plan === 'pro' ? 'team' : 'enterprise'
     )
   }
 }

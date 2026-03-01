@@ -13,6 +13,10 @@ const routeTitles: Record<string, string> = {
   '/keys': 'API Keys',
   '/settings': 'Settings',
   '/settings/org': 'Organization Settings',
+  '/settings/org/security': 'Security',
+  '/settings/org/audit-log': 'Audit Log',
+  '/settings/org/sso': 'Single Sign-On',
+  '/webhooks': 'Webhooks',
   '/onboarding': 'Get Started',
 }
 
@@ -67,10 +71,7 @@ export function Header({ onCommandPalette }: { onCommandPalette?: () => void }) 
 
           {userMenuOpen && (
             <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setUserMenuOpen(false)}
-              />
+              <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
               <div className="absolute right-0 top-10 z-20 w-48 rounded-xl border border-[#1e1e2e] bg-[#111118] py-1 shadow-2xl shadow-black/50">
                 <div className="border-b border-[#1e1e2e] px-3 py-2">
                   <p className="text-sm font-medium text-white">{userName}</p>

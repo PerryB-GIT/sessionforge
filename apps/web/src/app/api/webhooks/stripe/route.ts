@@ -34,11 +34,7 @@ export async function POST(req: NextRequest) {
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    )
+    event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET!)
   } catch (err) {
     logger.error('Stripe webhook signature verification failed', { error: String(err) })
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
@@ -54,15 +50,23 @@ export async function POST(req: NextRequest) {
         if (!userId || !plan) break
 
         // Save stripeCustomerId so the billing portal can be opened
-        const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
+        const customerId =
+          typeof session.customer === 'string' ? session.customer : session.customer?.id
         if (customerId && userId) {
-          await db.update(users).set({ stripeCustomerId: customerId, updatedAt: new Date() }).where(eq(users.id, userId))
+          await db
+            .update(users)
+            .set({ stripeCustomerId: customerId, updatedAt: new Date() })
+            .where(eq(users.id, userId))
         }
 
         // Save stripeSubscriptionId on the org so subscription management works
-        const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
+        const subscriptionId =
+          typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
         if (subscriptionId && orgId) {
-          await db.update(organizations).set({ stripeSubscriptionId: subscriptionId, updatedAt: new Date() }).where(eq(organizations.id, orgId))
+          await db
+            .update(organizations)
+            .set({ stripeSubscriptionId: subscriptionId, updatedAt: new Date() })
+            .where(eq(organizations.id, orgId))
         }
 
         await updatePlanForUser(userId, plan as PlanTier, orgId || null)
@@ -81,7 +85,8 @@ export async function POST(req: NextRequest) {
             const planLabel = (plan.charAt(0).toUpperCase() + plan.slice(1)) as string
             const limits = PLAN_LIMITS[plan as PlanTier]
             const machineLabel = limits.machines === -1 ? 'Unlimited' : String(limits.machines)
-            const historyLabel = limits.historyDays === 365 ? '1 year' : `${limits.historyDays} days`
+            const historyLabel =
+              limits.historyDays === 365 ? '1 year' : `${limits.historyDays} days`
             const displayName = upgradeUser.name ?? upgradeUser.email
 
             await resend.emails.send({
@@ -147,12 +152,24 @@ export async function POST(req: NextRequest) {
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription
-        const { userId, plan, orgId } = subscription.metadata ?? {}
-        if (!userId || !plan) break
+        const { userId, orgId } = subscription.metadata ?? {}
+        if (!userId) break
 
         // Only update if subscription is active
         if (subscription.status === 'active' || subscription.status === 'trialing') {
-          await updatePlanForUser(userId, plan as PlanTier, orgId || null)
+          // Derive plan from price ID rather than metadata — the billing portal does not
+          // update subscription metadata, so metadata.plan can be stale after a plan change.
+          const priceId = subscription.items.data[0]?.price?.id
+          const planByPriceId: Record<string, PlanTier> = {
+            [process.env.STRIPE_PRO_PRICE_ID ?? '']: 'pro',
+            [process.env.STRIPE_TEAM_PRICE_ID ?? '']: 'team',
+            [process.env.STRIPE_ENTERPRISE_PRICE_ID ?? '']: 'enterprise',
+          }
+          const resolvedPlan: PlanTier =
+            (priceId && planByPriceId[priceId]) ||
+            (subscription.metadata?.plan as PlanTier) ||
+            'pro'
+          await updatePlanForUser(userId, resolvedPlan, orgId || null)
         }
         break
       }
@@ -169,7 +186,8 @@ export async function POST(req: NextRequest) {
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
-        const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
+        const customerId =
+          typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
         if (customerId) {
           const [user] = await db
             .select({ id: users.id, email: users.email, name: users.name })
@@ -180,11 +198,12 @@ export async function POST(req: NextRequest) {
             const resend = new Resend(process.env.RESEND_API_KEY)
             const appUrl = process.env.NEXTAUTH_URL ?? 'https://sessionforge.dev'
             const displayName = user.name ?? user.email
-            await resend.emails.send({
-              from: process.env.EMAIL_FROM ?? 'noreply@sessionforge.dev',
-              to: user.email,
-              subject: 'Action required: SessionForge payment failed',
-              html: `<!DOCTYPE html>
+            await resend.emails
+              .send({
+                from: process.env.EMAIL_FROM ?? 'noreply@sessionforge.dev',
+                to: user.email,
+                subject: 'Action required: SessionForge payment failed',
+                html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
@@ -222,7 +241,12 @@ export async function POST(req: NextRequest) {
   </table>
 </body>
 </html>`,
-            }).catch((err) => logger.error('Stripe webhook: payment failure email send failed', { error: String(err) }))
+              })
+              .catch((err) =>
+                logger.error('Stripe webhook: payment failure email send failed', {
+                  error: String(err),
+                })
+              )
           }
         }
         break
@@ -241,15 +265,14 @@ export async function POST(req: NextRequest) {
 }
 
 async function updatePlanForUser(userId: string, plan: PlanTier, orgId: string | null) {
+  // Always update the user's own plan record so JWT-based plan checks work correctly
+  await db.update(users).set({ plan, updatedAt: new Date() }).where(eq(users.id, userId))
+
+  // If the checkout was org-scoped, update the org plan as well
   if (orgId) {
     await db
       .update(organizations)
       .set({ plan, updatedAt: new Date() })
       .where(eq(organizations.id, orgId))
-  } else {
-    await db
-      .update(users)
-      .set({ plan, updatedAt: new Date() })
-      .where(eq(users.id, userId))
   }
 }

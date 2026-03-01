@@ -31,8 +31,10 @@ type PendingInvite = { id: string; email: string; role: string; expiresAt: strin
 
 function StripeRedirectHandler({
   onUpgradeDetected,
+  currentPlan,
 }: {
   onUpgradeDetected: (plan: PlanTier) => void
+  currentPlan: string
 }) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -58,17 +60,20 @@ function StripeRedirectHandler({
         }
       })
       .catch(() => {
-        // Fallback: show modal anyway with plan from current session
-        onUpgradeDetected('pro')
+        // Fallback: show modal with the plan already in the session
+        onUpgradeDetected((currentPlan || 'pro') as PlanTier)
       })
-  }, [searchParams, router, update, onUpgradeDetected])
+  }, [searchParams, router, update, onUpgradeDetected, currentPlan])
 
   return null
 }
 
 const orgSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  slug: z.string().min(2).regex(/^[a-z0-9-]+$/, 'Only lowercase letters, numbers, and hyphens'),
+  slug: z
+    .string()
+    .min(2)
+    .regex(/^[a-z0-9-]+$/, 'Only lowercase letters, numbers, and hyphens'),
 })
 
 type OrgFormData = z.infer<typeof orgSchema>
@@ -80,9 +85,9 @@ const inviteSchema = z.object({
 type InviteFormData = z.infer<typeof inviteSchema>
 
 const PLANS = [
-  { name: 'Free',       price: 0,   machines: 1,  sessions: 3  },
-  { name: 'Pro',        price: 19,  machines: 5,  sessions: -1 },
-  { name: 'Team',       price: 49,  machines: 20, sessions: -1 },
+  { name: 'Free', price: 0, machines: 1, sessions: 3 },
+  { name: 'Pro', price: 19, machines: 5, sessions: -1 },
+  { name: 'Team', price: 49, machines: 20, sessions: -1 },
   { name: 'Enterprise', price: 199, machines: -1, sessions: -1 },
 ]
 
@@ -148,7 +153,12 @@ export default function OrgSettingsPage() {
     }
   }
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<OrgFormData>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<OrgFormData>({
     resolver: zodResolver(orgSchema),
     defaultValues: { name: '', slug: '' },
   })
@@ -156,22 +166,30 @@ export default function OrgSettingsPage() {
   useEffect(() => {
     fetch('/api/org')
       .then((r) => r.json())
-      .then((json) => { if (json.data) reset({ name: json.data.name, slug: json.data.slug }) })
+      .then((json) => {
+        if (json.data) reset({ name: json.data.name, slug: json.data.slug })
+      })
       .catch(() => {})
 
     fetch('/api/org/members')
       .then((r) => r.json())
-      .then((json) => { if (json.data) setMembers(json.data) })
+      .then((json) => {
+        if (json.data) setMembers(json.data)
+      })
       .catch(() => {})
 
     fetch('/api/org/invites')
       .then((r) => r.json())
-      .then((json) => { if (json.data) setPendingInvites(json.data) })
+      .then((json) => {
+        if (json.data) setPendingInvites(json.data)
+      })
       .catch(() => {})
 
     fetch('/api/usage')
       .then((r) => r.json())
-      .then((json) => { if (json.data) setUsage(json.data) })
+      .then((json) => {
+        if (json.data) setUsage(json.data)
+      })
       .catch(() => {})
   }, [reset])
 
@@ -224,7 +242,7 @@ export default function OrgSettingsPage() {
       if (!res.ok) {
         // If the endpoint doesn't support POST yet, surface a friendly message
         if (res.status === 405 || res.status === 404) {
-          toast.info('Invitations are coming soon. We\'ll notify you when they\'re ready.')
+          toast.info("Invitations are coming soon. We'll notify you when they're ready.")
         } else {
           toast.error(json.error?.message ?? 'Failed to send invitation')
         }
@@ -236,7 +254,9 @@ export default function OrgSettingsPage() {
       // Refresh pending invites
       fetch('/api/org/invites')
         .then((r) => r.json())
-        .then((j) => { if (j.data) setPendingInvites(j.data) })
+        .then((j) => {
+          if (j.data) setPendingInvites(j.data)
+        })
         .catch(() => {})
     } catch {
       toast.error('Failed to send invitation')
@@ -259,7 +279,10 @@ export default function OrgSettingsPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <Suspense>
-        <StripeRedirectHandler onUpgradeDetected={handleUpgradeDetected} />
+        <StripeRedirectHandler
+          onUpgradeDetected={handleUpgradeDetected}
+          currentPlan={currentPlan}
+        />
       </Suspense>
       <UpgradeSuccessModal
         open={upgradedPlan !== null}
@@ -284,11 +307,7 @@ export default function OrgSettingsPage() {
           <form onSubmit={handleSubmit(saveOrg)} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="orgName">Organization Name</Label>
-              <Input
-                id="orgName"
-                error={errors.name?.message}
-                {...register('name')}
-              />
+              <Input id="orgName" error={errors.name?.message} {...register('name')} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="slug">URL Slug</Label>
@@ -331,24 +350,30 @@ export default function OrgSettingsPage() {
           <div className="space-y-3">
             {members.length === 0 ? (
               <p className="text-sm text-gray-500">No members found.</p>
-            ) : members.map((member) => (
-              <div key={member.id} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/10 border border-purple-500/20 text-sm font-medium text-purple-400">
-                    {(member.name ?? member.email)[0].toUpperCase()}
+            ) : (
+              members.map((member) => (
+                <div key={member.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-500/10 border border-purple-500/20 text-sm font-medium text-purple-400">
+                      {(member.name ?? member.email)[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {member.name ?? member.email.split('@')[0]}
+                      </p>
+                      <p className="text-xs text-gray-500">{member.email}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-white">{member.name ?? member.email.split('@')[0]}</p>
-                    <p className="text-xs text-gray-500">{member.email}</p>
-                  </div>
+                  <Badge variant="secondary">{member.role}</Badge>
                 </div>
-                <Badge variant="secondary">{member.role}</Badge>
-              </div>
-            ))}
+              ))
+            )}
           </div>
           {pendingInvites.length > 0 && (
             <div className="mt-4 pt-4 border-t border-[#1e1e2e]">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Pending Invitations</p>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+                Pending Invitations
+              </p>
               <div className="space-y-2">
                 {pendingInvites.map((invite) => (
                   <div key={invite.id} className="flex items-center justify-between">
@@ -358,11 +383,15 @@ export default function OrgSettingsPage() {
                       </div>
                       <div>
                         <p className="text-sm text-gray-300">{invite.email}</p>
-                        <p className="text-xs text-gray-600">Invited · expires {new Date(invite.expiresAt).toLocaleDateString()}</p>
+                        <p className="text-xs text-gray-600">
+                          Invited · expires {new Date(invite.expiresAt).toLocaleDateString()}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs text-gray-500">{invite.role}</Badge>
+                      <Badge variant="outline" className="text-xs text-gray-500">
+                        {invite.role}
+                      </Badge>
                       <button
                         onClick={() => revokeInvite(invite.id)}
                         disabled={isRevoking === invite.id}
@@ -435,52 +464,63 @@ export default function OrgSettingsPage() {
             {PLANS.map((plan) => {
               const isCurrent = plan.name.toLowerCase() === currentPlan
               return (
-              <div
-                key={plan.name}
-                className={`rounded-xl border p-4 transition-colors ${
-                  isCurrent
-                    ? 'border-purple-500 bg-purple-500/5'
-                    : 'border-[#1e1e2e] hover:border-[#2a2a3e]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-white text-sm">{plan.name}</span>
-                  {isCurrent && (
-                    <Badge variant="default" className="text-xs">Current</Badge>
+                <div
+                  key={plan.name}
+                  className={`rounded-xl border p-4 transition-colors ${
+                    isCurrent
+                      ? 'border-purple-500 bg-purple-500/5'
+                      : 'border-[#1e1e2e] hover:border-[#2a2a3e]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-white text-sm">{plan.name}</span>
+                    {isCurrent && (
+                      <Badge variant="default" className="text-xs">
+                        Current
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xl font-bold text-white mb-2">
+                    {plan.price === 0 ? 'Free' : `$${plan.price}/mo`}
+                  </div>
+                  <ul className="space-y-1 text-xs text-gray-400">
+                    <li className="flex items-center gap-1.5">
+                      <Check className="h-3 w-3 text-green-400" />
+                      {plan.machines === -1 ? (
+                        <>
+                          <Infinity className="h-3 w-3" /> machines
+                        </>
+                      ) : (
+                        `${plan.machines} machine${plan.machines !== 1 ? 's' : ''}`
+                      )}
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="h-3 w-3 text-green-400" />
+                      {plan.sessions === -1 ? 'Unlimited sessions' : `${plan.sessions} sessions`}
+                    </li>
+                  </ul>
+                  {!isCurrent && (
+                    <Button
+                      size="sm"
+                      variant={plan.name === 'Enterprise' ? 'outline' : 'default'}
+                      className="w-full mt-3"
+                      isLoading={upgradingPlan === plan.name}
+                      onClick={() => {
+                        if (plan.name === 'Enterprise') {
+                          window.open(
+                            'mailto:sales@sessionforge.dev?subject=Enterprise%20Plan%20Inquiry',
+                            '_blank'
+                          )
+                        } else {
+                          handleUpgrade(plan.name)
+                        }
+                      }}
+                    >
+                      {plan.name === 'Enterprise' ? 'Contact Sales' : `Upgrade to ${plan.name}`}
+                    </Button>
                   )}
                 </div>
-                <div className="text-xl font-bold text-white mb-2">
-                  {plan.price === 0 ? 'Free' : `$${plan.price}/mo`}
-                </div>
-                <ul className="space-y-1 text-xs text-gray-400">
-                  <li className="flex items-center gap-1.5">
-                    <Check className="h-3 w-3 text-green-400" />
-                    {plan.machines === -1 ? <><Infinity className="h-3 w-3" /> machines</> : `${plan.machines} machine${plan.machines !== 1 ? 's' : ''}`}
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <Check className="h-3 w-3 text-green-400" />
-                    {plan.sessions === -1 ? 'Unlimited sessions' : `${plan.sessions} sessions`}
-                  </li>
-                </ul>
-                {!isCurrent && (
-                  <Button
-                    size="sm"
-                    variant={plan.name === 'Enterprise' ? 'outline' : 'default'}
-                    className="w-full mt-3"
-                    isLoading={upgradingPlan === plan.name}
-                    onClick={() => {
-                      if (plan.name === 'Enterprise') {
-                        window.open('mailto:sales@sessionforge.dev?subject=Enterprise%20Plan%20Inquiry', '_blank')
-                      } else {
-                        handleUpgrade(plan.name)
-                      }
-                    }}
-                  >
-                    {plan.name === 'Enterprise' ? 'Contact Sales' : `Upgrade to ${plan.name}`}
-                  </Button>
-                )}
-              </div>
-            )
+              )
             })}
           </div>
 
@@ -562,10 +602,10 @@ export default function OrgSettingsPage() {
             </div>
 
             {/* Overage alert */}
-            {(
-              (usage.machines.limit !== -1 && usage.machines.current / usage.machines.limit >= 0.8) ||
-              (usage.sessions.limit !== -1 && usage.sessions.current / usage.sessions.limit >= 0.8)
-            ) && (
+            {((usage.machines.limit !== -1 &&
+              usage.machines.current / usage.machines.limit >= 0.8) ||
+              (usage.sessions.limit !== -1 &&
+                usage.sessions.current / usage.sessions.limit >= 0.8)) && (
               <div className="flex items-center justify-between rounded-lg bg-yellow-500/5 border border-yellow-500/20 px-3 py-2">
                 <span className="text-xs text-yellow-300">Approaching plan limits</span>
                 <button

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -14,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import { UpgradePrompt } from '@/components/billing/UpgradePrompt'
 
 const VALID_EVENTS = [
   { value: 'session.started', label: 'Session started' },
@@ -38,6 +40,9 @@ export default function WebhooksPage() {
   const [selectedEvents, setSelectedEvents] = useState<string[]>([])
   const [isCreating, setIsCreating] = useState(false)
   const [newSecret, setNewSecret] = useState<string | null>(null)
+  const { data: authSession } = useSession()
+  const plan = (authSession?.user as { plan?: string } | undefined)?.plan ?? 'free'
+  const canUseWebhooks = plan !== 'free'
 
   async function load() {
     const res = await fetch('/api/webhooks')
@@ -98,7 +103,7 @@ export default function WebhooksPage() {
           }}
         >
           <DialogTrigger asChild>
-            <Button size="sm">
+            <Button size="sm" disabled={!canUseWebhooks}>
               <Plus className="h-4 w-4 mr-1" />
               Add Endpoint
             </Button>
@@ -168,7 +173,9 @@ export default function WebhooksPage() {
         </Dialog>
       </div>
 
-      {webhooks.length === 0 && (
+      {!canUseWebhooks && <UpgradePrompt resource="api_access" />}
+
+      {canUseWebhooks && webhooks.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-gray-500 text-sm">No webhook endpoints configured.</p>
@@ -176,30 +183,33 @@ export default function WebhooksPage() {
         </Card>
       )}
 
-      {webhooks.map((w) => (
-        <Card key={w.id}>
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <CardTitle className="text-sm font-mono text-gray-200 truncate">{w.url}</CardTitle>
-                <CardDescription className="mt-1 flex flex-wrap gap-1">
-                  {(w.events as string[]).map((e) => (
-                    <Badge key={e} variant="secondary" className="text-[10px]">
-                      {e}
-                    </Badge>
-                  ))}
-                </CardDescription>
+      {canUseWebhooks &&
+        webhooks.map((w) => (
+          <Card key={w.id}>
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <CardTitle className="text-sm font-mono text-gray-200 truncate">
+                    {w.url}
+                  </CardTitle>
+                  <CardDescription className="mt-1 flex flex-wrap gap-1">
+                    {(w.events as string[]).map((e) => (
+                      <Badge key={e} variant="secondary" className="text-[10px]">
+                        {e}
+                      </Badge>
+                    ))}
+                  </CardDescription>
+                </div>
+                <button
+                  onClick={() => remove(w.id)}
+                  className="text-gray-600 hover:text-red-400 transition-colors shrink-0"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
-              <button
-                onClick={() => remove(w.id)}
-                className="text-gray-600 hover:text-red-400 transition-colors shrink-0"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </CardHeader>
-        </Card>
-      ))}
+            </CardHeader>
+          </Card>
+        ))}
     </div>
   )
 }

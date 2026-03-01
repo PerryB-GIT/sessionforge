@@ -1,6 +1,7 @@
 'use client'
 
 import { ArrowRight, Zap } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -18,7 +19,7 @@ const UPGRADE_MESSAGES = {
   },
   sessions: {
     title: 'Session limit reached',
-    description: 'You\'ve hit your 3-session limit. Upgrade to Pro for unlimited sessions.',
+    description: "You've hit your 3-session limit. Upgrade to Pro for unlimited sessions.",
     cta: 'Upgrade to Pro — $19/mo',
   },
   api_access: {
@@ -35,18 +36,25 @@ const UPGRADE_MESSAGES = {
 
 export function UpgradePrompt({ resource, className, compact = false }: UpgradePromptProps) {
   const msg = UPGRADE_MESSAGES[resource]
+  const router = useRouter()
 
   if (compact) {
     return (
-      <div className={cn(
-        'flex items-center justify-between rounded-lg bg-purple-500/5 border border-purple-500/20 px-3 py-2',
-        className
-      )}>
+      <div
+        className={cn(
+          'flex items-center justify-between rounded-lg bg-purple-500/5 border border-purple-500/20 px-3 py-2',
+          className
+        )}
+      >
         <div className="flex items-center gap-2">
           <Zap className="h-3.5 w-3.5 text-purple-400 shrink-0" />
           <span className="text-xs text-purple-300">{msg.title}</span>
         </div>
-        <Button size="sm" className="h-6 text-xs px-2 shrink-0">
+        <Button
+          size="sm"
+          className="h-6 text-xs px-2 shrink-0"
+          onClick={() => router.push('/settings/org#plan-billing-section')}
+        >
           Upgrade
         </Button>
       </div>
@@ -54,10 +62,7 @@ export function UpgradePrompt({ resource, className, compact = false }: UpgradeP
   }
 
   return (
-    <div className={cn(
-      'rounded-xl border border-purple-500/20 bg-purple-500/5 p-5',
-      className
-    )}>
+    <div className={cn('rounded-xl border border-purple-500/20 bg-purple-500/5 p-5', className)}>
       <div className="flex items-start gap-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/10">
           <Zap className="h-4 w-4 text-purple-400" />
@@ -65,7 +70,7 @@ export function UpgradePrompt({ resource, className, compact = false }: UpgradeP
         <div className="flex-1">
           <h4 className="text-sm font-semibold text-white mb-0.5">{msg.title}</h4>
           <p className="text-xs text-gray-400 mb-3">{msg.description}</p>
-          <Button size="sm">
+          <Button size="sm" onClick={() => router.push('/settings/org#plan-billing-section')}>
             {msg.cta}
             <ArrowRight className="h-3.5 w-3.5" />
           </Button>

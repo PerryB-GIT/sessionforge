@@ -12,6 +12,7 @@ const PROTECTED_PREFIXES = [
   '/keys',
   '/settings',
   '/onboarding',
+  '/webhooks',
 ]
 
 const AUTH_ROUTES = ['/login', '/signup']
@@ -67,8 +68,8 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route))
   const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 
-  if (!isProtected && !isAuthRoute) return NextResponse.next()
   if (isPublic) return NextResponse.next()
+  if (!isProtected && !isAuthRoute) return NextResponse.next()
 
   // Use getToken which reads the JWT directly — no NextAuth handler needed
   // secureCookie must match what NextAuth used when setting the cookie:
@@ -100,7 +101,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   // ── First-login onboarding redirect ───────────────────────────────────────
   // Authenticated users who haven't completed onboarding are sent to /onboarding
   // Exclude /onboarding itself to avoid redirect loop
-  if (pathname.startsWith('/dashboard') && token && !token.onboardingCompletedAt) {
+  if (isProtected && !pathname.startsWith('/onboarding') && token && !token.onboardingCompletedAt) {
     return NextResponse.redirect(new URL('/onboarding', baseUrl))
   }
 
@@ -116,6 +117,13 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
     const allowed = await checkIpAllowlistFromCache(token.orgId as string, ip)
     if (!allowed) {
+      // API requests get JSON; browser page requests get a redirect to login with a reason param
+      const accept = req.headers.get('accept') ?? ''
+      if (accept.includes('text/html')) {
+        const blockedUrl = new URL('/login', baseUrl)
+        blockedUrl.searchParams.set('error', 'ip_blocked')
+        return NextResponse.redirect(blockedUrl)
+      }
       return NextResponse.json(
         {
           error: {

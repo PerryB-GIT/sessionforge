@@ -64,19 +64,36 @@ export default function SettingsPage() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
 
   useEffect(() => {
+    const DEFAULT_PREFS = {
+      sessionCrashed: true,
+      machineOffline: true,
+      sessionStarted: false,
+      weeklyDigest: true,
+    }
     fetch('/api/user/notifications')
       .then((r) => r.json())
-      .then((j) => setNotifPrefs(j.data))
-      .catch(() => {})
+      .then((j) => setNotifPrefs(j.data ?? DEFAULT_PREFS))
+      .catch(() => setNotifPrefs(DEFAULT_PREFS))
   }, [])
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      name: session?.user?.name ?? '',
-      email: session?.user?.email ?? '',
+      name: '',
+      email: '',
     },
   })
+
+  // Populate form once session data is available
+  useEffect(() => {
+    if (session?.user) {
+      profileForm.reset({
+        name: session.user.name ?? '',
+        email: session.user.email ?? '',
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.name, session?.user?.email])
 
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),

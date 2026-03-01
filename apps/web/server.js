@@ -322,6 +322,7 @@ const AGENT_TIMEOUT_MS = 90_000
 
 function handleAgentWs(ws, userId, remoteAddress) {
   let machineId = null
+  let machineHostname = null
   let lastHeartbeatAt = Date.now()
   let pingTimer = null
   let watchdogTimer = null
@@ -383,8 +384,9 @@ function handleAgentWs(ws, userId, remoteAddress) {
     let msg
     try { msg = JSON.parse(raw.toString()) } catch { return }
     try {
-      await handleAgentMessage(msg, userId, remoteAddress, sessionStats, (id) => {
+      await handleAgentMessage(msg, userId, remoteAddress, sessionStats, (id, hn) => {
         machineId = id
+        if (hn) machineHostname = hn
         lastHeartbeatAt = Date.now()
         if (!pollTimer) {
           console.log(`[ws/agent] starting poll for machine ${id}`)
@@ -418,6 +420,13 @@ function handleAgentWs(ws, userId, remoteAddress) {
           )
         } catch (err) {
           console.error('[notifications] failed to create offline notification:', err)
+        }
+        try {
+          const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
+          const machineRows = await query(`SELECT hostname FROM machines WHERE id = $1 LIMIT 1`, [machineId]).catch(() => [])
+          await deliverWebhook('machine.offline', { machineId, hostname: machineRows[0]?.hostname ?? null }, userId)
+        } catch (err) {
+          console.error('[webhooks] delivery error on machine.offline:', err)
         }
       }
     }
@@ -457,8 +466,18 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
            status = 'online', last_seen = NOW(), updated_at = NOW()`,
         [machineId, userId, name, os, h, version, ipAddress, cpuModel ?? null, ramGb ?? null]
       )
-      onMachineId(machineId)
+      onMachineId(machineId, h)
       await publishToDashboard(userId, { type: 'machine_updated', machine: { id: machineId, status: 'online', cpu: 0, memory: 0 } })
+      try {
+        const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
+        await deliverWebhook(
+          'machine.online',
+          { machineId, hostname: h },
+          userId
+        )
+      } catch (err) {
+        console.error('[webhooks] delivery error on machine.online:', err)
+      }
       break
     }
 
@@ -502,6 +521,16 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       sessionStartTimes[s.id] = new Date(s.startedAt)
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [s.id])
       if (rows[0]) await publishToDashboard(userId, { type: 'session_updated', session: { id: s.id, status: 'running', machineId: rows[0].machine_id } })
+      try {
+        const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
+        await deliverWebhook(
+          'session.started',
+          { sessionId: s.id, machineId: rows[0]?.machine_id ?? null },
+          userId
+        )
+      } catch (err) {
+        console.error('[webhooks] delivery error on session.started:', err)
+      }
       break
     }
 
@@ -519,6 +548,12 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
           delete sessionStartTimes[sessionId]
           archiveSessionRecording(sessionId, orgRows[0].org_id, startedAt).catch(console.error)
         }
+      }
+      try {
+        const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
+        await deliverWebhook('session.stopped', { sessionId, machineId: rows[0]?.machine_id ?? null }, userId)
+      } catch (err) {
+        console.error('[webhooks] delivery error on session.stopped:', err)
       }
       break
     }
@@ -551,6 +586,16 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         )
       } catch (err) {
         console.error('[notifications] failed to create crash notification:', err)
+      }
+      try {
+        const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
+        await deliverWebhook(
+          'session.crashed',
+          { sessionId, machineId: rows[0]?.machine_id ?? null },
+          userId
+        )
+      } catch (err) {
+        console.error('[webhooks] delivery error on session.crashed:', err)
       }
       break
     }

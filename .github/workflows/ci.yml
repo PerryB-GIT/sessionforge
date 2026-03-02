@@ -132,8 +132,15 @@ jobs:
       - name: go mod tidy
         run: cd agent && go mod tidy
 
-      - name: go vet
+      - name: go vet (linux)
         run: cd agent && go vet ./...
+
+      - name: go vet (windows/amd64)
+        run: cd agent && go vet ./...
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: "0"
 
       - name: Build all platforms
         run: |

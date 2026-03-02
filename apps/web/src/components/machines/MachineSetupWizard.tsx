@@ -11,9 +11,9 @@ interface MachineSetupWizardProps {
 }
 
 const INSTALL_COMMANDS = {
-  linux: `curl -fsSL https://get.sessionforge.io/agent | bash -s -- --key SF_API_KEY`,
-  macos: `curl -fsSL https://get.sessionforge.io/agent | bash -s -- --key SF_API_KEY`,
-  windows: `iwr -useb https://get.sessionforge.io/agent/install.ps1 | iex; Install-SessionForge -ApiKey 'SF_API_KEY'`,
+  linux: `curl -fsSL https://sessionforge.dev/install.sh | bash -s -- --key SF_API_KEY`,
+  macos: `curl -fsSL https://sessionforge.dev/install.sh | bash -s -- --key SF_API_KEY`,
+  windows: `irm https://sessionforge.dev/install.ps1 | iex; Install-SessionForge -ApiKey 'SF_API_KEY'`,
 }
 
 type TabType = 'linux' | 'macos' | 'windows'
@@ -98,8 +98,8 @@ export function MachineSetupWizard({ apiKey: apiKeyProp, onComplete }: MachineSe
                 step > s
                   ? 'bg-green-500 text-white'
                   : step === s
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-[#1e1e2e] text-gray-500'
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-[#1e1e2e] text-gray-500'
               }`}
             >
               {step > s ? <Check className="h-3 w-3" /> : s}
@@ -118,7 +118,8 @@ export function MachineSetupWizard({ apiKey: apiKeyProp, onComplete }: MachineSe
         <div>
           <h3 className="text-sm font-semibold text-white mb-1">Install the SessionForge Agent</h3>
           <p className="text-xs text-gray-400 mb-4">
-            Run this command on the machine you want to manage. The agent will connect automatically.
+            Run this command on the machine you want to manage. The agent will connect
+            automatically.
           </p>
 
           {keyLoading && (
@@ -130,7 +131,8 @@ export function MachineSetupWizard({ apiKey: apiKeyProp, onComplete }: MachineSe
           {keyMissing && (
             <div className="rounded-lg bg-yellow-500/5 border border-yellow-500/20 p-4 mb-4">
               <p className="text-xs text-yellow-400">
-                No API key found. Please generate one in <strong>Settings &rarr; API Keys</strong> before continuing.
+                No API key found. Please generate one in <strong>Settings &rarr; API Keys</strong>{' '}
+                before continuing.
               </p>
             </div>
           )}
@@ -165,13 +167,13 @@ export function MachineSetupWizard({ apiKey: apiKeyProp, onComplete }: MachineSe
 
           <div className="mt-4 rounded-lg bg-purple-500/5 border border-purple-500/20 p-3">
             <p className="text-xs text-purple-300">
-              <strong>Requirements:</strong> The machine needs internet access and curl (Linux/macOS) or PowerShell 5+ (Windows).
+              <strong>Requirements:</strong> The machine needs internet access and curl
+              (Linux/macOS) or PowerShell 5+ (Windows).
             </p>
           </div>
 
           <Button className="mt-4" onClick={() => setStep(2)}>
-            <Terminal className="h-4 w-4" />
-            I ran the command
+            <Terminal className="h-4 w-4" />I ran the command
           </Button>
         </div>
       )}
@@ -213,7 +215,8 @@ export function MachineSetupWizard({ apiKey: apiKeyProp, onComplete }: MachineSe
           </div>
           <h3 className="text-base font-semibold text-white mb-2">Setup Complete!</h3>
           <p className="text-sm text-gray-400 mb-6">
-            Your machine is connected and ready. You can now start sessions and monitor it from the dashboard.
+            Your machine is connected and ready. You can now start sessions and monitor it from the
+            dashboard.
           </p>
           <Button onClick={onComplete}>View Dashboard</Button>
         </div>

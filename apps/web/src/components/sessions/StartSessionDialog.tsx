@@ -83,6 +83,20 @@ export function StartSessionDialog({
 
   const selectedMachineId = watch('machineId')
 
+  function getSessionErrorMessage(code: string, fallback: string): string {
+    switch (code) {
+      case 'MACHINE_OFFLINE':
+        return 'Your machine is offline. Make sure the SessionForge agent is running.'
+      case 'SESSION_LIMIT_EXCEEDED':
+      case 'PLAN_LIMIT_ERROR':
+        return "You've reached your session limit. Upgrade to start more sessions."
+      case 'NOT_FOUND':
+        return 'Machine not found. It may have been removed.'
+      default:
+        return fallback
+    }
+  }
+
   async function onSubmit(data: FormData) {
     setIsLoading(true)
     try {
@@ -97,7 +111,9 @@ export function StartSessionDialog({
       })
       const json = await res.json()
       if (!res.ok) {
-        toast.error(json.error?.message ?? 'Failed to start session')
+        const code = json.error?.code ?? ''
+        const fallback = json.error?.message ?? 'Failed to start session'
+        toast.error(getSessionErrorMessage(code, fallback))
         return
       }
       const s = json.data
@@ -117,7 +133,7 @@ export function StartSessionDialog({
       reset()
       onOpenChange(false)
     } catch {
-      toast.error('Failed to start session')
+      toast.error('Connection failed. Check your internet and try again.')
     } finally {
       setIsLoading(false)
     }

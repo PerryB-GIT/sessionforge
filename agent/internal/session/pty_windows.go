@@ -86,10 +86,26 @@ type ptyHandle struct {
 	hPC    windows.Handle // ConPTY handle (0 in pipe-fallback mode)
 	proc   *os.Process    // child process (ConPTY path)
 	cmd    *exec.Cmd      // child process (pipe-fallback path)
-	stdin  io.WriteCloser // write end → PTY input
-	stdout io.ReadCloser  // read end  ← PTY output
+	stdin  io.WriteCloser // write end -> PTY input
+	stdout io.ReadCloser  // read end  <- PTY output
 	cancel context.CancelFunc
 	mu     sync.Mutex
+}
+
+// configuredClaudePath is the claude binary path stored in config.toml at install
+// time. Set via SetClaudePath by the Manager after loading config. When non-empty
+// it is tried first in resolveCommand, before exec.LookPath or the npm fallback.
+var (
+	configuredClaudePath   string
+	configuredClaudePathMu sync.Mutex
+)
+
+// SetClaudePath stores the pre-resolved claude binary path from config.toml.
+// Called by the daemon startup code after loading config.
+func SetClaudePath(path string) {
+	configuredClaudePathMu.Lock()
+	defer configuredClaudePathMu.Unlock()
+	configuredClaudePath = path
 }
 
 // allowedCommands is the set of process names the agent may spawn on Windows.
@@ -104,15 +120,16 @@ var allowedCommands = map[string]bool{
 
 // resolveCommand validates the binary name against the allow-list and returns
 // the absolute path plus any extra arguments split from the command string.
-// e.g. "bash -i" → ("/usr/bin/bash", ["-i"], nil)
+// e.g. "bash -i" -> ("/usr/bin/bash", ["-i"], nil)
 //
 // On Windows, if the resolved path is a .cmd script (e.g. npm-installed CLIs),
 // CreateProcess cannot execute it directly. In that case the returned binary is
 // cmd.exe and the script path is prepended to args so the caller builds:
-//   "C:\Windows\System32\cmd.exe" /C "C:\...\claude.cmd" [extra-args...]
+//
+//	"C:\Windows\System32\cmd.exe" /C "C:\...\claude.cmd" [extra-args...]
 //
 // resolveCommand also searches user-profile npm directories so that tools
-// installed with `npm install -g` are found even when the service runs as
+// installed with "npm install -g" are found even when the service runs as
 // LocalSystem (which only inherits the system PATH, not the user PATH).
 func resolveCommand(command string) (string, []string, error) {
 	parts := strings.Fields(command)
@@ -134,15 +151,35 @@ func resolveCommand(command string) (string, []string, error) {
 		return "", nil, fmt.Errorf("command %q is not allowed; permitted: claude, bash, zsh, sh, powershell, cmd", bin)
 	}
 
+	// 1. Check config-stored path first (set at install time while the installer
+	//    ran as the user with the correct PATH). Only applies to "claude".
+	configuredClaudePathMu.Lock()
+	storedPath := configuredClaudePath
+	configuredClaudePathMu.Unlock()
+	if storedPath != "" && baseLower == "claude" {
+		if _, err := os.Stat(storedPath); err == nil {
+			resolved := storedPath
+			isCmdScript := strings.ToLower(filepath.Ext(resolved)) == ".cmd"
+			if isCmdScript {
+				cmdExe, cmdErr := exec.LookPath("cmd.exe")
+				if cmdErr != nil {
+					cmdExe = `C:\Windows\System32\cmd.exe`
+				}
+				return cmdExe, append([]string{"/C", resolved}, args...), nil
+			}
+			return resolved, args, nil
+		}
+	}
+
+	// 2. Standard PATH lookup.
 	resolved, lookErr := exec.LookPath(bin)
 	if lookErr != nil {
 		// Service runs as LocalSystem: user's npm prefix (e.g. AppData\Roaming\npm)
-		// is not in the system PATH. Probe known locations so `claude` and other
+		// is not in the system PATH. Probe known locations so "claude" and other
 		// npm-global tools can be found without modifying the system PATH.
 		var fallbackErr error
 		resolved, fallbackErr = lookPathWithNpmFallback(bin)
 		if fallbackErr != nil {
-			dbgLog(fmt.Sprintf("resolveCommand: %q not found. LookPath=%v Fallback=%v PATH=%s", bin, lookErr, fallbackErr, os.Getenv("PATH")))
 			return "", nil, fmt.Errorf("command %q not found: %w", bin, fallbackErr)
 		}
 	}
@@ -150,7 +187,6 @@ func resolveCommand(command string) (string, []string, error) {
 	// Windows CreateProcess cannot execute .cmd script files directly.
 	// Wrap them as: cmd.exe /C "<script>" [args...]
 	isCmdScript := strings.ToLower(filepath.Ext(resolved)) == ".cmd"
-	dbgLog(fmt.Sprintf("resolveCommand: %q → resolved=%q isCmdScript=%v", bin, resolved, isCmdScript))
 
 	if isCmdScript {
 		cmdExe, cmdErr := exec.LookPath("cmd.exe")
@@ -163,22 +199,33 @@ func resolveCommand(command string) (string, []string, error) {
 	return resolved, args, nil
 }
 
-// dbgLog writes a line to the session debug log file.
-func dbgLog(msg string) {
-	if f, err := os.OpenFile(`C:\Users\Jakeb\.sessionforge\sf-env.log`, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666); err == nil {
-		_, _ = f.WriteString(msg + "\n")
-		f.Close()
-	}
-}
+// cachedClaudePath caches the result of the first successful npm fallback scan
+// for the "claude" binary so that C:\Users\ is not walked on every session spawn.
+var (
+	cachedClaudeResult    string
+	cachedClaudeResultErr error
+	cachedClaudeOnce      sync.Once
+)
 
 // lookPathWithNpmFallback searches for a binary in additional directories that
 // are typically in a user's PATH but absent from the LocalSystem service PATH.
-// It probes npm prefix directories derived from:
-//  1. USERPROFILE env var (may be set by the SCM when launching the service)
-//  2. The parent of the sessionforge config dir (e.g. C:\Users\Jakeb\.sessionforge
-//     → C:\Users\Jakeb)
-//  3. All user profile directories under C:\Users\ as a last resort
+// For the "claude" binary the result is cached after the first scan.
 func lookPathWithNpmFallback(bin string) (string, error) {
+	if strings.ToLower(bin) == "claude" {
+		cachedClaudeOnce.Do(func() {
+			cachedClaudeResult, cachedClaudeResultErr = scanNpmDirsForBin(bin)
+		})
+		return cachedClaudeResult, cachedClaudeResultErr
+	}
+	return scanNpmDirsForBin(bin)
+}
+
+// scanNpmDirsForBin probes known npm prefix directories for the named binary.
+// It probes directories derived from:
+//  1. USERPROFILE env var (may be set by the SCM when launching the service)
+//  2. The parent of the executable path (walks up 4 levels from service binary)
+//  3. All user profile directories under C:\Users\ as a last resort
+func scanNpmDirsForBin(bin string) (string, error) {
 	seen := map[string]bool{}
 	var extra []string
 
@@ -203,7 +250,6 @@ func lookPathWithNpmFallback(bin string) (string, error) {
 	//    C:\Users\<user>\AppData\Local\Programs\sessionforge\sessionforge.exe
 	//    Walk up 4 levels to reach C:\Users\<user>.
 	if exe, err := os.Executable(); err == nil {
-		// exe → Programs\sessionforge → Local → AppData → <user-home>
 		candidate := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(exe))))
 		if _, err2 := os.Stat(candidate); err2 == nil {
 			addNpmDirs(candidate)
@@ -260,7 +306,7 @@ func spawnPTY(
 
 	h, pid, err := spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, exitFn)
 	if err != nil {
-		// ConPTY unavailable (Windows < 1809) — fall back to pipe I/O.
+		// ConPTY unavailable (Windows < 1809) -- fall back to pipe I/O.
 		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, exitFn)
 	}
 	return h, pid, nil
@@ -278,10 +324,10 @@ func spawnWithConPTY(
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
 	// Pipe layout:
-	//   inputRead   → ConPTY reads keystroke data from here
-	//   inputWrite  → We write keystrokes here
-	//   outputRead  ← We read terminal output from here
-	//   outputWrite ← ConPTY writes rendered terminal output here
+	//   inputRead   -> ConPTY reads keystroke data from here
+	//   inputWrite  -> We write keystrokes here
+	//   outputRead  <- We read terminal output from here
+	//   outputWrite <- ConPTY writes rendered terminal output here
 	var inputRead, inputWrite windows.Handle
 	if err := windows.CreatePipe(&inputRead, &inputWrite, nil, 0); err != nil {
 		return nil, 0, fmt.Errorf("create input pipe: %w", err)
@@ -314,7 +360,7 @@ func spawnWithConPTY(
 	// Windows anonymous pipes do not support IOCP; os.NewFile would associate
 	// them with Go's async I/O subsystem, causing silent failures: writes
 	// deliver EOF to the child and reads return immediately instead of
-	// blocking — both of which cause interactive shells to exit at once.
+	// blocking -- both of which cause interactive shells to exit at once.
 	stdinPW := &pipeWriter{h: inputWrite}
 	stdoutPR := &pipeReader{h: outputRead}
 
@@ -322,9 +368,6 @@ func spawnWithConPTY(
 
 	// Start the output reader BEFORE CreateProcess so the pipe is drained
 	// from the moment the ConPTY first writes VT initialisation sequences.
-	// Gosched yields to allow the reader goroutine to enter its first Read
-	// call before CreateProcess launches the child — this ensures the ConPTY
-	// output buffer has an active consumer when the child starts writing.
 	readerReady := make(chan struct{})
 	go readPipeOutput(sessionID, stdoutPR, outputFn, readerReady)
 	<-readerReady
@@ -469,32 +512,29 @@ func spawnWithConPTY(
 
 // buildEnvBlock constructs a UTF-16 environment block for CreateProcess.
 // The block is pairs of KEY=VALUE\0 terminated by an extra \0.
-// Returns nil on error (process inherits parent environment).
+// Returns nil when no pairs are produced (process inherits parent environment).
 func buildEnvBlock(overlay map[string]string) *uint16 {
-	dbgLog("buildEnvBlock ENTERED")
-	base := os.Environ()
-	merged := make(map[string]string, len(base)+len(overlay)+1)
-	for _, kv := range base {
+	// Strip vars that must never reach the child process.
+	blocked := map[string]bool{
+		"CLAUDECODE": true, // prevents "nested session" error
+	}
+
+	merged := make(map[string]string)
+	for _, kv := range os.Environ() {
 		if idx := strings.IndexByte(kv, '='); idx > 0 {
-			merged[kv[:idx]] = kv[idx+1:]
+			key := kv[:idx]
+			if !blocked[key] {
+				merged[key] = kv[idx+1:]
+			}
 		}
 	}
 	for k, v := range overlay {
-		merged[k] = v
-	}
-	merged["TERM"] = "xterm-256color"
-	delete(merged, "CLAUDECODE") // prevent "nested Claude Code session" error
-
-	hadCC := false
-	for _, kv := range base {
-		if strings.HasPrefix(kv, "CLAUDECODE=") {
-			hadCC = true
-			break
+		if !blocked[k] {
+			merged[k] = v
 		}
 	}
-	dbgLog(fmt.Sprintf("buildEnvBlock: CLAUDECODE in base=%v in merged=%v", hadCC, merged["CLAUDECODE"] != ""))
+	merged["TERM"] = "xterm-256color"
 
-	// Build null-separated KEY=VALUE pairs, double-null terminated.
 	var pairs []uint16
 	for k, v := range merged {
 		entry := k + "=" + v
@@ -502,13 +542,12 @@ func buildEnvBlock(overlay map[string]string) *uint16 {
 		if err != nil {
 			continue
 		}
-		pairs = append(pairs, encoded...) // includes the null terminator
+		pairs = append(pairs, encoded...)
 	}
-	pairs = append(pairs, 0) // final double-null
-
 	if len(pairs) == 0 {
 		return nil
 	}
+	pairs = append(pairs, 0) // double-null terminator
 	return &pairs[0]
 }
 
@@ -526,12 +565,13 @@ func spawnWithPipes(
 	cmdCtx, cancel := context.WithCancel(ctx)
 	cmd := exec.CommandContext(cmdCtx, binary, args...)
 	cmd.Dir = workdir
+
+	// Build environment: inherit + overlay, stripping CLAUDECODE so the child
+	// does not think it is running inside an existing Claude Code session.
 	baseEnv := os.Environ()
 	filteredEnv := make([]string, 0, len(baseEnv))
-	hadCC := false
 	for _, kv := range baseEnv {
 		if strings.HasPrefix(kv, "CLAUDECODE=") {
-			hadCC = true
 			continue
 		}
 		filteredEnv = append(filteredEnv, kv)
@@ -540,7 +580,7 @@ func spawnWithPipes(
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
-	dbgLog(fmt.Sprintf("spawnWithPipes: binary=%q hadCC=%v", binary, hadCC))
+	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

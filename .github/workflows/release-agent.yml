@@ -4,20 +4,31 @@ on:
   push:
     tags:
       - "v*.*.*"
+    branches: [master, main]
+    paths-ignore:
+      # When triggered by branch push, only run if agent code changed.
+      # Tag pushes always run regardless of paths.
+      - "apps/**"
+      - "packages/**"
+      - "*.md"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/deploy-*.yml"
+  workflow_dispatch:
 
 # Required for creating GitHub Releases and uploading assets
 permissions:
   contents: write
 
 jobs:
+  # ── Versioned release (tag push only) — uses GoReleaser ───────────────────
   goreleaser:
-    name: Build & Release (${{ matrix.os }})
+    name: Versioned Release (GoReleaser)
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Full history required for goreleaser changelog generation
           fetch-depth: 0
 
       - name: Set up Go
@@ -35,10 +46,70 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── Rolling "latest" build (master/main push or workflow_dispatch) ─────────
+  # Produces a stable release tag "latest" so the download URL never changes:
+  #   https://github.com/PerryB-GIT/sessionforge/releases/latest/download/sessionforge.exe
+  build-latest:
+    name: Build & Publish Latest (windows/amd64)
+    if: "!startsWith(github.ref, 'refs/tags/v')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - name: Build Windows agent
+        run: |
+          cd agent
+          go build \
+            -ldflags="-s -w -X main.Version=latest -X main.GitCommit=${{ github.sha }}" \
+            -o sessionforge.exe \
+            ./cmd/sessionforge/
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+
+      - name: Delete existing "latest" release (if present)
+        run: gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create "latest" release with stable download URL
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "SessionForge Agent (latest)"
+          body: |
+            Rolling release built from master — commit ${{ github.sha }}.
+
+            For pinned versions, see versioned releases (e.g. v1.0.0).
+
+            **Windows one-liner:**
+            ```powershell
+            irm https://sessionforge.dev/install.ps1 | iex
+            ```
+
+            **Direct download:**
+            ```powershell
+            Invoke-WebRequest -Uri "https://github.com/PerryB-GIT/sessionforge/releases/latest/download/sessionforge.exe" -OutFile "sessionforge.exe"
+            ```
+          prerelease: true
+          files: agent/sessionforge.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Verify install scripts reachable (versioned releases only) ────────────
   verify-install-scripts:
     name: Verify install scripts are reachable
     runs-on: ubuntu-latest
     needs: goreleaser
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Check install.sh returns 200
         run: |

@@ -22,6 +22,7 @@ export interface Machine {
   hostname: string
   status: MachineStatus
   lastSeen: Date | null
+  agentVersion: string | null
   createdAt: Date
   // Metrics from heartbeats
   cpu?: number

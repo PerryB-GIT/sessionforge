@@ -81,19 +81,46 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
 
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: 'subscribe_session', sessionId }))
+
+        // C1: Send current terminal size immediately on open — don't wait for
+        // ResizeObserver to fire, which could be 100–500ms later. Sessions that
+        // start with 80×24 defaults have broken line-wrapping until the first
+        // resize event. fitAddon.fit() was already called before connectWebSocket,
+        // so terminal.cols/rows already reflect the real container dimensions.
+        if (terminalRef.current) {
+          ws.send(
+            JSON.stringify({
+              type: 'resize',
+              sessionId,
+              cols: terminalRef.current.cols,
+              rows: terminalRef.current.rows,
+            })
+          )
+        }
+
         terminalRef.current?.write('\r\n\x1b[32mConnected to session\x1b[0m\r\n')
       }
 
       ws.onmessage = (event) => {
+        // C2: Parse the envelope first. If parsing fails, log and drop — do NOT
+        // write raw event.data (which would be a JSON string like {"type":"..."})
+        // directly into the terminal, creating noise the user cannot dismiss.
         try {
           const msg = JSON.parse(event.data as string)
           if (msg.type === 'session_output' && msg.sessionId === sessionId) {
-            // STUB: Real output is base64 encoded PTY data
-            const data = atob(msg.data as string)
-            terminalRef.current?.write(data)
+            if (typeof msg.data === 'string' && msg.data.length > 0) {
+              try {
+                const decoded = atob(msg.data)
+                terminalRef.current?.write(decoded)
+              } catch (decodeErr) {
+                console.warn('[Terminal] base64 decode failed, writing raw:', decodeErr)
+                terminalRef.current?.write(msg.data)
+              }
+            }
           }
-        } catch {
-          terminalRef.current?.write(event.data as string)
+        } catch (parseErr) {
+          console.warn('[Terminal] message parse failed:', parseErr)
+          // Do NOT write raw event.data — it would show JSON noise in the terminal
         }
       }
 

@@ -73,10 +73,7 @@ export function MachineCard({ machine }: MachineCardProps) {
               >
                 <OsIcon
                   os={machine.os}
-                  className={cn(
-                    'h-5 w-5',
-                    isOnline ? 'text-purple-400' : 'text-gray-500'
-                  )}
+                  className={cn('h-5 w-5', isOnline ? 'text-purple-400' : 'text-gray-500')}
                 />
               </div>
               <div className="overflow-hidden">
@@ -92,15 +89,21 @@ export function MachineCard({ machine }: MachineCardProps) {
           {/* Metrics */}
           {isOnline && (
             <div className="space-y-2.5 mb-4">
-              <MetricBar label="CPU" value={machine.cpu} colorClass={
-                (machine.cpu ?? 0) > 80 ? 'text-red-400' : 'text-gray-300'
-              } />
-              <MetricBar label="Memory" value={machine.memory} colorClass={
-                (machine.memory ?? 0) > 80 ? 'text-red-400' : 'text-gray-300'
-              } />
-              <MetricBar label="Disk" value={machine.disk} colorClass={
-                (machine.disk ?? 0) > 80 ? 'text-red-400' : 'text-gray-300'
-              } />
+              <MetricBar
+                label="CPU"
+                value={machine.cpu}
+                colorClass={(machine.cpu ?? 0) > 80 ? 'text-red-400' : 'text-gray-300'}
+              />
+              <MetricBar
+                label="Memory"
+                value={machine.memory}
+                colorClass={(machine.memory ?? 0) > 80 ? 'text-red-400' : 'text-gray-300'}
+              />
+              <MetricBar
+                label="Disk"
+                value={machine.disk}
+                colorClass={(machine.disk ?? 0) > 80 ? 'text-red-400' : 'text-gray-300'}
+              />
             </div>
           )}
 
@@ -110,12 +113,19 @@ export function MachineCard({ machine }: MachineCardProps) {
               <Clock className="h-3 w-3" />
               <span>{formatRelativeTime(machine.lastSeen)}</span>
             </div>
-            {isOnline && machine.sessionCount !== undefined && (
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                <Terminal className="h-3 w-3" />
-                <span>{machine.sessionCount} session{machine.sessionCount !== 1 ? 's' : ''}</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {machine.agentVersion && (
+                <span className="text-xs text-gray-600 font-mono">v{machine.agentVersion}</span>
+              )}
+              {isOnline && machine.sessionCount !== undefined && (
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <Terminal className="h-3 w-3" />
+                  <span>
+                    {machine.sessionCount} session{machine.sessionCount !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </Card>

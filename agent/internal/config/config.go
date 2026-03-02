@@ -29,6 +29,11 @@ type Config struct {
 	MachineName string `toml:"machine_name"`
 	// LogLevel controls logging verbosity: debug, info, warn, error.
 	LogLevel string `toml:"log_level"`
+	// ClaudePath is the absolute path to the claude CLI binary, resolved at
+	// install time while the installer runs as the user (with the correct PATH).
+	// Used at runtime when the service runs as LocalSystem and the user's npm
+	// directories are not in the system PATH.
+	ClaudePath string `toml:"claude_path,omitempty"`
 }
 
 // DefaultConfig returns a Config populated with sensible defaults.
@@ -89,6 +94,40 @@ func LoadFrom(dir string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// SaveFrom writes the config to the given directory, creating it if needed.
+// If dir is empty it falls back to the default ~/.sessionforge directory.
+func SaveFrom(dir string, cfg *Config) error {
+	var path string
+	if dir != "" {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return fmt.Errorf("failed to create config directory %s: %w", dir, err)
+		}
+		path = filepath.Join(dir, configFile)
+	} else {
+		var err error
+		path, err = ConfigPath()
+		if err != nil {
+			return err
+		}
+		d := filepath.Dir(path)
+		if err := os.MkdirAll(d, 0700); err != nil {
+			return fmt.Errorf("failed to create config directory %s: %w", d, err)
+		}
+	}
+
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to open config file %s for writing: %w", path, err)
+	}
+	defer f.Close()
+
+	enc := toml.NewEncoder(f)
+	if err := enc.Encode(cfg); err != nil {
+		return fmt.Errorf("failed to encode config: %w", err)
+	}
+	return nil
 }
 
 // Save writes the config to disk, creating the directory if needed.

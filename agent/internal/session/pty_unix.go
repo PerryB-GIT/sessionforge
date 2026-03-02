@@ -74,12 +74,20 @@ func spawnPTY(
 	cmd := exec.CommandContext(cmdCtx, binary, args...)
 	cmd.Dir = workdir
 
-	// Build environment: inherit + overlay.
-	cmd.Env = os.Environ()
-	for k, v := range env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+	// Build environment: inherit + overlay, stripping vars that must not reach child.
+	blocked := map[string]bool{"CLAUDECODE": true}
+	for _, kv := range os.Environ() {
+		if idx := strings.IndexByte(kv, '='); idx > 0 {
+			if !blocked[kv[:idx]] {
+				cmd.Env = append(cmd.Env, kv)
+			}
+		}
 	}
-	// Always set TERM so editors work.
+	for k, v := range env {
+		if !blocked[k] {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+	}
 	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 
 	ptmx, err := pty.Start(cmd)

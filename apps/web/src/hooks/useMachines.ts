@@ -16,27 +16,31 @@ export function useMachines() {
         if (!res.ok) throw new Error('Failed to load machines')
         const json = await res.json()
         if (json.data?.items) {
-          const machines: Machine[] = json.data.items.map((m: {
-            id: string
-            userId: string
-            orgId: string | null
-            name: string
-            os: string
-            hostname: string
-            status: string
-            lastSeen: string | null
-            createdAt: string
-          }) => ({
-            id: m.id,
-            userId: m.userId,
-            orgId: m.orgId,
-            name: m.name,
-            os: m.os,
-            hostname: m.hostname,
-            status: m.status,
-            lastSeen: m.lastSeen ? new Date(m.lastSeen) : null,
-            createdAt: new Date(m.createdAt),
-          }))
+          const machines: Machine[] = json.data.items.map(
+            (m: {
+              id: string
+              userId: string
+              orgId: string | null
+              name: string
+              os: string
+              hostname: string
+              status: string
+              lastSeen: string | null
+              agentVersion: string | null
+              createdAt: string
+            }) => ({
+              id: m.id,
+              userId: m.userId,
+              orgId: m.orgId,
+              name: m.name,
+              os: m.os,
+              hostname: m.hostname,
+              status: m.status,
+              lastSeen: m.lastSeen ? new Date(m.lastSeen) : null,
+              agentVersion: m.agentVersion ?? null,
+              createdAt: new Date(m.createdAt),
+            })
+          )
           setMachines(machines)
         }
       } catch (err) {
@@ -79,6 +83,7 @@ export function useMachine(id: string) {
             hostname: m.hostname,
             status: m.status,
             lastSeen: m.lastSeen ? new Date(m.lastSeen) : null,
+            agentVersion: m.agentVersion ?? null,
             createdAt: new Date(m.createdAt),
           })
         }

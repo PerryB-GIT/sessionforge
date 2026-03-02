@@ -134,6 +134,15 @@ func runDaemonWithContext(ctx context.Context) error {
 
 	client := connection.NewClient(cfg, version, dispatchWrapper, logger)
 	mgr := session.NewManager(ctx, client, logger)
+
+	// If install stored a resolved claude path in config, prime the session
+	// package so the service (running as LocalSystem) can find claude without
+	// needing the user's npm directories in the system PATH.
+	if cfg.ClaudePath != "" {
+		mgr.SetClaudePath(cfg.ClaudePath)
+		logger.Info("using stored claude path from config", "claudePath", cfg.ClaudePath)
+	}
+
 	handler := connection.NewHandler(mgr, client, logger)
 
 	// Wire up dispatch to the fully-constructed handler.

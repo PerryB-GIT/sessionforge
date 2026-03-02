@@ -448,6 +448,13 @@ function handleDashboardWs(ws, userId) {
       }
       case 'session_input': {
         if (!msg.sessionId || !msg.data) break
+        // C4: Reject oversized or non-string payloads before touching the DB.
+        // 8192 bytes covers any realistic terminal paste; larger values indicate
+        // a bug or abuse attempt and should be dropped rather than forwarded.
+        if (typeof msg.data !== 'string' || msg.data.length > 8192) {
+          console.warn('[ws/dashboard] session_input too large or invalid, dropping')
+          break
+        }
         const record = await getSessionRecord(msg.sessionId, userId)
         if (!record || record.status !== 'running') break
         await publishToAgent(record.machine_id, {
@@ -726,6 +733,15 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
 
     case 'session_started': {
       const { session: s } = msg
+
+      // C3: Pre-allocate the ring buffer key so any dashboard subscriber that
+      // calls lrange() immediately after subscribe_session sees an existing key
+      // rather than nil. Without this, output that arrives before the dashboard
+      // WS calls subscribe_session is flushed into a key that didn't exist yet,
+      // and lrange returns [] — causing the client to miss early output.
+      const logKey = StreamKeys.sessionLogs(s.id)
+      await redis.expire(logKey, SESSION_LOG_TTL_SECONDS).catch(() => {})
+
       await query(
         `UPDATE sessions SET pid = $1, process_name = $2, workdir = $3, status = 'running', started_at = $4 WHERE id = $5`,
         [s.pid, s.processName, s.workdir, new Date(s.startedAt), s.id]

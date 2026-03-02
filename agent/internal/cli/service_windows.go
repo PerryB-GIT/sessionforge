@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/sessionforge/agent/internal/config"
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
@@ -89,6 +90,67 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 	}
 	execPath, _ = filepath.EvalSymlinks(execPath)
 
+	// ── B4: Pre-flight checks ──────────────────────────────────────────────────
+
+	// 1. Confirm the agent binary itself is reachable (sanity check).
+	if _, err := os.Stat(execPath); err != nil {
+		return fmt.Errorf("agent binary not found at %q: %w", execPath, err)
+	}
+
+	// 2. Confirm the config directory is writable.
+	userProfile := os.Getenv("USERPROFILE")
+	if userProfile == "" {
+		return fmt.Errorf("USERPROFILE environment variable is not set; cannot determine config directory")
+	}
+	configDir := filepath.Join(userProfile, ".sessionforge")
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return fmt.Errorf("config directory %q is not writable: %w", configDir, err)
+	}
+	// Write + delete a probe file to confirm actual write access.
+	probe := filepath.Join(configDir, ".write-probe")
+	if f, err := os.Create(probe); err != nil {
+		return fmt.Errorf("config directory %q is not writable: %w", configDir, err)
+	} else {
+		f.Close()
+		_ = os.Remove(probe)
+	}
+
+	// 3. Check whether claude CLI is installed and reachable.
+	//    Do this now, while running as the user (with the correct PATH).
+	//    The result is stored in config.toml so the service (LocalSystem) can find it.
+	claudePath, claudeErr := exec.LookPath("claude")
+	if claudeErr != nil {
+		// Try npm prefix locations derived from USERPROFILE.
+		claudePath = probeNpmDirs(userProfile, "claude")
+	}
+	if claudePath == "" {
+		fmt.Println("WARNING: 'claude' CLI not found in PATH.")
+		fmt.Println("  Install it with:  npm install -g @anthropic-ai/claude-code")
+		fmt.Println("  Then re-run:      sessionforge service install")
+		fmt.Println("  (The service will be installed, but sessions won't start until claude is installed.)")
+	} else {
+		fmt.Printf("Found claude CLI: %s\n", claudePath)
+	}
+
+	// ── B1: Load existing config, store the resolved claude path, and save ────
+
+	cfg, loadErr := config.LoadFrom(configDir)
+	if loadErr != nil {
+		// Non-fatal: we'll write defaults.
+		cfg = config.DefaultConfig()
+	}
+	if claudePath != "" {
+		cfg.ClaudePath = claudePath
+	}
+	if saveErr := config.SaveFrom(configDir, cfg); saveErr != nil {
+		// Non-fatal: log the error but continue — the service can still install.
+		fmt.Printf("WARNING: could not save config: %v\n", saveErr)
+	} else if claudePath != "" {
+		fmt.Printf("Stored claude path in config: %s\n", claudePath)
+	}
+
+	// ── SCM: install the service ───────────────────────────────────────────────
+
 	m, err := mgr.Connect()
 	if err != nil {
 		return errorHint(fmt.Errorf("connect to SCM: %w", err), "Run this command as Administrator")
@@ -102,12 +164,7 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 		existing.Close()
 	}
 
-	// Derive the config dir from the installing user's profile so the
-	// service (running as LocalSystem) reads the correct config.toml.
-	// We pass it as a flag: sessionforge --config-dir C:\Users\Perry\.sessionforge
-	userProfile := os.Getenv("USERPROFILE")
-	configDir := filepath.Join(userProfile, ".sessionforge")
-
+	// Pass --config-dir so the service (LocalSystem) reads the correct config.toml.
 	s, err := m.CreateService(serviceName, execPath, mgr.Config{
 		DisplayName:  serviceDisplayName,
 		Description:  serviceDescription,
@@ -122,6 +179,26 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 	successMsg("Installed", "Windows Service: "+serviceName)
 	fmt.Println("Run: sessionforge service start")
 	return nil
+}
+
+// probeNpmDirs searches for a binary in the npm prefix directories under the
+// given user profile. Returns the full path on success or "" if not found.
+func probeNpmDirs(userProfile, bin string) string {
+	for _, dir := range []string{
+		filepath.Join(userProfile, "AppData", "Roaming", "npm"),
+		filepath.Join(userProfile, "AppData", "Local", "npm"),
+	} {
+		// Try exec.LookPath (honours PATHEXT).
+		if p, err := exec.LookPath(filepath.Join(dir, bin)); err == nil {
+			return p
+		}
+		// Explicitly try the .cmd suffix (npm-installed CLIs on Windows).
+		candidate := filepath.Join(dir, bin+".cmd")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func runServiceUninstall(cmd *cobra.Command, args []string) error {

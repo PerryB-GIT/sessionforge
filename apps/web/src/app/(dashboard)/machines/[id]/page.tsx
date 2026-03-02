@@ -2,9 +2,22 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Trash2, Monitor, Apple, Terminal, Cpu, MemoryStick, HardDrive, Clock } from 'lucide-react'
+import {
+  ArrowLeft,
+  Trash2,
+  Monitor,
+  Apple,
+  Terminal,
+  Cpu,
+  MemoryStick,
+  HardDrive,
+  Clock,
+  Pencil,
+  Check,
+  X,
+} from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -39,8 +52,13 @@ export default function MachineDetailPage() {
   const { machine, isLoading } = useMachine(id)
   const { sessions } = useSessions(id)
   const removeMachine = useStore((s) => s.removeMachine)
+  const updateMachine = useStore((s) => s.updateMachine)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [isRenamingMachine, setIsRenamingMachine] = useState(false)
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   async function handleDelete() {
     setIsDeleting(true)
@@ -59,6 +77,45 @@ export default function MachineDetailPage() {
     } finally {
       setIsDeleting(false)
       setDeleteOpen(false)
+    }
+  }
+
+  function startEditName() {
+    if (!machine) return
+    setEditName(machine.name)
+    setIsEditingName(true)
+    setTimeout(() => nameInputRef.current?.select(), 0)
+  }
+
+  function cancelEditName() {
+    setIsEditingName(false)
+    setEditName('')
+  }
+
+  async function commitRename() {
+    if (!machine || !editName.trim() || editName.trim() === machine.name) {
+      cancelEditName()
+      return
+    }
+    setIsRenamingMachine(true)
+    try {
+      const res = await fetch(`/api/machines/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editName.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to rename machine')
+        return
+      }
+      updateMachine(id, { name: editName.trim() })
+      toast.success('Machine renamed')
+      setIsEditingName(false)
+    } catch {
+      toast.error('Failed to rename machine')
+    } finally {
+      setIsRenamingMachine(false)
     }
   }
 
@@ -95,17 +152,52 @@ export default function MachineDetailPage() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10">
             <OsIcon os={machine.os} />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-white">{machine.name}</h2>
+          <div className="flex flex-col gap-0.5">
+            {isEditingName ? (
+              <div className="flex items-center gap-1">
+                <input
+                  ref={nameInputRef}
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void commitRename()
+                    if (e.key === 'Escape') cancelEditName()
+                  }}
+                  onBlur={() => void commitRename()}
+                  disabled={isRenamingMachine}
+                  className="text-lg font-semibold text-white bg-transparent border-b border-purple-500 focus:outline-none w-48"
+                  autoFocus
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => void commitRename()}
+                  disabled={isRenamingMachine}
+                >
+                  <Check className="h-3.5 w-3.5 text-green-400" />
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={cancelEditName}>
+                  <X className="h-3.5 w-3.5 text-gray-500" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 group">
+                <h2 className="text-lg font-semibold text-white">{machine.name}</h2>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6"
+                  onClick={startEditName}
+                >
+                  <Pencil className="h-3 w-3 text-gray-500" />
+                </Button>
+              </div>
+            )}
             <p className="text-xs text-gray-500 font-mono">{machine.hostname}</p>
           </div>
           <MachineStatusBadge status={machine.status} />
         </div>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => setDeleteOpen(true)}
-        >
+        <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
           <Trash2 className="h-4 w-4" />
           Delete
         </Button>
@@ -182,11 +274,11 @@ export default function MachineDetailPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue={machine.status === 'offline' && sessions.length === 0 ? 'setup' : 'sessions'}>
+      <Tabs
+        defaultValue={machine.status === 'offline' && sessions.length === 0 ? 'setup' : 'sessions'}
+      >
         <TabsList>
-          <TabsTrigger value="sessions">
-            Sessions ({sessions.length})
-          </TabsTrigger>
+          <TabsTrigger value="sessions">Sessions ({sessions.length})</TabsTrigger>
           <TabsTrigger value="setup">Setup</TabsTrigger>
         </TabsList>
 
@@ -212,8 +304,9 @@ export default function MachineDetailPage() {
           <DialogHeader>
             <DialogTitle>Delete Machine</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong className="text-white">{machine.name}</strong>?
-              This will permanently remove the machine and all its session history. This action cannot be undone.
+              Are you sure you want to delete <strong className="text-white">{machine.name}</strong>
+              ? This will permanently remove the machine and all its session history. This action
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

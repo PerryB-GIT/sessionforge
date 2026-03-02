@@ -1,15 +1,21 @@
 'use client'
 
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
 import { toast } from 'sonner'
 import type { Terminal as XTermTerminal } from '@xterm/xterm'
 import type { FitAddon as XTermFitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
+export interface TerminalHandle {
+  appendOutput: (data: string) => void
+}
+
 interface TerminalProps {
   sessionId: string
   isConnected?: boolean
   onSendInput?: (data: string) => void
+  readOnly?: boolean
+  initialLogs?: string[]
 }
 
 async function loadXterm(): Promise<{
@@ -32,9 +38,7 @@ function StubTerminalContent({ sessionId }: { sessionId: string }) {
   return (
     <div className="h-full overflow-y-auto p-4 font-mono text-sm text-green-400 leading-relaxed">
       <div className="text-purple-400 mb-2">SessionForge Terminal — Session {sessionId}</div>
-      <div className="text-gray-500 mb-1">
-        Install xterm.js to enable live terminal:
-      </div>
+      <div className="text-gray-500 mb-1">Install xterm.js to enable live terminal:</div>
       <div className="text-purple-300 mb-4">
         npm install @xterm/xterm @xterm/addon-fit @xterm/addon-web-links
       </div>
@@ -48,7 +52,10 @@ function StubTerminalContent({ sessionId }: { sessionId: string }) {
   )
 }
 
-export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendInput }: TerminalProps) {
+export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
+  { sessionId, isConnected = false, onSendInput: _onSendInput, readOnly = false, initialLogs },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<XTermTerminal | null>(null)
   const fitAddonRef = useRef<XTermFitAddon | null>(null)
@@ -57,7 +64,14 @@ export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendI
   const [xtermFailed, setXtermFailed] = useState(false)
   const stubRef = useRef(false)
 
+  useImperativeHandle(ref, () => ({
+    appendOutput(data: string) {
+      terminalRef.current?.write(data)
+    },
+  }))
+
   const connectWebSocket = useCallback(() => {
+    if (readOnly) return
     try {
       // Use same-origin WS — relative URL converted to ws(s):// automatically
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -104,7 +118,7 @@ export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendI
         }
       }, 500)
     }
-  }, [sessionId])
+  }, [sessionId, readOnly])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -149,10 +163,11 @@ export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendI
         fontFamily: '"JetBrains Mono", "Fira Code", "Courier New", monospace',
         fontSize: 13,
         lineHeight: 1.5,
-        cursorBlink: true,
+        cursorBlink: !readOnly,
         cursorStyle: 'bar',
         scrollback: 5000,
         allowProposedApi: true,
+        disableStdin: readOnly,
       })
 
       const fitAddon = new FitAddon()
@@ -163,25 +178,27 @@ export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendI
       terminalRef.current = terminal
       fitAddonRef.current = fitAddon
 
-      // Handle keyboard input — send to WS only via the terminal's own WebSocket.
-      // Do NOT call onSendInput here: page.tsx wraps data in btoa() again, causing
-      // double base64 encoding. The wsRef path below is the single correct path.
-      terminal.onData((data) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(
-            JSON.stringify({
-              type: 'session_input',
-              sessionId,
-              data: btoa(data), // base64 encode PTY input — decoded once by agent writeInput
-            })
-          )
-        }
-      })
+      if (!readOnly) {
+        // Handle keyboard input — send to WS only via the terminal's own WebSocket.
+        // Do NOT call onSendInput here: page.tsx wraps data in btoa() again, causing
+        // double base64 encoding. The wsRef path below is the single correct path.
+        terminal.onData((data) => {
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+              JSON.stringify({
+                type: 'session_input',
+                sessionId,
+                data: btoa(data), // base64 encode PTY input — decoded once by agent writeInput
+              })
+            )
+          }
+        })
+      }
 
       // Handle resize with ResizeObserver + fit addon
       const observer = new ResizeObserver(() => {
         fitAddon.fit()
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
+        if (!readOnly && wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(
             JSON.stringify({ type: 'resize', sessionId, cols: terminal.cols, rows: terminal.rows })
           )
@@ -193,9 +210,20 @@ export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendI
       // Initial greeting
       terminal.write(`\x1b[90mSessionForge Terminal — Session ID: ${sessionId}\x1b[0m\r\n`)
       terminal.write(`\x1b[90m${'─'.repeat(60)}\x1b[0m\r\n`)
-      terminal.focus()
 
-      connectWebSocket()
+      // Write historical logs in readOnly mode
+      if (readOnly && initialLogs && initialLogs.length > 0) {
+        terminal.write('\x1b[90m── Replay Start ──────────────────────────────────────\x1b[0m\r\n')
+        for (const line of initialLogs) {
+          terminal.write(line)
+        }
+        terminal.write(
+          '\r\n\x1b[90m── Replay End ────────────────────────────────────────\x1b[0m\r\n'
+        )
+      } else if (!readOnly) {
+        terminal.focus()
+        connectWebSocket()
+      }
     })
 
     return () => {
@@ -204,7 +232,7 @@ export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendI
       terminalRef.current?.dispose()
       wsRef.current?.close()
     }
-  }, [sessionId, connectWebSocket])
+  }, [sessionId, connectWebSocket, readOnly, initialLogs])
 
   return (
     <div className="relative flex flex-col h-full w-full overflow-hidden rounded-lg bg-[#0a0a0f] border border-[#1e1e2e]">
@@ -219,14 +247,23 @@ export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendI
           <span className="text-xs text-gray-600 font-mono">bash — SessionForge</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div
-            className={`h-1.5 w-1.5 rounded-full ${
-              isConnected ? 'bg-green-400 animate-pulse' : 'bg-gray-600'
-            }`}
-          />
-          <span className="text-xs text-gray-600">
-            {isConnected ? 'Connected' : 'Disconnected'}
-          </span>
+          {readOnly ? (
+            <>
+              <div className="h-1.5 w-1.5 rounded-full bg-gray-600" />
+              <span className="text-xs text-gray-600">Read-only — Stopped</span>
+            </>
+          ) : (
+            <>
+              <div
+                className={`h-1.5 w-1.5 rounded-full ${
+                  isConnected ? 'bg-green-400 animate-pulse' : 'bg-gray-600'
+                }`}
+              />
+              <span className="text-xs text-gray-600">
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -240,4 +277,4 @@ export function Terminal({ sessionId, isConnected = false, onSendInput: _onSendI
       )}
     </div>
   )
-}
+})

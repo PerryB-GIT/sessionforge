@@ -7,16 +7,41 @@ import { db, users, organizations } from '@/db'
 import { PLAN_PRICES } from '@sessionforge/shared-types'
 import type { PlanTier } from '@sessionforge/shared-types'
 
-// STUB: STRIPE_SECRET_KEY must be set in environment
+// Guard: surface billing misconfiguration early rather than silently passing
+// stub values to Stripe (which would cause cryptic API errors at runtime).
+function requireBillingConfig(): {
+  stripe: Stripe
+  priceIds: Record<Exclude<PlanTier, 'free' | 'enterprise'>, string>
+} {
+  const secretKey = process.env.STRIPE_SECRET_KEY
+  // Accept both naming conventions: STRIPE_PRO_PRICE_ID (deploy YAML) and STRIPE_PRICE_PRO (legacy)
+  const proPriceId = process.env.STRIPE_PRO_PRICE_ID ?? process.env.STRIPE_PRICE_PRO
+  const teamPriceId = process.env.STRIPE_TEAM_PRICE_ID ?? process.env.STRIPE_PRICE_TEAM
+
+  if (
+    !secretKey ||
+    !proPriceId ||
+    proPriceId === 'price_pro_stub' ||
+    !teamPriceId ||
+    teamPriceId === 'price_team_stub'
+  ) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Billing is not configured',
+    })
+  }
+
+  return {
+    stripe: new Stripe(secretKey, { apiVersion: '2024-04-10' }),
+    priceIds: { pro: proPriceId, team: teamPriceId },
+  }
+}
+
+// Module-level Stripe client used only by getSubscription (read-only, no price IDs needed).
+// createCheckout and createPortalSession call requireBillingConfig() to validate all vars.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
   apiVersion: '2024-04-10',
 })
-
-// STUB: Set Stripe Price IDs per plan in environment variables
-const STRIPE_PRICE_IDS: Record<Exclude<PlanTier, 'free' | 'enterprise'>, string> = {
-  pro: process.env.STRIPE_PRICE_PRO ?? 'price_pro_stub',
-  team: process.env.STRIPE_PRICE_TEAM ?? 'price_team_stub',
-}
 
 export const billingRouter = router({
   /** Get the current subscription status for the authenticated user */
@@ -77,6 +102,8 @@ export const billingRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const { stripe: billingStripe, priceIds } = requireBillingConfig()
+
       const [user] = await db
         .select({ id: users.id, email: users.email, stripeCustomerId: users.stripeCustomerId })
         .from(users)
@@ -91,21 +118,27 @@ export const billingRouter = router({
       let customerId = user.stripeCustomerId
 
       if (!customerId) {
-        const customer = await stripe.customers.create({
+        const customer = await billingStripe.customers.create({
           email: user.email,
           metadata: { userId: user.id },
         })
         customerId = customer.id
 
-        await db.update(users).set({ stripeCustomerId: customerId, updatedAt: new Date() }).where(eq(users.id, user.id))
+        await db
+          .update(users)
+          .set({ stripeCustomerId: customerId, updatedAt: new Date() })
+          .where(eq(users.id, user.id))
       }
 
-      const priceId = STRIPE_PRICE_IDS[input.plan]
+      const priceId = priceIds[input.plan]
       if (!priceId) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: `No Stripe price configured for plan: ${input.plan}` })
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `No Stripe price configured for plan: ${input.plan}`,
+        })
       }
 
-      const checkoutSession = await stripe.checkout.sessions.create({
+      const checkoutSession = await billingStripe.checkout.sessions.create({
         customer: customerId,
         mode: 'subscription',
         line_items: [{ price: priceId, quantity: 1 }],

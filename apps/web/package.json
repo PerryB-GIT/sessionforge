@@ -17,6 +17,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@auth/drizzle-adapter": "^1.11.1",
     "@google-cloud/storage": "^7.19.0",
     "@hookform/resolvers": "^3.3.4",

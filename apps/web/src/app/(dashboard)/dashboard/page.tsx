@@ -8,7 +8,6 @@ import { Progress } from '@/components/ui/progress'
 import { SessionList } from '@/components/sessions/SessionList'
 import { useMachines } from '@/hooks/useMachines'
 import { useSessions } from '@/hooks/useSessions'
-import { useWebSocket } from '@/hooks/useWebSocket'
 import { formatRelativeTime } from '@/lib/utils'
 import { useSession } from 'next-auth/react'
 import { useState, useEffect } from 'react'
@@ -64,8 +63,6 @@ function StatCard({
 export default function DashboardPage() {
   const { machines, isLoading: machinesLoading } = useMachines()
   const { sessions, isLoading: sessionsLoading } = useSessions()
-  useWebSocket() // Initialize WS connection for real-time updates
-
   const { data: authSession } = useSession()
   const [dateLabel, setDateLabel] = useState('')
   useEffect(() => {

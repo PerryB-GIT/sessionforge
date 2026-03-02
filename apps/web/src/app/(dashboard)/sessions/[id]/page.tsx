@@ -15,7 +15,7 @@ import { AsciinemaPlayerLoader } from '@/components/sessions/AsciinemaPlayerLoad
 import { useSession } from '@/hooks/useSessions'
 import { useStore } from '@/store'
 import { useMachine } from '@/hooks/useMachines'
-import { useWebSocket } from '@/hooks/useWebSocket'
+import { useWs } from '@/components/providers/WebSocketProvider'
 import { formatDuration, formatRelativeTime, truncate } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -23,7 +23,7 @@ export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { session, isLoading } = useSession(id)
   const updateSession = useStore((s) => s.updateSession)
-  const { sendMessage, wsStatus } = useWebSocket()
+  const { sendMessage, wsStatus } = useWs()
 
   const [isStopping, setIsStopping] = useState(false)
   const [activeTab, setActiveTab] = useState('terminal')

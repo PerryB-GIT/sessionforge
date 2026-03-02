@@ -113,7 +113,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ reply: text, suggestedCommand: '' })
     }
   } catch (err) {
-    console.error('[ai-chat] Anthropic error:', err)
-    return NextResponse.json({ error: 'AI service error' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[ai-chat] Anthropic error:', msg)
+    return NextResponse.json({ error: 'AI service error', detail: msg }, { status: 500 })
   }
 }

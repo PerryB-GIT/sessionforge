@@ -32,18 +32,26 @@ var allowedCommands = map[string]bool{
 	"cmd":        true,
 }
 
-// resolveCommand returns the absolute path for a given command name.
-// Only commands in allowedCommands are permitted.
-func resolveCommand(command string) (string, error) {
-	// Extract the base binary name for the allow-list check.
-	base := command
-	if idx := strings.LastIndex(command, "/"); idx >= 0 {
-		base = command[idx+1:]
+// resolveCommand validates the binary name against the allow-list and returns
+// the absolute path plus any extra arguments split from the command string.
+// e.g. "bash -i" → ("/usr/bin/bash", ["-i"], nil)
+func resolveCommand(command string) (string, []string, error) {
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return "", nil, fmt.Errorf("empty command")
+	}
+	bin := parts[0]
+	args := parts[1:]
+
+	base := bin
+	if idx := strings.LastIndex(bin, "/"); idx >= 0 {
+		base = bin[idx+1:]
 	}
 	if !allowedCommands[base] {
-		return "", fmt.Errorf("command %q is not allowed; permitted: claude, bash, zsh, sh, powershell, cmd", base)
+		return "", nil, fmt.Errorf("command %q is not allowed; permitted: claude, bash, zsh, sh, powershell, cmd", base)
 	}
-	return exec.LookPath(command)
+	resolved, err := exec.LookPath(bin)
+	return resolved, args, err
 }
 
 // spawnPTY starts a new PTY process and wires up output streaming.
@@ -57,13 +65,13 @@ func spawnPTY(
 	outputFn func(sessionID, data string),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
-	binary, err := resolveCommand(command)
+	binary, args, err := resolveCommand(command)
 	if err != nil {
 		return nil, 0, fmt.Errorf("resolve command: %w", err)
 	}
 
 	cmdCtx, cancel := context.WithCancel(ctx)
-	cmd := exec.CommandContext(cmdCtx, binary)
+	cmd := exec.CommandContext(cmdCtx, binary, args...)
 	cmd.Dir = workdir
 
 	// Build environment: inherit + overlay.

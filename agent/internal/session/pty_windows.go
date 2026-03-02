@@ -48,20 +48,30 @@ var allowedCommands = map[string]bool{
 	"cmd":        true,
 }
 
-// resolveCommand validates against the allow-list and returns the absolute path.
-func resolveCommand(command string) (string, error) {
-	base := command
-	if idx := strings.LastIndex(command, "\\"); idx >= 0 {
-		base = command[idx+1:]
+// resolveCommand validates the binary name against the allow-list and returns
+// the absolute path plus any extra arguments split from the command string.
+// e.g. "bash -i" → ("/usr/bin/bash", ["-i"], nil)
+func resolveCommand(command string) (string, []string, error) {
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return "", nil, fmt.Errorf("empty command")
+	}
+	bin := parts[0]
+	args := parts[1:]
+
+	base := bin
+	if idx := strings.LastIndex(bin, "\\"); idx >= 0 {
+		base = bin[idx+1:]
 	}
 	if idx := strings.LastIndex(base, "/"); idx >= 0 {
 		base = base[idx+1:]
 	}
 	baseLower := strings.ToLower(strings.TrimSuffix(base, ".exe"))
 	if !allowedCommands[baseLower] {
-		return "", fmt.Errorf("command %q is not allowed; permitted: claude, bash, zsh, sh, powershell, cmd", command)
+		return "", nil, fmt.Errorf("command %q is not allowed; permitted: claude, bash, zsh, sh, powershell, cmd", bin)
 	}
-	return exec.LookPath(command)
+	resolved, err := exec.LookPath(bin)
+	return resolved, args, err
 }
 
 // Windows API constants.
@@ -84,15 +94,15 @@ func spawnPTY(
 	outputFn func(sessionID, data string),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
-	binary, err := resolveCommand(command)
+	binary, args, err := resolveCommand(command)
 	if err != nil {
 		return nil, 0, fmt.Errorf("resolve command: %w", err)
 	}
 
-	h, pid, err := spawnWithConPTY(ctx, sessionID, binary, workdir, env, outputFn, exitFn)
+	h, pid, err := spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, exitFn)
 	if err != nil {
 		// ConPTY unavailable (Windows < 1809) — fall back to pipe I/O.
-		return spawnWithPipes(ctx, sessionID, binary, workdir, env, outputFn, exitFn)
+		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, exitFn)
 	}
 	return h, pid, nil
 }
@@ -102,6 +112,7 @@ func spawnWithConPTY(
 	ctx context.Context,
 	sessionID string,
 	binary string,
+	args []string,
 	workdir string,
 	env map[string]string,
 	outputFn func(sessionID, data string),
@@ -167,9 +178,11 @@ func spawnWithConPTY(
 	siEx.StartupInfo.Cb = uint32(unsafe.Sizeof(siEx))
 	siEx.ProcThreadAttributeList = attrList.List()
 
-	// Build command-line string (quoted binary path, no extra args — the binary
-	// is the shell itself, e.g. claude, bash, powershell).
+	// Build command-line string: quoted binary followed by any extra arguments.
 	cmdLine := `"` + binary + `"`
+	for _, arg := range args {
+		cmdLine += " " + arg
+	}
 	cmdLinePtr, err := windows.UTF16PtrFromString(cmdLine)
 	if err != nil {
 		attrList.Delete()
@@ -312,13 +325,14 @@ func spawnWithPipes(
 	ctx context.Context,
 	sessionID string,
 	binary string,
+	args []string,
 	workdir string,
 	env map[string]string,
 	outputFn func(sessionID, data string),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
 	cmdCtx, cancel := context.WithCancel(ctx)
-	cmd := exec.CommandContext(cmdCtx, binary)
+	cmd := exec.CommandContext(cmdCtx, binary, args...)
 	cmd.Dir = workdir
 	cmd.Env = os.Environ()
 	for k, v := range env {

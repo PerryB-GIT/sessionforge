@@ -47,7 +47,7 @@ const redis = new Redis({
 
 const StreamKeys = {
   dashboard: (userId) => `stream:dashboard:${userId}`,
-  agent:     (machineId) => `stream:agent:${machineId}`,
+  agent: (machineId) => `stream:agent:${machineId}`,
   sessionLogs: (sessionId) => `session:logs:${sessionId}`,
   machineMetrics: (machineId) => `machine:metrics:${machineId}`,
 }
@@ -117,9 +117,12 @@ async function archiveSessionRecording(sessionId, orgId, startedAt, width = 220,
     const { Storage } = require('@google-cloud/storage')
     const storage = new Storage()
     const gcsPath = `session-recordings/${orgId}/${sessionId}.cast.gz`
-    await storage.bucket(RECORDING_BUCKET).file(gcsPath).save(compressed, {
-      metadata: { contentType: 'application/gzip', contentEncoding: 'gzip' },
-    })
+    await storage
+      .bucket(RECORDING_BUCKET)
+      .file(gcsPath)
+      .save(compressed, {
+        metadata: { contentType: 'application/gzip', contentEncoding: 'gzip' },
+      })
 
     await redis.del(key)
     console.log(`[recording] archived session ${sessionId} → gs://${RECORDING_BUCKET}/${gcsPath}`)
@@ -137,7 +140,13 @@ function buildSql(connectionString) {
     const credMatch = connectionString.match(/^postgresql?:\/\/([^:]+):([^@]+)@\/([^?]+)/)
     if (credMatch) {
       const [, user, password, database] = credMatch
-      return postgres({ host: socketPath, user: decodeURIComponent(user), password: decodeURIComponent(password), database, max: 5 })
+      return postgres({
+        host: socketPath,
+        user: decodeURIComponent(user),
+        password: decodeURIComponent(password),
+        database,
+        max: 5,
+      })
     }
   }
   return postgres(connectionString, { max: 5 })
@@ -253,6 +262,40 @@ function handleDashboardWs(ws, userId) {
   let pollTimer = null
   let pingTimer = null
 
+  // Push cached machine metrics immediately on connect so the client doesn't
+  // have to wait up to 30 s for the next heartbeat to see Live CPU / Memory.
+  async function pushInitialMetrics() {
+    try {
+      const machines = await query(
+        `SELECT id FROM machines WHERE user_id = $1 AND status = 'online'`,
+        [userId]
+      )
+      await Promise.all(
+        machines.map(async (m) => {
+          const cached = await redis.get(StreamKeys.machineMetrics(m.id))
+          if (!cached) return
+          const metrics = typeof cached === 'string' ? JSON.parse(cached) : cached
+          if (ws.readyState !== WebSocket.OPEN) return
+          ws.send(
+            JSON.stringify({
+              type: 'machine_updated',
+              machine: {
+                id: m.id,
+                status: 'online',
+                cpu: metrics.cpu,
+                memory: metrics.memory,
+                disk: metrics.disk,
+                sessionCount: metrics.sessionCount,
+              },
+            })
+          )
+        })
+      )
+    } catch {
+      /* non-critical, poll will catch up */
+    }
+  }
+
   async function poll() {
     if (ws.readyState !== WebSocket.OPEN) return
     try {
@@ -265,12 +308,17 @@ function handleDashboardWs(ws, userId) {
         if (ws.subscribedSessionId) {
           try {
             const parsed = JSON.parse(msg)
-            if (parsed.type === 'session_output' && parsed.sessionId !== ws.subscribedSessionId) continue
-          } catch { /* not valid JSON, forward as-is */ }
+            if (parsed.type === 'session_output' && parsed.sessionId !== ws.subscribedSessionId)
+              continue
+          } catch {
+            /* not valid JSON, forward as-is */
+          }
         }
         ws.send(msg)
       }
-    } catch { /* transient */ }
+    } catch {
+      /* transient */
+    }
     if (ws.readyState === WebSocket.OPEN) {
       pollTimer = setTimeout(poll, POLL_INTERVAL_MS)
     }
@@ -282,9 +330,14 @@ function handleDashboardWs(ws, userId) {
 
   ws.on('message', async (raw) => {
     let msg
-    try { msg = JSON.parse(raw.toString()) } catch { return }
+    try {
+      msg = JSON.parse(raw.toString())
+    } catch {
+      return
+    }
     switch (msg.type) {
-      case 'ping': break
+      case 'ping':
+        break
       case 'subscribe_session': {
         if (!msg.sessionId) break
         ws.subscribedSessionId = msg.sessionId
@@ -294,14 +347,23 @@ function handleDashboardWs(ws, userId) {
         if (!msg.sessionId || !msg.data) break
         const record = await getSessionRecord(msg.sessionId, userId)
         if (!record || record.status !== 'running') break
-        await publishToAgent(record.machine_id, { type: 'session_input', sessionId: msg.sessionId, data: msg.data })
+        await publishToAgent(record.machine_id, {
+          type: 'session_input',
+          sessionId: msg.sessionId,
+          data: msg.data,
+        })
         break
       }
       case 'resize': {
         if (!msg.sessionId || !msg.cols || !msg.rows) break
         const record = await getSessionRecord(msg.sessionId, userId)
         if (!record || record.status !== 'running') break
-        await publishToAgent(record.machine_id, { type: 'resize', sessionId: msg.sessionId, cols: msg.cols, rows: msg.rows })
+        await publishToAgent(record.machine_id, {
+          type: 'resize',
+          sessionId: msg.sessionId,
+          cols: msg.cols,
+          rows: msg.rows,
+        })
         break
       }
     }
@@ -312,6 +374,7 @@ function handleDashboardWs(ws, userId) {
     if (pingTimer) clearInterval(pingTimer)
   })
 
+  pushInitialMetrics()
   poll()
 }
 
@@ -360,10 +423,15 @@ function handleAgentWs(ws, userId, remoteAddress) {
 
   watchdogTimer = setInterval(async () => {
     if (Date.now() - lastHeartbeatAt > AGENT_TIMEOUT_MS && machineId) {
-      await query(`UPDATE machines SET status = 'offline', updated_at = NOW() WHERE id = $1`, [machineId]).catch(console.error)
+      await query(`UPDATE machines SET status = 'offline', updated_at = NOW() WHERE id = $1`, [
+        machineId,
+      ]).catch(console.error)
       watchdogFired = true
       try {
-        const machineRows = await query(`SELECT name, hostname FROM machines WHERE id = $1 LIMIT 1`, [machineId])
+        const machineRows = await query(
+          `SELECT name, hostname FROM machines WHERE id = $1 LIMIT 1`,
+          [machineId]
+        )
         const machineName = machineRows[0]?.name ?? machineId
         const machineHostname = machineRows[0]?.hostname ?? machineName
         const { createNotification } = await import('./src/lib/notifications.js')
@@ -382,7 +450,11 @@ function handleAgentWs(ws, userId, remoteAddress) {
 
   ws.on('message', async (raw) => {
     let msg
-    try { msg = JSON.parse(raw.toString()) } catch { return }
+    try {
+      msg = JSON.parse(raw.toString())
+    } catch {
+      return
+    }
     try {
       await handleAgentMessage(msg, userId, remoteAddress, sessionStats, (id, hn) => {
         machineId = id
@@ -404,10 +476,15 @@ function handleAgentWs(ws, userId, remoteAddress) {
     if (watchdogTimer) clearInterval(watchdogTimer)
     if (pollTimer) clearTimeout(pollTimer)
     if (machineId) {
-      await query(`UPDATE machines SET status = 'offline', updated_at = NOW() WHERE id = $1`, [machineId]).catch(console.error)
+      await query(`UPDATE machines SET status = 'offline', updated_at = NOW() WHERE id = $1`, [
+        machineId,
+      ]).catch(console.error)
       if (!watchdogFired) {
         try {
-          const machineRows = await query(`SELECT name, hostname FROM machines WHERE id = $1 LIMIT 1`, [machineId])
+          const machineRows = await query(
+            `SELECT name, hostname FROM machines WHERE id = $1 LIMIT 1`,
+            [machineId]
+          )
           const machineName = machineRows[0]?.name ?? machineId
           const machineHostname = machineRows[0]?.hostname ?? machineName
           const { createNotification } = await import('./src/lib/notifications.js')
@@ -423,8 +500,14 @@ function handleAgentWs(ws, userId, remoteAddress) {
         }
         try {
           const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
-          const machineRows = await query(`SELECT hostname FROM machines WHERE id = $1 LIMIT 1`, [machineId]).catch(() => [])
-          await deliverWebhook('machine.offline', { machineId, hostname: machineRows[0]?.hostname ?? null }, userId)
+          const machineRows = await query(`SELECT hostname FROM machines WHERE id = $1 LIMIT 1`, [
+            machineId,
+          ]).catch(() => [])
+          await deliverWebhook(
+            'machine.offline',
+            { machineId, hostname: machineRows[0]?.hostname ?? null },
+            userId
+          )
         } catch (err) {
           console.error('[webhooks] delivery error on machine.offline:', err)
         }
@@ -442,10 +525,11 @@ async function flushSessionStats(sessionId, sessionStats) {
   const peakMemory = stats.peakMemory ?? null
   const avgCpu = stats.cpuSamples > 0 ? stats.cpuTotal / stats.cpuSamples : null
   if (peakMemory !== null || avgCpu !== null) {
-    await query(
-      `UPDATE sessions SET peak_memory_mb = $1, avg_cpu_percent = $2 WHERE id = $3`,
-      [peakMemory, avgCpu, sessionId]
-    ).catch(console.error)
+    await query(`UPDATE sessions SET peak_memory_mb = $1, avg_cpu_percent = $2 WHERE id = $3`, [
+      peakMemory,
+      avgCpu,
+      sessionId,
+    ]).catch(console.error)
   }
 }
 
@@ -467,30 +551,40 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         [machineId, userId, name, os, h, version, ipAddress, cpuModel ?? null, ramGb ?? null]
       )
       onMachineId(machineId, h)
-      await publishToDashboard(userId, { type: 'machine_updated', machine: { id: machineId, status: 'online', cpu: 0, memory: 0 } })
+      await publishToDashboard(userId, {
+        type: 'machine_updated',
+        machine: { id: machineId, status: 'online', cpu: 0, memory: 0 },
+      })
       try {
         const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
-        await deliverWebhook(
-          'machine.online',
-          { machineId, hostname: h },
-          userId
-        )
+        await deliverWebhook('machine.online', { machineId, hostname: h }, userId)
       } catch (err) {
         console.error('[webhooks] delivery error on machine.online:', err)
       }
       break
     }
 
-    case 'pong': break
+    case 'pong':
+      break
 
     case 'heartbeat': {
       const { machineId, cpu, memory, disk, sessionCount } = msg
       if (!machineId) break // guard against bare heartbeat responses
       await Promise.all([
-        query(`UPDATE machines SET last_seen = NOW(), status = 'online', updated_at = NOW() WHERE id = $1`, [machineId]),
-        redis.setex(StreamKeys.machineMetrics(machineId), 120, JSON.stringify({ cpu, memory, disk, sessionCount, ts: Date.now() })),
+        query(
+          `UPDATE machines SET last_seen = NOW(), status = 'online', updated_at = NOW() WHERE id = $1`,
+          [machineId]
+        ),
+        redis.setex(
+          StreamKeys.machineMetrics(machineId),
+          120,
+          JSON.stringify({ cpu, memory, disk, sessionCount, ts: Date.now() })
+        ),
       ])
-      await publishToDashboard(userId, { type: 'machine_updated', machine: { id: machineId, status: 'online', cpu, memory, disk, sessionCount } })
+      await publishToDashboard(userId, {
+        type: 'machine_updated',
+        machine: { id: machineId, status: 'online', cpu, memory, disk, sessionCount },
+      })
 
       // Update per-session stats accumulators for any running sessions on this machine.
       if (machineId && (cpu != null || memory != null)) {
@@ -505,7 +599,10 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
           // memory from heartbeat is a percentage (0-100); store as-is in peak_memory_mb field
           // (column is named peak_memory_mb but we store percentage since we don't have absolute MB here)
           if (memory != null && memory > s.peakMemory) s.peakMemory = memory
-          if (cpu != null) { s.cpuTotal += cpu; s.cpuSamples++ }
+          if (cpu != null) {
+            s.cpuTotal += cpu
+            s.cpuSamples++
+          }
         }
       }
       break
@@ -520,7 +617,11 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       // Track session start time for recording frame timestamps
       sessionStartTimes[s.id] = new Date(s.startedAt)
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [s.id])
-      if (rows[0]) await publishToDashboard(userId, { type: 'session_updated', session: { id: s.id, status: 'running', machineId: rows[0].machine_id } })
+      if (rows[0])
+        await publishToDashboard(userId, {
+          type: 'session_updated',
+          session: { id: s.id, status: 'running', machineId: rows[0].machine_id },
+        })
       try {
         const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
         await deliverWebhook(
@@ -537,12 +638,22 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
     case 'session_stopped': {
       const { sessionId, exitCode } = msg
       await flushSessionStats(sessionId, sessionStats)
-      await query(`UPDATE sessions SET status = 'stopped', exit_code = $1, stopped_at = NOW() WHERE id = $2`, [exitCode, sessionId])
-      const rows = await query(`SELECT machine_id, user_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
+      await query(
+        `UPDATE sessions SET status = 'stopped', exit_code = $1, stopped_at = NOW() WHERE id = $2`,
+        [exitCode, sessionId]
+      )
+      const rows = await query(`SELECT machine_id, user_id FROM sessions WHERE id = $1 LIMIT 1`, [
+        sessionId,
+      ])
       if (rows[0]) {
-        await publishToDashboard(userId, { type: 'session_updated', session: { id: sessionId, status: 'stopped', machineId: rows[0].machine_id } })
+        await publishToDashboard(userId, {
+          type: 'session_updated',
+          session: { id: sessionId, status: 'stopped', machineId: rows[0].machine_id },
+        })
         // Archive recording to GCS if the machine has an org (enterprise plan check happens at playback)
-        const orgRows = await query(`SELECT org_id FROM machines WHERE id = $1 LIMIT 1`, [rows[0].machine_id]).catch(() => [])
+        const orgRows = await query(`SELECT org_id FROM machines WHERE id = $1 LIMIT 1`, [
+          rows[0].machine_id,
+        ]).catch(() => [])
         if (orgRows[0]?.org_id) {
           const startedAt = sessionStartTimes[sessionId] ?? new Date()
           delete sessionStartTimes[sessionId]
@@ -551,7 +662,11 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       }
       try {
         const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
-        await deliverWebhook('session.stopped', { sessionId, machineId: rows[0]?.machine_id ?? null }, userId)
+        await deliverWebhook(
+          'session.stopped',
+          { sessionId, machineId: rows[0]?.machine_id ?? null },
+          userId
+        )
       } catch (err) {
         console.error('[webhooks] delivery error on session.stopped:', err)
       }
@@ -576,13 +691,25 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
     case 'session_crashed': {
       const { sessionId, error } = msg
       await flushSessionStats(sessionId, sessionStats)
-      await query(`UPDATE sessions SET status = 'crashed', stopped_at = NOW() WHERE id = $1`, [sessionId])
+      await query(`UPDATE sessions SET status = 'crashed', stopped_at = NOW() WHERE id = $1`, [
+        sessionId,
+      ])
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
       if (rows[0]) {
-        await publishToDashboard(userId, { type: 'session_updated', session: { id: sessionId, status: 'crashed', machineId: rows[0].machine_id } })
-        await publishToDashboard(userId, { type: 'alert_fired', alertId: crypto.randomUUID(), message: `Session crashed: ${error}`, severity: 'warning' })
+        await publishToDashboard(userId, {
+          type: 'session_updated',
+          session: { id: sessionId, status: 'crashed', machineId: rows[0].machine_id },
+        })
+        await publishToDashboard(userId, {
+          type: 'alert_fired',
+          alertId: crypto.randomUUID(),
+          message: `Session crashed: ${error}`,
+          severity: 'warning',
+        })
         // Archive recording to GCS even on crash
-        const orgRows = await query(`SELECT org_id FROM machines WHERE id = $1 LIMIT 1`, [rows[0].machine_id]).catch(() => [])
+        const orgRows = await query(`SELECT org_id FROM machines WHERE id = $1 LIMIT 1`, [
+          rows[0].machine_id,
+        ]).catch(() => [])
         if (orgRows[0]?.org_id) {
           const startedAt = sessionStartTimes[sessionId] ?? new Date()
           delete sessionStartTimes[sessionId]
@@ -626,7 +753,8 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       if (startedAt) appendRecordingFrame(sessionId, data, startedAt).catch(console.error)
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
       const ownerUserId = await getMachineUserId(rows[0]?.machine_id)
-      if (ownerUserId) await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })
+      if (ownerUserId)
+        await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })
       break
     }
   }
@@ -660,8 +788,10 @@ function proxyUpgrade(req, socket, head) {
   const proxySocket = net.connect(INTERNAL_PORT, '127.0.0.1', () => {
     proxySocket.write(
       `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
-      Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n') +
-      '\r\n\r\n'
+        Object.entries(req.headers)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('\r\n') +
+        '\r\n\r\n'
     )
     proxySocket.write(head)
     socket.pipe(proxySocket)
@@ -688,7 +818,10 @@ async function main() {
       const configJson = fs.readFileSync(path.join(__dirname, 'next-config.json'), 'utf8')
       process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = configJson
     } catch (e) {
-      console.warn('[server] next-config.json not found, startServer will try to read next.config.js:', e.message)
+      console.warn(
+        '[server] next-config.json not found, startServer will try to read next.config.js:',
+        e.message
+      )
     }
   }
 
@@ -711,10 +844,16 @@ async function main() {
     let attempts = 0
     const check = () => {
       const probe = net.connect(INTERNAL_PORT, '127.0.0.1')
-      probe.on('connect', () => { probe.destroy(); resolve() })
+      probe.on('connect', () => {
+        probe.destroy()
+        resolve()
+      })
       probe.on('error', () => {
         if (++attempts < 60) setTimeout(check, 500)
-        else { console.error('[next] timed out waiting for Next.js to start'); process.exit(1) }
+        else {
+          console.error('[next] timed out waiting for Next.js to start')
+          process.exit(1)
+        }
       })
     }
     setTimeout(check, 1000)
@@ -759,12 +898,23 @@ async function main() {
     if (pathname === '/api/ws/agent') {
       const url = new URL(req.url ?? '/', 'http://localhost')
       const apiKey = url.searchParams.get('key')
-      if (!apiKey) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return }
+      if (!apiKey) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+        socket.destroy()
+        return
+      }
       const validKey = await validateApiKey(apiKey)
-      if (!validKey) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return }
+      if (!validKey) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+        socket.destroy()
+        return
+      }
       req._userId = validKey.userId
       // Capture remote IP: prefer X-Forwarded-For (set by load balancers/proxies) then socket address.
-      req._remoteAddress = (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || null
+      req._remoteAddress =
+        (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() ||
+        req.socket.remoteAddress ||
+        null
       wsAgent.handleUpgrade(req, socket, head, (ws) => wsAgent.emit('connection', ws, req))
       return
     }

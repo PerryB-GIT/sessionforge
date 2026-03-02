@@ -525,16 +525,31 @@ export default function OrgSettingsPage() {
           </div>
 
           <div className="mt-4 pt-4 border-t border-[#1e1e2e]">
-            <p className="text-xs text-gray-500">
-              Need to manage invoices or update payment info?{' '}
-              <button
-                onClick={handleBillingPortal}
-                disabled={portalLoading}
-                className="text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50"
-              >
-                {portalLoading ? 'Loading...' : 'Open billing portal →'}
-              </button>
-            </p>
+            {currentPlan === 'free' ? (
+              <p className="text-xs text-gray-500">
+                Billing portal is available on paid plans.{' '}
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('plan-billing-section')
+                    el?.scrollIntoView({ behavior: 'smooth' })
+                  }}
+                  className="text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  Upgrade to Pro →
+                </button>
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500">
+                Need to manage invoices or update payment info?{' '}
+                <button
+                  onClick={handleBillingPortal}
+                  disabled={portalLoading}
+                  className="text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50"
+                >
+                  {portalLoading ? 'Loading...' : 'Open billing portal →'}
+                </button>
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

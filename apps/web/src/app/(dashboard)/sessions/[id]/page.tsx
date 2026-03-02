@@ -5,16 +5,16 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Square, Monitor, Clock, Cpu, MemoryStick, Bot, Film } from 'lucide-react'
+import { ArrowLeft, Square, Monitor, Clock, Cpu, MemoryStick, Film } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { SessionStatusBadge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Terminal, type TerminalHandle } from '@/components/sessions/Terminal'
-import { AiCopilotPanel } from '@/components/sessions/AiCopilotPanel'
 import { AsciinemaPlayerLoader } from '@/components/sessions/AsciinemaPlayerLoader'
 import { useSession } from '@/hooks/useSessions'
 import { useStore } from '@/store'
+import { useMachine } from '@/hooks/useMachines'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { formatDuration, formatRelativeTime, truncate } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -22,12 +22,10 @@ import { toast } from 'sonner'
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { session, isLoading } = useSession(id)
-  const machines = useStore((s) => s.machines)
   const updateSession = useStore((s) => s.updateSession)
   const { sendMessage, wsStatus } = useWebSocket()
 
   const [isStopping, setIsStopping] = useState(false)
-  const [aiPanelOpen, setAiPanelOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('terminal')
 
   // Historical log state (stopped sessions)
@@ -42,7 +40,7 @@ export default function SessionDetailPage() {
 
   const terminalRef = useRef<TerminalHandle>(null)
 
-  const machine = session ? machines.find((m) => m.id === session.machineId) : null
+  const { machine } = useMachine(session?.machineId ?? '')
   const isConnected = wsStatus === 'connected'
   const isRunning = session?.status === 'running'
 
@@ -159,10 +157,6 @@ export default function SessionDetailPage() {
           <SessionStatusBadge status={session.status} />
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="secondary" size="sm" onClick={() => setAiPanelOpen((o) => !o)}>
-            <Bot className="h-3.5 w-3.5" />
-            AI
-          </Button>
           {isRunning && (
             <Button variant="destructive" size="sm" onClick={stopSession} isLoading={isStopping}>
               <Square className="h-3.5 w-3.5" />
@@ -230,12 +224,9 @@ export default function SessionDetailPage() {
         </Card>
       </div>
 
-      {/* Terminal + AI panel */}
+      {/* Terminal */}
       <div className="flex flex-1 min-h-0 gap-0" style={{ minHeight: '400px' }}>
-        {/* Terminal area with tabs */}
-        <div
-          className={aiPanelOpen ? 'w-[60%] flex flex-col min-h-0' : 'w-full flex flex-col min-h-0'}
-        >
+        <div className="w-full flex flex-col min-h-0">
           <Tabs
             value={activeTab}
             onValueChange={setActiveTab}
@@ -310,18 +301,6 @@ export default function SessionDetailPage() {
             </TabsContent>
           </Tabs>
         </div>
-
-        {/* AI Co-pilot panel */}
-        {aiPanelOpen && (
-          <div className="w-[40%] min-h-0">
-            <AiCopilotPanel
-              sessionId={id}
-              onSendToTerminal={isRunning ? handleSendInput : undefined}
-              isOpen={aiPanelOpen}
-              onClose={() => setAiPanelOpen(false)}
-            />
-          </div>
-        )}
       </div>
     </div>
   )

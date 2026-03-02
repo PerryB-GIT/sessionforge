@@ -25,7 +25,8 @@ export const sessionRouter = router({
       const whereConditions = [eq(sessions.userId, ctx.userId)]
       if (machineId) whereConditions.push(eq(sessions.machineId, machineId))
       if (status) whereConditions.push(eq(sessions.status, status))
-      const whereClause = whereConditions.length === 1 ? whereConditions[0] : and(...whereConditions)
+      const whereClause =
+        whereConditions.length === 1 ? whereConditions[0] : and(...whereConditions)
 
       const [totalResult, rows] = await Promise.all([
         db.select({ count: count() }).from(sessions).where(whereClause),
@@ -50,21 +51,19 @@ export const sessionRouter = router({
     }),
 
   /** Get a single session by ID */
-  get: apiKeyProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .query(async ({ ctx, input }) => {
-      const [record] = await db
-        .select()
-        .from(sessions)
-        .where(and(eq(sessions.id, input.id), eq(sessions.userId, ctx.userId)))
-        .limit(1)
+  get: apiKeyProcedure.input(z.object({ id: z.string().uuid() })).query(async ({ ctx, input }) => {
+    const [record] = await db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.id, input.id), eq(sessions.userId, ctx.userId)))
+      .limit(1)
 
-      if (!record) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' })
-      }
+    if (!record) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' })
+    }
 
-      return record
-    }),
+    return record
+  }),
 
   /** Start a new session on a machine */
   start: apiKeyProcedure
@@ -134,11 +133,13 @@ export const sessionRouter = router({
         requestId,
         sessionId: newSession.id,
         command,
-        workdir: workdir ?? '/home',
+        workdir: workdir ?? '',
         env,
       }
 
-      await redis.xadd(RedisKeys.agentChannel(machineId), '*', { data: JSON.stringify(startCommand) })
+      await redis.xadd(RedisKeys.agentChannel(machineId), '*', {
+        data: JSON.stringify(startCommand),
+      })
 
       return newSession
     }),
@@ -175,7 +176,9 @@ export const sessionRouter = router({
         force: input.force,
       }
 
-      await redis.xadd(RedisKeys.agentChannel(record.machineId), '*', { data: JSON.stringify(stopCommand) })
+      await redis.xadd(RedisKeys.agentChannel(record.machineId), '*', {
+        data: JSON.stringify(stopCommand),
+      })
 
       await db
         .update(sessions)

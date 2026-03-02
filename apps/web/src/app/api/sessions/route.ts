@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
     requestId,
     sessionId: newSession.id,
     command,
-    workdir: workdir ?? process.env.DEFAULT_WORKDIR ?? '/home',
+    workdir: workdir ?? process.env.DEFAULT_WORKDIR ?? '',
     env,
   }
 

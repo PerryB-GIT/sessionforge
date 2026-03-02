@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic'
 
 // ─── GET /api/org/members ───────────────────────────────────────────────────
 // Returns all members of the authenticated user's organization.
+// Any org member (viewer+) may list members; requires requireOrgRole('member').
 
 export async function GET() {
   const session = await auth()
@@ -27,20 +28,33 @@ export async function GET() {
     )
   }
 
-  // Find the user's org
-  const [org] = await db
-    .select({ id: organizations.id })
-    .from(organizations)
-    .where(eq(organizations.ownerId, session.user.id))
+  // Find the user's org (via ownership or membership)
+  const [membership] = await db
+    .select({ orgId: orgMembers.orgId })
+    .from(orgMembers)
+    .where(eq(orgMembers.userId, session.user.id))
     .limit(1)
 
-  if (!org) {
+  const orgId = membership?.orgId
+
+  if (!orgId) {
     return NextResponse.json(
       {
         data: null,
         error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 },
       } satisfies ApiError,
       { status: 404 }
+    )
+  }
+
+  // Enforce minimum member role — viewers and above may list members
+  try {
+    await requireOrgRole(session, orgId, 'member')
+  } catch (err) {
+    const { status, code, message } = orgAuthErrorResponse(err)
+    return NextResponse.json(
+      { data: null, error: { code, message, statusCode: status } },
+      { status }
     )
   }
 
@@ -53,7 +67,7 @@ export async function GET() {
     })
     .from(orgMembers)
     .innerJoin(users, eq(orgMembers.userId, users.id))
-    .where(eq(orgMembers.orgId, org.id))
+    .where(eq(orgMembers.orgId, orgId))
 
   return NextResponse.json({ data: rows, error: null } satisfies ApiResponse<typeof rows>)
 }

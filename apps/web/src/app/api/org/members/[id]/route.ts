@@ -5,11 +5,12 @@ import { eq, and } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { db, organizations, orgMembers } from '@/db'
 import { logAuditEvent } from '@/lib/audit'
+import { requireOrgRole, orgAuthErrorResponse } from '@/lib/org-auth'
 import type { ApiResponse, ApiError } from '@sessionforge/shared-types'
 
 // ─── DELETE /api/org/members/:id ──────────────────────────────────────────────
 // Removes a member from the authenticated user's organization.
-// :id is the org_members row id.
+// :id is the org_members row id. Requires admin role.
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
@@ -37,6 +38,17 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
         error: { code: 'NOT_FOUND', message: 'No organization found', statusCode: 404 },
       } satisfies ApiError,
       { status: 404 }
+    )
+  }
+
+  // Enforce admin role — only admins and owners may remove members
+  try {
+    await requireOrgRole(session, org.id, 'admin')
+  } catch (err) {
+    const { status, code, message } = orgAuthErrorResponse(err)
+    return NextResponse.json(
+      { data: null, error: { code, message, statusCode: status } },
+      { status }
     )
   }
 

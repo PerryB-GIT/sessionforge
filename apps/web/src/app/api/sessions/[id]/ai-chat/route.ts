@@ -8,7 +8,9 @@ import { redis, RedisKeys } from '@/lib/redis'
 import { decodeLogsForLlm } from '@/lib/ansi-strip'
 
 // ─── POST /api/sessions/:id/ai-chat ──────────────────────────────────────────
-// Streams an SSE response from Claude (Haiku) with terminal context baked in.
+// Returns a JSON response from Claude Haiku with terminal context baked in.
+// Note: SSE streaming is not used here because Cloud Run buffers responses;
+// a single JSON response is more reliable in this environment.
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   // Guard: ANTHROPIC_API_KEY must be configured
@@ -87,47 +89,31 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     `- Never suggest destructive commands (rm -rf, format, etc.) without a warning in reply`,
   ].join('\n')
 
-  // Stream SSE using Web Streams API (native Next.js 14 edge-compatible)
-  const encoder = new TextEncoder()
+  try {
+    const Anthropic = (await import('@anthropic-ai/sdk')).default
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        const Anthropic = (await import('@anthropic-ai/sdk')).default
-        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: message }],
+    })
 
-        const anthropicStream = client.messages.stream({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 512,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: message }],
-        })
+    const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
 
-        for await (const chunk of anthropicStream) {
-          if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-            const sseChunk = `data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`
-            controller.enqueue(encoder.encode(sseChunk))
-          }
-        }
-
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-      } catch (err) {
-        console.error('[ai-chat] Anthropic stream error:', err)
-        const errChunk = `data: ${JSON.stringify({ error: 'AI service error' })}\n\n`
-        controller.enqueue(encoder.encode(errChunk))
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-      } finally {
-        controller.close()
-      }
-    },
-  })
-
-  return new NextResponse(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no', // Disable Cloud Run / nginx response buffering for SSE
-    },
-  })
+    // Try to parse as JSON; fall back to wrapping raw text
+    try {
+      const parsed = JSON.parse(text) as { reply?: string; suggestedCommand?: string }
+      return NextResponse.json({
+        reply: parsed.reply ?? text,
+        suggestedCommand: parsed.suggestedCommand ?? '',
+      })
+    } catch {
+      return NextResponse.json({ reply: text, suggestedCommand: '' })
+    }
+  } catch (err) {
+    console.error('[ai-chat] Anthropic error:', err)
+    return NextResponse.json({ error: 'AI service error' }, { status: 500 })
+  }
 }

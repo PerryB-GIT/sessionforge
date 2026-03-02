@@ -58,7 +58,7 @@ export function AiCopilotPanel({
         signal: abortRef.current.signal,
       })
 
-      if (!res.ok || !res.body) {
+      if (!res.ok) {
         setMessages((prev) => {
           const updated = [...prev]
           updated[updated.length - 1] = {
@@ -70,56 +70,21 @@ export function AiCopilotPanel({
         return
       }
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let rawText = ''
+      const data = (await res.json()) as {
+        reply?: string
+        suggestedCommand?: string
+        error?: string
+      }
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6).trim()
-          if (data === '[DONE]') break
-          try {
-            const parsed = JSON.parse(data) as { text?: string; error?: string }
-            if (parsed.text) {
-              rawText += parsed.text
-              // Update the last assistant message with accumulated text (raw, not yet parsed)
-              setMessages((prev) => {
-                const updated = [...prev]
-                updated[updated.length - 1] = {
-                  role: 'assistant',
-                  content: rawText,
-                }
-                return updated
-              })
-            }
-          } catch {
-            // Partial JSON chunk — skip
-          }
+      setMessages((prev) => {
+        const updated = [...prev]
+        updated[updated.length - 1] = {
+          role: 'assistant',
+          content: data.reply ?? data.error ?? 'No response received.',
+          suggestedCommand: data.suggestedCommand || undefined,
         }
-      }
-
-      // Once streaming is done, try to parse JSON to extract reply + suggestedCommand
-      try {
-        const parsed = JSON.parse(rawText) as { reply?: string; suggestedCommand?: string }
-        setMessages((prev) => {
-          const updated = [...prev]
-          updated[updated.length - 1] = {
-            role: 'assistant',
-            content: parsed.reply ?? rawText,
-            suggestedCommand: parsed.suggestedCommand || undefined,
-          }
-          return updated
-        })
-      } catch {
-        // Not JSON — show raw text as-is
-      }
+        return updated
+      })
     } catch (err) {
       if ((err as Error).name === 'AbortError') return
       setMessages((prev) => {

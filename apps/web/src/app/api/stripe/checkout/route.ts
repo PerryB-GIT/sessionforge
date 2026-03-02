@@ -11,9 +11,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
 })
 
 const PRICE_IDS: Record<string, string | undefined> = {
-  pro: process.env.STRIPE_PRICE_PRO,
-  team: process.env.STRIPE_PRICE_TEAM,
-  enterprise: process.env.STRIPE_PRICE_ENTERPRISE,
+  pro: process.env.STRIPE_PRO_PRICE_ID,
+  team: process.env.STRIPE_TEAM_PRICE_ID,
+  enterprise: process.env.STRIPE_ENTERPRISE_PRICE_ID,
 }
 
 export async function POST(req: NextRequest) {
@@ -46,7 +46,10 @@ export async function POST(req: NextRequest) {
       metadata: { userId: session.user.id },
     })
     customerId = customer.id
-    await db.update(users).set({ stripeCustomerId: customerId, updatedAt: new Date() }).where(eq(users.id, session.user.id))
+    await db
+      .update(users)
+      .set({ stripeCustomerId: customerId, updatedAt: new Date() })
+      .where(eq(users.id, session.user.id))
   }
 
   const checkoutSession = await stripe.checkout.sessions.create({

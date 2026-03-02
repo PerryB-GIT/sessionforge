@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Search, User, LogOut, Settings, ChevronDown } from 'lucide-react'
+import { Search, User, LogOut, Settings, ChevronDown, Menu } from 'lucide-react'
 import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { NotificationsPanel } from './NotificationsPanel'
@@ -26,7 +26,13 @@ function getBreadcrumb(pathname: string): { title: string; segments: string[] } 
   return { title, segments }
 }
 
-export function Header({ onCommandPalette }: { onCommandPalette?: () => void }) {
+export function Header({
+  onCommandPalette,
+  onMobileMenuOpen,
+}: {
+  onCommandPalette?: () => void
+  onMobileMenuOpen?: () => void
+}) {
   const pathname = usePathname()
   const { title } = getBreadcrumb(pathname)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -36,8 +42,17 @@ export function Header({ onCommandPalette }: { onCommandPalette?: () => void }) 
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-[#1e1e2e] bg-[#0a0a0f] px-4 lg:px-6">
-      {/* Page title */}
-      <h1 className="text-sm font-semibold text-white">{title}</h1>
+      {/* Mobile hamburger + Page title */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onMobileMenuOpen}
+          className="md:hidden rounded-lg p-1.5 text-gray-500 hover:bg-[#1e1e2e] hover:text-white transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <h1 className="text-sm font-semibold text-white">{title}</h1>
+      </div>
 
       {/* Right actions */}
       <div className="flex items-center gap-2">

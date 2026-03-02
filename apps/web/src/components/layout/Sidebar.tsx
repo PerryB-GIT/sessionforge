@@ -14,6 +14,7 @@ import {
   Activity,
   CreditCard,
   Webhook,
+  X,
 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
@@ -30,7 +31,12 @@ const baseNavItems = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean
+  onMobileClose?: () => void
+}
+
+export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
   const wsStatus = useStore((s) => s.wsStatus)
@@ -44,16 +50,20 @@ export function Sidebar() {
       : []),
   ]
 
-  return (
+  const sidebarContent = (
     <aside
       className={cn(
-        'flex flex-col border-r border-[#1e1e2e] bg-[#0a0a0f] transition-all duration-300',
+        'flex flex-col border-r border-[#1e1e2e] bg-[#0a0a0f] transition-all duration-300 h-full',
         collapsed ? 'w-16' : 'w-60'
       )}
     >
       {/* Logo */}
-      <div className="flex h-14 items-center border-b border-[#1e1e2e] px-4">
-        <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
+      <div className="flex h-14 items-center justify-between border-b border-[#1e1e2e] px-4">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2.5 overflow-hidden"
+          onClick={onMobileClose}
+        >
           <div className="shrink-0 shadow-lg shadow-purple-500/30">
             <Logo size={32} />
           </div>
@@ -61,6 +71,15 @@ export function Sidebar() {
             <span className="text-sm font-semibold text-white whitespace-nowrap">SessionForge</span>
           )}
         </Link>
+        {onMobileClose && (
+          <button
+            onClick={onMobileClose}
+            className="ml-2 rounded-lg p-1.5 text-gray-500 hover:bg-[#1e1e2e] hover:text-white transition-colors"
+            aria-label="Close menu"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
@@ -72,6 +91,7 @@ export function Sidebar() {
               <li key={href}>
                 <Link
                   href={href}
+                  onClick={onMobileClose}
                   className={cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors group',
                     active
@@ -147,5 +167,26 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+  )
+
+  // Desktop: always visible, participates in flex layout
+  // Mobile: hidden by default, shown as overlay drawer when mobileOpen=true
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex">{sidebarContent}</div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-30 bg-black/60 md:hidden"
+            onClick={onMobileClose}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-y-0 left-0 z-40 md:hidden flex">{sidebarContent}</div>
+        </>
+      )}
+    </>
   )
 }

@@ -11,6 +11,7 @@ import { useSessions } from '@/hooks/useSessions'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { formatRelativeTime } from '@/lib/utils'
 import { useSession } from 'next-auth/react'
+import { useState, useEffect } from 'react'
 
 const PLAN_LIMITS = {
   free: { machines: 1, sessions: 3 },
@@ -66,6 +67,16 @@ export default function DashboardPage() {
   useWebSocket() // Initialize WS connection for real-time updates
 
   const { data: authSession } = useSession()
+  const [dateLabel, setDateLabel] = useState('')
+  useEffect(() => {
+    setDateLabel(
+      new Date().toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      })
+    )
+  }, [])
   const plan = ((authSession?.user as { plan?: string })?.plan ??
     'free') as keyof typeof PLAN_LIMITS
   const limits = PLAN_LIMITS[plan]
@@ -85,13 +96,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-white">Overview</h2>
-          <p className="text-sm text-gray-400">
-            {new Date().toLocaleDateString('en-US', {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </p>
+          <p className="text-sm text-gray-400">{dateLabel}</p>
         </div>
         <Link
           href="/sessions"

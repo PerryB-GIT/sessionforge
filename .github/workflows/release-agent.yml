@@ -74,6 +74,8 @@ jobs:
           GOOS: windows
           GOARCH: amd64
           CGO_ENABLED: "0"
+          GONOSUMDB: "*"
+          GOFLAGS: "-mod=mod"
 
       - name: Delete existing "latest" release (if present)
         run: gh release delete latest --yes --cleanup-tag 2>/dev/null || true

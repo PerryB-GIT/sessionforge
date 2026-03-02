@@ -218,3 +218,8 @@ func (h *ptyHandle) close() {
 	h.cancel()
 	h.ptmx.Close()
 }
+
+// SetClaudePath is a no-op on Unix — path resolution uses the system PATH.
+// The Windows implementation stores a pre-resolved path from config.toml
+// because the service runs as LocalSystem without access to the user's npm PATH.
+func SetClaudePath(_ string) {}

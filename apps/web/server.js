@@ -341,6 +341,22 @@ function handleDashboardWs(ws, userId) {
       case 'subscribe_session': {
         if (!msg.sessionId) break
         ws.subscribedSessionId = msg.sessionId
+        // Replay ring buffer so the client sees output that arrived before this WS connected.
+        try {
+          const logKey = StreamKeys.sessionLogs(msg.sessionId)
+          const lines = await redis.lrange(logKey, 0, -1)
+          if (lines && lines.length > 0 && ws.readyState === WebSocket.OPEN) {
+            // lrange returns newest-first (lpush), so reverse for chronological order
+            const chronological = [...lines].reverse()
+            for (const line of chronological) {
+              ws.send(
+                JSON.stringify({ type: 'session_output', sessionId: msg.sessionId, data: line })
+              )
+            }
+          }
+        } catch {
+          /* non-critical — live stream will catch up */
+        }
         break
       }
       case 'session_input': {

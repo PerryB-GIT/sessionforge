@@ -26,6 +26,59 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// pipeWriter is a raw Windows pipe writer that bypasses Go's IOCP runtime.
+// Anonymous pipes on Windows do not support I/O Completion Ports, so wrapping
+// them with os.NewFile causes Go to attempt (and silently fail) IOCP association,
+// which results in broken I/O. This type calls windows.WriteFile directly.
+type pipeWriter struct {
+	h  windows.Handle
+	mu sync.Mutex
+}
+
+func (pw *pipeWriter) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	var written uint32
+	err := windows.WriteFile(pw.h, p, &written, nil)
+	return int(written), err
+}
+
+func (pw *pipeWriter) Close() error {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	return windows.CloseHandle(pw.h)
+}
+
+// pipeReader is a raw Windows pipe reader that bypasses Go's IOCP runtime.
+// Same rationale as pipeWriter: anonymous pipes do not support IOCP, so
+// os.NewFile's Read path fails silently. This type calls windows.ReadFile
+// directly, which blocks in the kernel until data is available or the pipe
+// is closed — the correct behaviour for a ConPTY output consumer.
+type pipeReader struct {
+	h  windows.Handle
+	mu sync.Mutex
+}
+
+func (pr *pipeReader) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+	var n uint32
+	err := windows.ReadFile(pr.h, p, &n, nil)
+	return int(n), err
+}
+
+func (pr *pipeReader) Close() error {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+	return windows.CloseHandle(pr.h)
+}
+
 // ptyHandle wraps a Windows ConPTY pseudo-console and its child process.
 // In pipe-fallback mode (Windows < 1809) cmd is set and hPC is zero.
 type ptyHandle struct {
@@ -151,12 +204,32 @@ func spawnWithConPTY(
 	windows.CloseHandle(inputRead)
 	windows.CloseHandle(outputWrite)
 
+	// Use raw pipe handles instead of os.NewFile for both stdin and stdout.
+	// Windows anonymous pipes do not support IOCP; os.NewFile would associate
+	// them with Go's async I/O subsystem, causing silent failures: writes
+	// deliver EOF to the child and reads return immediately instead of
+	// blocking — both of which cause interactive shells to exit at once.
+	stdinPW := &pipeWriter{h: inputWrite}
+	stdoutPR := &pipeReader{h: outputRead}
+
+	cmdCtx, cancel := context.WithCancel(ctx)
+
+	// Start the output reader BEFORE CreateProcess so the pipe is drained
+	// from the moment the ConPTY first writes VT initialisation sequences.
+	// Gosched yields to allow the reader goroutine to enter its first Read
+	// call before CreateProcess launches the child — this ensures the ConPTY
+	// output buffer has an active consumer when the child starts writing.
+	readerReady := make(chan struct{})
+	go readPipeOutput(sessionID, stdoutPR, outputFn, readerReady)
+	<-readerReady
+
 	// Build the PROC_THREAD_ATTRIBUTE_LIST that tells CreateProcess to attach
 	// the new process to our pseudo console.
 	attrList, err := windows.NewProcThreadAttributeList(1)
 	if err != nil {
-		windows.CloseHandle(inputWrite)
-		windows.CloseHandle(outputRead)
+		cancel()
+		stdinPW.Close()
+		stdoutPR.Close()
 		windows.ClosePseudoConsole(hPC)
 		return nil, 0, fmt.Errorf("NewProcThreadAttributeList: %w", err)
 	}
@@ -167,8 +240,9 @@ func spawnWithConPTY(
 		unsafe.Sizeof(hPC),
 	); err != nil {
 		attrList.Delete()
-		windows.CloseHandle(inputWrite)
-		windows.CloseHandle(outputRead)
+		cancel()
+		stdinPW.Close()
+		stdoutPR.Close()
 		windows.ClosePseudoConsole(hPC)
 		return nil, 0, fmt.Errorf("UpdateProcThreadAttribute: %w", err)
 	}
@@ -186,8 +260,9 @@ func spawnWithConPTY(
 	cmdLinePtr, err := windows.UTF16PtrFromString(cmdLine)
 	if err != nil {
 		attrList.Delete()
-		windows.CloseHandle(inputWrite)
-		windows.CloseHandle(outputRead)
+		cancel()
+		stdinPW.Close()
+		stdoutPR.Close()
 		windows.ClosePseudoConsole(hPC)
 		return nil, 0, fmt.Errorf("cmdline utf16: %w", err)
 	}
@@ -199,8 +274,9 @@ func spawnWithConPTY(
 	workdirPtr, err := windows.UTF16PtrFromString(workdir)
 	if err != nil {
 		attrList.Delete()
-		windows.CloseHandle(inputWrite)
-		windows.CloseHandle(outputRead)
+		cancel()
+		stdinPW.Close()
+		stdoutPR.Close()
 		windows.ClosePseudoConsole(hPC)
 		return nil, 0, fmt.Errorf("workdir utf16: %w", err)
 	}
@@ -226,8 +302,9 @@ func spawnWithConPTY(
 		&procInfo,
 	); err != nil {
 		attrList.Delete()
-		windows.CloseHandle(inputWrite)
-		windows.CloseHandle(outputRead)
+		cancel()
+		stdinPW.Close()
+		stdoutPR.Close()
 		windows.ClosePseudoConsole(hPC)
 		return nil, 0, fmt.Errorf("CreateProcess: %w", err)
 	}
@@ -237,16 +314,11 @@ func spawnWithConPTY(
 	// Thread handle not needed.
 	windows.CloseHandle(procInfo.Thread)
 
-	cmdCtx, cancel := context.WithCancel(ctx)
-
-	stdinFile := os.NewFile(uintptr(inputWrite), "conpty-stdin")
-	stdoutFile := os.NewFile(uintptr(outputRead), "conpty-stdout")
-
 	proc, err := os.FindProcess(int(procInfo.ProcessId))
 	if err != nil {
 		cancel()
-		stdinFile.Close()
-		stdoutFile.Close()
+		stdinPW.Close()
+		stdoutPR.Close()
 		windows.ClosePseudoConsole(hPC)
 		windows.CloseHandle(procInfo.Process)
 		return nil, 0, fmt.Errorf("FindProcess: %w", err)
@@ -255,18 +327,16 @@ func spawnWithConPTY(
 	h := &ptyHandle{
 		hPC:    hPC,
 		proc:   proc,
-		stdin:  stdinFile,
-		stdout: stdoutFile,
+		stdin:  stdinPW,
+		stdout: stdoutPR,
 		cancel: cancel,
 	}
-
-	go readPipeOutput(sessionID, stdoutFile, outputFn)
 
 	go func() {
 		defer cancel()
 		state, waitErr := proc.Wait()
-		stdinFile.Close()
-		stdoutFile.Close()
+		stdinPW.Close()
+		stdoutPR.Close()
 		windows.ClosePseudoConsole(hPC)
 		windows.CloseHandle(procInfo.Process)
 
@@ -371,7 +441,7 @@ func spawnWithPipes(
 		cancel: cancel,
 	}
 
-	go readPipeOutput(sessionID, pr, outputFn)
+	go readPipeOutput(sessionID, pr, outputFn, nil)
 
 	go func() {
 		waitErr := cmd.Wait()
@@ -391,8 +461,9 @@ func spawnWithPipes(
 }
 
 // readPipeOutput drains a reader, batches output at ~60fps, and calls outputFn
-// with base64-encoded chunks.
-func readPipeOutput(sessionID string, r io.Reader, outputFn func(string, string)) {
+// with base64-encoded chunks. If ready is non-nil it is closed once the inner
+// read goroutine has started, signalling that the pipe has an active consumer.
+func readPipeOutput(sessionID string, r io.Reader, outputFn func(string, string), ready chan<- struct{}) {
 	buf := make([]byte, 4096)
 	ticker := time.NewTicker(16 * time.Millisecond)
 	defer ticker.Stop()
@@ -410,6 +481,10 @@ func readPipeOutput(sessionID string, r io.Reader, outputFn func(string, string)
 	readCh := make(chan []byte, 64)
 
 	go func() {
+		// Signal that this goroutine is running and about to call Read.
+		if ready != nil {
+			close(ready)
+		}
 		for {
 			n, err := r.Read(buf)
 			if n > 0 {

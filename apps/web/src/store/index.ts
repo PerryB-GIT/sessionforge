@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 
+export interface DiscoveredProcess {
+  pid: number
+  name: string
+  cmdline: string
+  workdir: string
+}
+
 export type MachineStatus = 'online' | 'offline' | 'error'
 export type SessionStatus = 'running' | 'stopped' | 'crashed' | 'paused'
 export type PlanTier = 'free' | 'pro' | 'team' | 'enterprise'
@@ -21,6 +28,8 @@ export interface Machine {
   memory?: number
   disk?: number
   sessionCount?: number
+  // Processes running on this machine not managed by SessionForge
+  discoveredProcesses?: DiscoveredProcess[]
 }
 
 export interface Session {
@@ -99,8 +108,7 @@ export const useStore = create<SessionForgeStore>()(
         set((state) => ({
           machines: state.machines.map((m) => (m.id === id ? { ...m, ...patch } : m)),
         })),
-      addMachine: (machine) =>
-        set((state) => ({ machines: [...state.machines, machine] })),
+      addMachine: (machine) => set((state) => ({ machines: [...state.machines, machine] })),
       removeMachine: (id) =>
         set((state) => ({ machines: state.machines.filter((m) => m.id !== id) })),
 
@@ -109,14 +117,11 @@ export const useStore = create<SessionForgeStore>()(
         set((state) => ({
           sessions: state.sessions.map((s) => (s.id === id ? { ...s, ...patch } : s)),
         })),
-      addSession: (session) =>
-        set((state) => ({ sessions: [...state.sessions, session] })),
+      addSession: (session) => set((state) => ({ sessions: [...state.sessions, session] })),
 
       setApiKeys: (apiKeys) => set({ apiKeys }),
-      addApiKey: (key) =>
-        set((state) => ({ apiKeys: [...state.apiKeys, key] })),
-      removeApiKey: (id) =>
-        set((state) => ({ apiKeys: state.apiKeys.filter((k) => k.id !== id) })),
+      addApiKey: (key) => set((state) => ({ apiKeys: [...state.apiKeys, key] })),
+      removeApiKey: (id) => set((state) => ({ apiKeys: state.apiKeys.filter((k) => k.id !== id) })),
 
       setUser: (user) => set({ user }),
       setWsStatus: (wsStatus) => set({ wsStatus }),

@@ -211,6 +211,19 @@ func (m *Manager) Count() int {
 	return m.registry.Count()
 }
 
+// ManagedPIDs returns the set of PIDs for all active sessions so that the
+// process scanner can exclude processes already managed by SessionForge.
+func (m *Manager) ManagedPIDs() map[int32]bool {
+	all := m.registry.GetAll()
+	pids := make(map[int32]bool, len(all))
+	for _, s := range all {
+		if s.PID != 0 {
+			pids[int32(s.PID)] = true
+		}
+	}
+	return pids
+}
+
 // StopAll gracefully stops all active sessions. Called on agent shutdown.
 func (m *Manager) StopAll() {
 	for _, s := range m.registry.GetAll() {

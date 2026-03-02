@@ -71,13 +71,22 @@ export function useWebSocket() {
   function handleMessage(message: { type: string; [key: string]: unknown }) {
     switch (message.type) {
       case 'machine_updated': {
-        const m = message.machine as { id: string; status: string; cpu: number; memory: number; disk: number; sessionCount: number }
+        const m = message.machine as {
+          id: string
+          status: string
+          cpu: number
+          memory: number
+          disk: number
+          sessionCount: number
+          discoveredProcesses?: import('@/store').DiscoveredProcess[]
+        }
         updateMachine(m.id, {
           status: m.status as 'online' | 'offline' | 'error',
           cpu: m.cpu,
           memory: m.memory,
           disk: m.disk,
           sessionCount: m.sessionCount,
+          discoveredProcesses: m.discoveredProcesses,
         })
         break
       }

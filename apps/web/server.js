@@ -373,6 +373,7 @@ function handleDashboardWs(ws, userId) {
                 memory: metrics.memory,
                 disk: metrics.disk,
                 sessionCount: metrics.sessionCount,
+                discoveredProcesses: metrics.discoveredProcesses ?? [],
               },
             })
           )
@@ -433,9 +434,8 @@ function handleDashboardWs(ws, userId) {
           const logKey = StreamKeys.sessionLogs(msg.sessionId)
           const lines = await redis.lrange(logKey, 0, -1)
           if (lines && lines.length > 0 && ws.readyState === WebSocket.OPEN) {
-            // lrange returns newest-first (lpush), so reverse for chronological order
-            const chronological = [...lines].reverse()
-            for (const line of chronological) {
+            // Logs stored via rpush — lrange(0,-1) returns chronological order (oldest→newest)
+            for (const line of lines) {
               ws.send(
                 JSON.stringify({ type: 'session_output', sessionId: msg.sessionId, data: line })
               )
@@ -669,7 +669,7 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       break
 
     case 'heartbeat': {
-      const { machineId, cpu, memory, disk, sessionCount } = msg
+      const { machineId, cpu, memory, disk, sessionCount, discoveredProcesses } = msg
       if (!machineId) break // guard against bare heartbeat responses
       await Promise.all([
         query(
@@ -679,12 +679,27 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         redis.setex(
           StreamKeys.machineMetrics(machineId),
           120,
-          JSON.stringify({ cpu, memory, disk, sessionCount, ts: Date.now() })
+          JSON.stringify({
+            cpu,
+            memory,
+            disk,
+            sessionCount,
+            discoveredProcesses: discoveredProcesses ?? [],
+            ts: Date.now(),
+          })
         ),
       ])
       await publishToDashboard(userId, {
         type: 'machine_updated',
-        machine: { id: machineId, status: 'online', cpu, memory, disk, sessionCount },
+        machine: {
+          id: machineId,
+          status: 'online',
+          cpu,
+          memory,
+          disk,
+          sessionCount,
+          discoveredProcesses: discoveredProcesses ?? [],
+        },
       })
 
       // Update per-session stats accumulators for any running sessions on this machine.

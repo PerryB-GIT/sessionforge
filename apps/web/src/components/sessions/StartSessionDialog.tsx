@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -16,7 +16,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useStore } from '@/store'
 import { toast } from 'sonner'
 
@@ -32,9 +38,17 @@ interface StartSessionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultMachineId?: string
+  defaultCommand?: string
+  defaultWorkdir?: string
 }
 
-export function StartSessionDialog({ open, onOpenChange, defaultMachineId }: StartSessionDialogProps) {
+export function StartSessionDialog({
+  open,
+  onOpenChange,
+  defaultMachineId,
+  defaultCommand,
+  defaultWorkdir,
+}: StartSessionDialogProps) {
   const machines = useStore((s) => s.machines)
   const addSession = useStore((s) => s.addSession)
   const onlineMachines = machines.filter((m) => m.status === 'online')
@@ -51,10 +65,21 @@ export function StartSessionDialog({ open, onOpenChange, defaultMachineId }: Sta
     resolver: zodResolver(schema),
     defaultValues: {
       machineId: defaultMachineId ?? '',
-      command: 'claude',
-      workdir: '',
+      command: defaultCommand ?? 'claude',
+      workdir: defaultWorkdir ?? '',
     },
   })
+
+  // Re-populate form whenever the dialog opens or Adopt pre-fill props change
+  useEffect(() => {
+    if (open) {
+      reset({
+        machineId: defaultMachineId ?? '',
+        command: defaultCommand ?? 'claude',
+        workdir: defaultWorkdir ?? '',
+      })
+    }
+  }, [open, defaultMachineId, defaultCommand, defaultWorkdir])
 
   const selectedMachineId = watch('machineId')
 
@@ -122,10 +147,7 @@ export function StartSessionDialog({ open, onOpenChange, defaultMachineId }: Sta
                 No machines are currently online. Connect a machine first.
               </div>
             ) : (
-              <Select
-                value={selectedMachineId}
-                onValueChange={(v) => setValue('machineId', v)}
-              >
+              <Select value={selectedMachineId} onValueChange={(v) => setValue('machineId', v)}>
                 <SelectTrigger id="machine">
                   <SelectValue placeholder="Select a machine..." />
                 </SelectTrigger>
@@ -142,9 +164,7 @@ export function StartSessionDialog({ open, onOpenChange, defaultMachineId }: Sta
                 </SelectContent>
               </Select>
             )}
-            {errors.machineId && (
-              <p className="text-xs text-red-400">{errors.machineId.message}</p>
-            )}
+            {errors.machineId && <p className="text-xs text-red-400">{errors.machineId.message}</p>}
           </div>
 
           {/* Command */}
@@ -156,16 +176,13 @@ export function StartSessionDialog({ open, onOpenChange, defaultMachineId }: Sta
               error={errors.command?.message}
               {...register('command')}
             />
-            <p className="text-xs text-gray-500">
-              The command to run in the new session
-            </p>
+            <p className="text-xs text-gray-500">The command to run in the new session</p>
           </div>
 
           {/* Working directory */}
           <div className="space-y-1.5">
             <Label htmlFor="workdir">
-              Working Directory{' '}
-              <span className="text-gray-600 font-normal">(optional)</span>
+              Working Directory <span className="text-gray-600 font-normal">(optional)</span>
             </Label>
             <Input
               id="workdir"
@@ -176,18 +193,10 @@ export function StartSessionDialog({ open, onOpenChange, defaultMachineId }: Sta
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              isLoading={isLoading}
-              disabled={onlineMachines.length === 0}
-            >
+            <Button type="submit" isLoading={isLoading} disabled={onlineMachines.length === 0}>
               <Play className="h-4 w-4" />
               Start Session
             </Button>

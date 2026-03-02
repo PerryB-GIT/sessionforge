@@ -139,7 +139,7 @@ func runDaemonWithContext(ctx context.Context) error {
 	// Wire up dispatch to the fully-constructed handler.
 	dispatch = handler.Handle
 
-	// Start heartbeat (sends metrics every 30s).
+	// Start heartbeat (sends metrics + discovered processes every 10s).
 	go connection.RunHeartbeat(ctx, client, cfg.MachineID, mgr, logger)
 
 	// Start the WebSocket client (blocks with auto-reconnect until ctx cancelled).

@@ -385,7 +385,7 @@ func spawnWithConPTY(
 
 	if err := attrList.Update(
 		procThreadAttributePseudoConsole,
-		unsafe.Pointer(hPC),
+		unsafe.Pointer(&hPC), //nolint:govet // hPC is a Windows HANDLE (uintptr); taking its address is safe here
 		unsafe.Sizeof(hPC),
 	); err != nil {
 		attrList.Delete()

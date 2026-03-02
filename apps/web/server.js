@@ -251,6 +251,93 @@ async function getMachineUserId(machineId) {
   return rows[0]?.user_id ?? null
 }
 
+// ─── Webhook delivery (plain-JS equivalent of src/lib/webhook-delivery.ts) ───
+// server.js is CJS and cannot import TypeScript modules at runtime, so the
+// delivery logic is inlined here using the existing query() helper.
+
+const WEBHOOK_MAX_ATTEMPTS = 3
+const WEBHOOK_RETRY_DELAYS_MS = [60_000, 300_000, 1_800_000]
+
+async function deliverWebhook(event, payload, userId, orgId) {
+  let whereClause, params
+  if (orgId) {
+    whereClause = `(user_id = $1 OR org_id = $2) AND enabled = true`
+    params = [userId, orgId]
+  } else {
+    whereClause = `user_id = $1 AND enabled = true`
+    params = [userId]
+  }
+  const targets = await query(`SELECT * FROM webhooks WHERE ${whereClause}`, params).catch(() => [])
+  const subscribed = targets.filter(
+    (w) => (w.events ?? []).includes(event) || (w.events ?? []).includes('*')
+  )
+  if (subscribed.length === 0) return
+
+  const body = JSON.stringify({ event, ...payload, timestamp: new Date().toISOString() })
+  await Promise.allSettled(subscribed.map((w) => _attemptWebhookDelivery(w, event, body, payload)))
+}
+
+async function _attemptWebhookDelivery(webhook, event, body, payload) {
+  const { createHmac } = require('crypto')
+  const sig = `sha256=${createHmac('sha256', webhook.secret).update(body).digest('hex')}`
+
+  const [delivery] = await query(
+    `INSERT INTO webhook_deliveries (webhook_id, event, payload, status, attempts)
+     VALUES ($1, $2, $3, 'pending', 0) RETURNING id`,
+    [webhook.id, event, JSON.stringify(payload)]
+  ).catch(() => [null])
+  if (!delivery) return
+
+  await _sendWebhookWithRetry(webhook.url, body, sig, delivery.id, 1, event)
+}
+
+async function _sendWebhookWithRetry(url, body, signature, deliveryId, attempt, event) {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10_000)
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-SessionForge-Signature': signature,
+        'X-SessionForge-Event': event,
+        'User-Agent': 'SessionForge-Webhooks/1.0',
+      },
+      body,
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout))
+    const responseBody = await res.text().catch(() => '')
+    await query(
+      `UPDATE webhook_deliveries SET status = $1, response_code = $2, response_body = $3,
+       attempts = $4, last_attempt_at = NOW() WHERE id = $5`,
+      [
+        res.ok ? 'delivered' : 'failed',
+        res.status,
+        responseBody.slice(0, 1000),
+        attempt,
+        deliveryId,
+      ]
+    ).catch(() => {})
+    if (!res.ok && attempt < WEBHOOK_MAX_ATTEMPTS) {
+      setTimeout(
+        () => _sendWebhookWithRetry(url, body, signature, deliveryId, attempt + 1, event),
+        WEBHOOK_RETRY_DELAYS_MS[attempt - 1]
+      )
+    }
+  } catch {
+    await query(
+      `UPDATE webhook_deliveries SET status = $1, attempts = $2, last_attempt_at = NOW() WHERE id = $3`,
+      [attempt >= WEBHOOK_MAX_ATTEMPTS ? 'failed' : 'pending', attempt, deliveryId]
+    ).catch(() => {})
+    if (attempt < WEBHOOK_MAX_ATTEMPTS) {
+      setTimeout(
+        () => _sendWebhookWithRetry(url, body, signature, deliveryId, attempt + 1, event),
+        WEBHOOK_RETRY_DELAYS_MS[attempt - 1]
+      )
+    }
+  }
+}
+
 // ─── Dashboard WS ─────────────────────────────────────────────────────────────
 
 const POLL_INTERVAL_MS = 150
@@ -515,7 +602,6 @@ function handleAgentWs(ws, userId, remoteAddress) {
           console.error('[notifications] failed to create offline notification:', err)
         }
         try {
-          const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
           const machineRows = await query(`SELECT hostname FROM machines WHERE id = $1 LIMIT 1`, [
             machineId,
           ]).catch(() => [])
@@ -572,7 +658,6 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         machine: { id: machineId, status: 'online', cpu: 0, memory: 0 },
       })
       try {
-        const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
         await deliverWebhook('machine.online', { machineId, hostname: h }, userId)
       } catch (err) {
         console.error('[webhooks] delivery error on machine.online:', err)
@@ -639,7 +724,6 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
           session: { id: s.id, status: 'running', machineId: rows[0].machine_id },
         })
       try {
-        const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
         await deliverWebhook(
           'session.started',
           { sessionId: s.id, machineId: rows[0]?.machine_id ?? null },
@@ -677,7 +761,6 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         }
       }
       try {
-        const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
         await deliverWebhook(
           'session.stopped',
           { sessionId, machineId: rows[0]?.machine_id ?? null },
@@ -746,7 +829,6 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         console.error('[notifications] failed to create crash notification:', err)
       }
       try {
-        const { deliverWebhook } = await import('./src/lib/webhook-delivery.js')
         await deliverWebhook(
           'session.crashed',
           { sessionId, machineId: rows[0]?.machine_id ?? null },

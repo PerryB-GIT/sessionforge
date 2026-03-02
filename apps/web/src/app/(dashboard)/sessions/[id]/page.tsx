@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Square, Monitor, Clock, Cpu, MemoryStick, Film } from 'lucide-react'
+import { ArrowLeft, Square, Monitor, Clock, Cpu, MemoryStick, Film, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { SessionStatusBadge } from '@/components/ui/badge'
@@ -43,6 +43,15 @@ export default function SessionDetailPage() {
   const { machine } = useMachine(session?.machineId ?? '')
   const isConnected = wsStatus === 'connected'
   const isRunning = session?.status === 'running'
+
+  // Agent is considered disconnected if the machine is offline/error, or if its
+  // last heartbeat is more than 90 seconds old (the agent heartbeats every 30s).
+  const agentDisconnected =
+    isRunning &&
+    machine != null &&
+    (machine.status === 'offline' ||
+      machine.status === 'error' ||
+      (machine.lastSeen != null && Date.now() - machine.lastSeen.getTime() > 90_000))
 
   // Fetch historical logs when session is stopped
   useEffect(() => {
@@ -223,6 +232,21 @@ export default function SessionDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Agent disconnected warning */}
+      {agentDisconnected && (
+        <div className="flex items-center gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm shrink-0">
+          <WifiOff className="h-4 w-4 text-yellow-400 shrink-0" />
+          <div className="min-w-0">
+            <span className="font-medium text-yellow-300">Agent not connected</span>
+            <span className="text-yellow-400/80 ml-2">
+              The SessionForge agent on{' '}
+              <span className="font-mono">{machine?.name ?? 'this machine'}</span> is offline.
+              Terminal output will be empty until the agent reconnects.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Terminal */}
       <div className="flex flex-1 min-h-0 gap-0" style={{ minHeight: '400px' }}>

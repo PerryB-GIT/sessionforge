@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -119,6 +120,18 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 		}
 	}
 
+	// DEBUG: confirm we reach spawnPTY (remove after fix confirmed)
+	if f, err2 := os.OpenFile(`C:\Users\Jakeb\.sessionforge\sf-env.log`, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666); err2 == nil {
+		ccInEnv := "NO"
+		for _, kv := range os.Environ() {
+			if len(kv) >= 10 && kv[:10] == "CLAUDECODE" {
+				ccInEnv = "YES=" + kv
+				break
+			}
+		}
+		_, _ = f.WriteString("manager.Start: command=" + command + " CLAUDECODE=" + ccInEnv + "\n")
+		f.Close()
+	}
 	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, exitFn)
 	if err != nil {
 		return "", fmt.Errorf("spawn PTY: %w", err)

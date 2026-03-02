@@ -17,6 +17,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -104,6 +105,15 @@ var allowedCommands = map[string]bool{
 // resolveCommand validates the binary name against the allow-list and returns
 // the absolute path plus any extra arguments split from the command string.
 // e.g. "bash -i" → ("/usr/bin/bash", ["-i"], nil)
+//
+// On Windows, if the resolved path is a .cmd script (e.g. npm-installed CLIs),
+// CreateProcess cannot execute it directly. In that case the returned binary is
+// cmd.exe and the script path is prepended to args so the caller builds:
+//   "C:\Windows\System32\cmd.exe" /C "C:\...\claude.cmd" [extra-args...]
+//
+// resolveCommand also searches user-profile npm directories so that tools
+// installed with `npm install -g` are found even when the service runs as
+// LocalSystem (which only inherits the system PATH, not the user PATH).
 func resolveCommand(command string) (string, []string, error) {
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
@@ -119,12 +129,108 @@ func resolveCommand(command string) (string, []string, error) {
 	if idx := strings.LastIndex(base, "/"); idx >= 0 {
 		base = base[idx+1:]
 	}
-	baseLower := strings.ToLower(strings.TrimSuffix(base, ".exe"))
+	baseLower := strings.ToLower(strings.TrimSuffix(strings.TrimSuffix(base, ".cmd"), ".exe"))
 	if !allowedCommands[baseLower] {
 		return "", nil, fmt.Errorf("command %q is not allowed; permitted: claude, bash, zsh, sh, powershell, cmd", bin)
 	}
-	resolved, err := exec.LookPath(bin)
-	return resolved, args, err
+
+	resolved, lookErr := exec.LookPath(bin)
+	if lookErr != nil {
+		// Service runs as LocalSystem: user's npm prefix (e.g. AppData\Roaming\npm)
+		// is not in the system PATH. Probe known locations so `claude` and other
+		// npm-global tools can be found without modifying the system PATH.
+		var fallbackErr error
+		resolved, fallbackErr = lookPathWithNpmFallback(bin)
+		if fallbackErr != nil {
+			dbgLog(fmt.Sprintf("resolveCommand: %q not found. LookPath=%v Fallback=%v PATH=%s", bin, lookErr, fallbackErr, os.Getenv("PATH")))
+			return "", nil, fmt.Errorf("command %q not found: %w", bin, fallbackErr)
+		}
+	}
+
+	// Windows CreateProcess cannot execute .cmd script files directly.
+	// Wrap them as: cmd.exe /C "<script>" [args...]
+	isCmdScript := strings.ToLower(filepath.Ext(resolved)) == ".cmd"
+	dbgLog(fmt.Sprintf("resolveCommand: %q → resolved=%q isCmdScript=%v", bin, resolved, isCmdScript))
+
+	if isCmdScript {
+		cmdExe, cmdErr := exec.LookPath("cmd.exe")
+		if cmdErr != nil {
+			cmdExe = `C:\Windows\System32\cmd.exe`
+		}
+		return cmdExe, append([]string{"/C", resolved}, args...), nil
+	}
+
+	return resolved, args, nil
+}
+
+// dbgLog writes a line to the session debug log file.
+func dbgLog(msg string) {
+	if f, err := os.OpenFile(`C:\Users\Jakeb\.sessionforge\sf-env.log`, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666); err == nil {
+		_, _ = f.WriteString(msg + "\n")
+		f.Close()
+	}
+}
+
+// lookPathWithNpmFallback searches for a binary in additional directories that
+// are typically in a user's PATH but absent from the LocalSystem service PATH.
+// It probes npm prefix directories derived from:
+//  1. USERPROFILE env var (may be set by the SCM when launching the service)
+//  2. The parent of the sessionforge config dir (e.g. C:\Users\Jakeb\.sessionforge
+//     → C:\Users\Jakeb)
+//  3. All user profile directories under C:\Users\ as a last resort
+func lookPathWithNpmFallback(bin string) (string, error) {
+	seen := map[string]bool{}
+	var extra []string
+
+	addNpmDirs := func(home string) {
+		for _, d := range []string{
+			filepath.Join(home, "AppData", "Roaming", "npm"),
+			filepath.Join(home, "AppData", "Local", "npm"),
+		} {
+			if !seen[d] {
+				seen[d] = true
+				extra = append(extra, d)
+			}
+		}
+	}
+
+	// 1. From USERPROFILE env var.
+	if up := os.Getenv("USERPROFILE"); up != "" {
+		addNpmDirs(up)
+	}
+
+	// 2. Infer from the binary's own location: the service binary is at
+	//    C:\Users\<user>\AppData\Local\Programs\sessionforge\sessionforge.exe
+	//    Walk up 4 levels to reach C:\Users\<user>.
+	if exe, err := os.Executable(); err == nil {
+		// exe → Programs\sessionforge → Local → AppData → <user-home>
+		candidate := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(exe))))
+		if _, err2 := os.Stat(candidate); err2 == nil {
+			addNpmDirs(candidate)
+		}
+	}
+
+	// 3. Scan C:\Users\ for all profile directories.
+	if entries, err := os.ReadDir(`C:\Users`); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				addNpmDirs(filepath.Join(`C:\Users`, e.Name()))
+			}
+		}
+	}
+
+	for _, dir := range extra {
+		// Try without extension first — exec.LookPath honours PATHEXT extensions.
+		if candidate, err := exec.LookPath(filepath.Join(dir, bin)); err == nil {
+			return candidate, nil
+		}
+		// Explicitly try .cmd suffix (npm-installed CLIs on Windows).
+		candidate := filepath.Join(dir, bin+".cmd")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("%q not found in system PATH or known npm directories", bin)
 }
 
 // Windows API constants.
@@ -253,9 +359,14 @@ func spawnWithConPTY(
 	siEx.ProcThreadAttributeList = attrList.List()
 
 	// Build command-line string: quoted binary followed by any extra arguments.
+	// Arguments that contain spaces are quoted so CreateProcess parses them correctly.
 	cmdLine := `"` + binary + `"`
 	for _, arg := range args {
-		cmdLine += " " + arg
+		if strings.ContainsAny(arg, " \t") {
+			cmdLine += ` "` + arg + `"`
+		} else {
+			cmdLine += " " + arg
+		}
 	}
 	cmdLinePtr, err := windows.UTF16PtrFromString(cmdLine)
 	if err != nil {
@@ -360,6 +471,7 @@ func spawnWithConPTY(
 // The block is pairs of KEY=VALUE\0 terminated by an extra \0.
 // Returns nil on error (process inherits parent environment).
 func buildEnvBlock(overlay map[string]string) *uint16 {
+	dbgLog("buildEnvBlock ENTERED")
 	base := os.Environ()
 	merged := make(map[string]string, len(base)+len(overlay)+1)
 	for _, kv := range base {
@@ -371,6 +483,16 @@ func buildEnvBlock(overlay map[string]string) *uint16 {
 		merged[k] = v
 	}
 	merged["TERM"] = "xterm-256color"
+	delete(merged, "CLAUDECODE") // prevent "nested Claude Code session" error
+
+	hadCC := false
+	for _, kv := range base {
+		if strings.HasPrefix(kv, "CLAUDECODE=") {
+			hadCC = true
+			break
+		}
+	}
+	dbgLog(fmt.Sprintf("buildEnvBlock: CLAUDECODE in base=%v in merged=%v", hadCC, merged["CLAUDECODE"] != ""))
 
 	// Build null-separated KEY=VALUE pairs, double-null terminated.
 	var pairs []uint16
@@ -404,10 +526,21 @@ func spawnWithPipes(
 	cmdCtx, cancel := context.WithCancel(ctx)
 	cmd := exec.CommandContext(cmdCtx, binary, args...)
 	cmd.Dir = workdir
-	cmd.Env = os.Environ()
+	baseEnv := os.Environ()
+	filteredEnv := make([]string, 0, len(baseEnv))
+	hadCC := false
+	for _, kv := range baseEnv {
+		if strings.HasPrefix(kv, "CLAUDECODE=") {
+			hadCC = true
+			continue
+		}
+		filteredEnv = append(filteredEnv, kv)
+	}
+	cmd.Env = filteredEnv
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
+	dbgLog(fmt.Sprintf("spawnWithPipes: binary=%q hadCC=%v", binary, hadCC))
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

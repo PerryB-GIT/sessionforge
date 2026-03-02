@@ -34,15 +34,7 @@ type heartbeatMsg struct {
 
 // processAllowList is the set of executable names worth reporting as discoverable.
 var processAllowList = map[string]bool{
-	"claude":     true,
-	"bash":       true,
-	"zsh":        true,
-	"sh":         true,
-	"powershell": true,
-	"cmd":        true,
-	"node":       true,
-	"python":     true,
-	"python3":    true,
+	"claude": true,
 }
 
 // SessionCounter is satisfied by session.Manager (Count method).

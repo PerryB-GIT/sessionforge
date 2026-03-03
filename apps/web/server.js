@@ -220,9 +220,15 @@ async function publishToAgent(machineId, message) {
   await redis.xtrim(key, { strategy: 'MAXLEN', threshold: 100 })
 }
 
+let _streamShapeLogged = false
 async function readStream(key, lastId) {
   const result = await redis.xread(key, lastId, { count: 20 })
   if (!result || result.length === 0) return [lastId, []]
+  // DEBUG: log the raw xread shape once so we can verify the parsing assumptions
+  if (!_streamShapeLogged) {
+    _streamShapeLogged = true
+    console.log('[readStream] raw xread result shape:', JSON.stringify(result).slice(0, 400))
+  }
   // @upstash/redis returns: [[streamName, [[id, [field, value, ...]], ...]]]
   // The value at e[1][1] is auto-parsed from JSON by @upstash/redis, so re-stringify for ws.send()
   const entries = result[0]?.[1] ?? []

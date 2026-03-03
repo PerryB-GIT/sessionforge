@@ -1057,21 +1057,6 @@ async function main() {
 
   // 4. Create our public-facing HTTP server
   const server = http.createServer(async (req, res) => {
-    // TEMP: one-shot admin endpoint to kill zombie running sessions
-    if (req.url === '/api/admin/kill-zombie-sessions' && req.method === 'POST') {
-      const authHeader = req.headers['authorization'] ?? ''
-      if (authHeader !== `Bearer ${process.env.E2E_TEST_SECRET ?? ''}`) {
-        res.writeHead(401)
-        res.end('Unauthorized')
-        return
-      }
-      const result = await query(
-        `UPDATE sessions SET status = 'stopped', stopped_at = NOW() WHERE status = 'running' RETURNING id`
-      )
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ killed: result.length, ids: result.map((r) => r.id) }))
-      return
-    }
     proxyRequest(req, res)
   })
 

@@ -447,7 +447,10 @@ function handleDashboardWs(ws, userId) {
         break
       }
       case 'session_input': {
-        if (!msg.sessionId || !msg.data) break
+        if (!msg.sessionId || !msg.data) {
+          console.warn('[ws/dashboard] session_input missing sessionId or data')
+          break
+        }
         // C4: Reject oversized or non-string payloads before touching the DB.
         // 8192 bytes covers any realistic terminal paste; larger values indicate
         // a bug or abuse attempt and should be dropped rather than forwarded.
@@ -456,7 +459,30 @@ function handleDashboardWs(ws, userId) {
           break
         }
         const record = await getSessionRecord(msg.sessionId, userId)
-        if (!record || record.status !== 'running') break
+        if (!record) {
+          console.warn(
+            '[ws/dashboard] session_input: session not found',
+            msg.sessionId,
+            'userId',
+            userId
+          )
+          break
+        }
+        if (record.status !== 'running') {
+          console.warn(
+            '[ws/dashboard] session_input: session not running, status=',
+            record.status,
+            'sessionId',
+            msg.sessionId
+          )
+          break
+        }
+        console.log(
+          '[ws/dashboard] session_input forwarding to agent, sessionId',
+          msg.sessionId,
+          'machineId',
+          record.machine_id
+        )
         await publishToAgent(record.machine_id, {
           type: 'session_input',
           sessionId: msg.sessionId,
@@ -727,6 +753,14 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
 
     case 'session_started': {
       const { session: s } = msg
+      console.log(
+        '[ws/agent] session_started sessionId',
+        s.id,
+        'pid',
+        s.pid,
+        'command',
+        s.processName
+      )
 
       // C3: Pre-allocate the ring buffer key so any dashboard subscriber that
       // calls lrange() immediately after subscribe_session sees an existing key

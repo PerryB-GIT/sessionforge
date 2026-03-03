@@ -544,13 +544,10 @@ function handleAgentWs(ws, userId, remoteAddress) {
         )
         const machineName = machineRows[0]?.name ?? machineId
         const machineHostname = machineRows[0]?.hostname ?? machineName
-        const { createNotification } = await import('./src/lib/notifications.js')
-        await createNotification(
-          userId,
-          'machine_offline',
-          'Machine went offline',
-          `${machineName} (${machineHostname}) stopped responding`,
-          machineId
+        await query(
+          `INSERT INTO notifications (id, user_id, type, title, body, resource_id, created_at)
+           VALUES (gen_random_uuid(), $1, 'machine_offline', 'Machine went offline', $2, $3, NOW())`,
+          [userId, `${machineName} (${machineHostname}) stopped responding`, machineId]
         )
       } catch (err) {
         console.error('[notifications] failed to create offline notification:', err)
@@ -597,13 +594,10 @@ function handleAgentWs(ws, userId, remoteAddress) {
           )
           const machineName = machineRows[0]?.name ?? machineId
           const machineHostname = machineRows[0]?.hostname ?? machineName
-          const { createNotification } = await import('./src/lib/notifications.js')
-          await createNotification(
-            userId,
-            'machine_offline',
-            'Machine went offline',
-            `${machineName} (${machineHostname}) stopped responding`,
-            machineId
+          await query(
+            `INSERT INTO notifications (id, user_id, type, title, body, resource_id, created_at)
+             VALUES (gen_random_uuid(), $1, 'machine_offline', 'Machine went offline', $2, $3, NOW())`,
+            [userId, `${machineName} (${machineHostname}) stopped responding`, machineId]
           )
         } catch (err) {
           console.error('[notifications] failed to create offline notification:', err)
@@ -848,13 +842,14 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       }
       // Notify the session owner
       try {
-        const { createNotification } = await import('./src/lib/notifications.js')
-        await createNotification(
-          userId,
-          'session_crashed',
-          'Session crashed',
-          `Session ${sessionId} exited unexpectedly${error ? `: ${error}` : ''}`,
-          sessionId
+        await query(
+          `INSERT INTO notifications (id, user_id, type, title, body, resource_id, created_at)
+           VALUES (gen_random_uuid(), $1, 'session_crashed', 'Session crashed', $2, $3, NOW())`,
+          [
+            userId,
+            `Session ${sessionId} exited unexpectedly${error ? `: ${error}` : ''}`,
+            sessionId,
+          ]
         )
       } catch (err) {
         console.error('[notifications] failed to create crash notification:', err)

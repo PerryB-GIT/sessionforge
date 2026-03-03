@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useStore } from '@/store'
+import { useMachines } from '@/hooks/useMachines'
 import { toast } from 'sonner'
 
 const schema = z.object({
@@ -51,6 +52,7 @@ export function StartSessionDialog({
 }: StartSessionDialogProps) {
   const machines = useStore((s) => s.machines)
   const addSession = useStore((s) => s.addSession)
+  const { isLoading: machinesLoading } = useMachines()
   const onlineMachines = machines.filter((m) => m.status === 'online')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -158,7 +160,11 @@ export function StartSessionDialog({
           {/* Machine selector */}
           <div className="space-y-1.5">
             <Label htmlFor="machine">Machine</Label>
-            {onlineMachines.length === 0 ? (
+            {machinesLoading ? (
+              <div className="rounded-lg border border-[#1e1e2e] bg-[#0f0f1a] p-3 text-xs text-gray-500">
+                Loading machines...
+              </div>
+            ) : onlineMachines.length === 0 ? (
               <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3 text-xs text-yellow-400">
                 No machines are currently online. Connect a machine first.
               </div>
@@ -212,7 +218,11 @@ export function StartSessionDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={isLoading} disabled={onlineMachines.length === 0}>
+            <Button
+              type="submit"
+              isLoading={isLoading}
+              disabled={machinesLoading || onlineMachines.length === 0}
+            >
               <Play className="h-4 w-4" />
               Start Session
             </Button>

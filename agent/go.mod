@@ -1,6 +1,6 @@
 module github.com/sessionforge/agent
 
-go 1.22
+go 1.24.0
 
 require (
 	github.com/BurntSushi/toml v1.3.2
@@ -9,7 +9,8 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/shirou/gopsutil/v3 v3.23.12
 	github.com/spf13/cobra v1.8.0
-	golang.org/x/sys v0.15.0
+	golang.org/x/sys v0.41.0
+	golang.org/x/term v0.40.0
 )
 
 require (

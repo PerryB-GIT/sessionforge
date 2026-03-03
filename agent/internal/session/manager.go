@@ -28,6 +28,7 @@ type sessionInfoJSON struct {
 	ProcessName string `json:"processName"`
 	Workdir     string `json:"workdir"`
 	StartedAt   string `json:"startedAt"`
+	Name        string `json:"name,omitempty"`
 }
 
 type sessionStoppedMsg struct {
@@ -166,14 +167,17 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 
 // StartWithLocalOutput is like Start but also streams raw PTY bytes to localFn.
 // Used by `sessionforge run` to display output in the local terminal simultaneously.
+// Returns the session ID, a channel that receives the child exit code when it exits, and any error.
 func (m *Manager) StartWithLocalOutput(
-	requestID, sessionID, command, workdir string,
+	requestID, sessionID, command, workdir, name string,
 	env map[string]string,
 	localFn func(raw []byte),
-) (string, error) {
+) (string, <-chan int, error) {
 	if sessionID == "" {
 		sessionID = uuid.New().String()
 	}
+
+	exitCh := make(chan int, 1)
 
 	m.logger.Info("starting session with local output",
 		"sessionId", sessionID,
@@ -198,6 +202,16 @@ func (m *Manager) StartWithLocalOutput(
 		m.logger.Info("session exited", "sessionId", sid, "exitCode", exitCode, "err", exitErr)
 		m.registry.Remove(sid)
 
+		// Signal the local run loop that the process has exited.
+		code := exitCode
+		if exitErr != nil {
+			code = -1
+		}
+		select {
+		case exitCh <- code:
+		default:
+		}
+
 		if exitErr != nil {
 			msg := sessionCrashedMsg{
 				Type:      "session_crashed",
@@ -210,7 +224,6 @@ func (m *Manager) StartWithLocalOutput(
 			return
 		}
 
-		code := exitCode
 		msg := sessionStoppedMsg{
 			Type:      "session_stopped",
 			SessionID: sid,
@@ -242,6 +255,7 @@ func (m *Manager) StartWithLocalOutput(
 			ProcessName: command,
 			Workdir:     workdir,
 			StartedAt:   startedAt.Format(time.RFC3339),
+			Name:        name,
 		},
 	}
 	if err := m.messenger.SendJSON(earlyStarted); err != nil {
@@ -251,13 +265,13 @@ func (m *Manager) StartWithLocalOutput(
 	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, localFn, exitFn)
 	if err != nil {
 		m.registry.Remove(sessionID)
-		return "", fmt.Errorf("spawn PTY: %w", err)
+		return "", nil, fmt.Errorf("spawn PTY: %w", err)
 	}
 
 	placeholder.PID = pid
 	placeholder.ptySession = handle
 
-	return sessionID, nil
+	return sessionID, exitCh, nil
 }
 
 // WriteInputRaw forwards raw bytes to a session's PTY stdin without base64 encoding.

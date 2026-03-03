@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/sessionforge/agent/internal/config"
@@ -56,13 +55,11 @@ func runRun(cmd *cobra.Command, args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	logger := buildLogger(cfg.LogLevel, cfg.LogFile)
 	client, mgr := buildAgentComponents(ctx, cfg)
 
-	go connection.RunHeartbeat(ctx, client, cfg.MachineID, mgr, buildLogger(cfg.LogLevel, cfg.LogFile))
+	go connection.RunHeartbeat(ctx, client, cfg.MachineID, mgr, logger)
 	go client.Run(ctx)
-
-	// Allow WebSocket to register before spawning the session.
-	time.Sleep(600 * time.Millisecond)
 
 	// Enable raw mode — must be restored in all exit paths.
 	rawState, rawErr := setRawMode()
@@ -76,7 +73,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		os.Stdout.Write(raw)
 	}
 
-	sessionID, err := mgr.StartWithLocalOutput("cli-run", "", command, workdir, nil, localFn)
+	sessionID, exitCh, err := mgr.StartWithLocalOutput("cli-run", "", command, workdir, runName, nil, localFn)
 	if err != nil {
 		restoreMode(rawState)
 		return fmt.Errorf("start session: %w", err)
@@ -109,15 +106,24 @@ func runRun(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	// Block until detach, process exit, or OS signal.
+	// Block until process exits, detach, or OS signal.
+	var sessionExitCode int
 	select {
+	case code := <-exitCh:
+		sessionExitCode = code
+		restoreMode(rawState)
 	case <-detached:
 		restoreMode(rawState)
 		fmt.Fprintf(os.Stderr, "\nDetached. Session ID: %s\nReattach: sessionforge session attach %s\n",
 			sessionID, sessionID)
+		return nil
 	case <-ctx.Done():
 		restoreMode(rawState)
+		return nil
 	}
 
+	if sessionExitCode != 0 {
+		os.Exit(sessionExitCode)
+	}
 	return nil
 }

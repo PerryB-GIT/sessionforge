@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
-import { Plus, Filter } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MachineGrid } from '@/components/machines/MachineGrid'
 import {
@@ -27,7 +27,7 @@ const filters: { label: string; value: FilterType }[] = [
 ]
 
 export default function MachinesPage() {
-  const { machines, isLoading } = useMachines()
+  const { machines, isLoading, refetch } = useMachines()
   const [filter, setFilter] = useState<FilterType>('all')
   const [wizardOpen, setWizardOpen] = useState(false)
 
@@ -50,10 +50,16 @@ export default function MachinesPage() {
             {counts.online} online, {counts.offline} offline
           </p>
         </div>
-        <Button onClick={() => setWizardOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Add Machine
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button onClick={() => setWizardOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add Machine
+          </Button>
+        </div>
       </div>
 
       {/* Filter tabs */}

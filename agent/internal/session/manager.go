@@ -121,36 +121,45 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 		}
 	}
 
-	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, nil, exitFn)
-	if err != nil {
-		return "", fmt.Errorf("spawn PTY: %w", err)
-	}
+	startedAt := time.Now().UTC()
 
-	s := &Session{
+	// Register a placeholder session entry immediately so that heartbeats
+	// report sessionCount > 0 and the dashboard shows the session before
+	// the ConPTY probe (which can block for several seconds) completes.
+	placeholder := &Session{
 		ID:          sessionID,
-		PID:         pid,
+		PID:         0, // unknown until after spawn
 		ProcessName: command,
 		Workdir:     workdir,
-		StartedAt:   time.Now().UTC(),
+		StartedAt:   startedAt,
 		Command:     command,
-		ptySession:  handle,
 	}
-	m.registry.Add(s)
+	m.registry.Add(placeholder)
 
-	// Send session_started notification.
-	started := sessionStartedMsg{
+	// Send session_started immediately so the dashboard card appears.
+	earlyStarted := sessionStartedMsg{
 		Type: "session_started",
 		Session: sessionInfoJSON{
 			ID:          sessionID,
-			PID:         pid,
+			PID:         0,
 			ProcessName: command,
 			Workdir:     workdir,
-			StartedAt:   s.StartedAt.Format(time.RFC3339),
+			StartedAt:   startedAt.Format(time.RFC3339),
 		},
 	}
-	if err := m.messenger.SendJSON(started); err != nil {
-		m.logger.Warn("failed to send session_started", "err", err)
+	if err := m.messenger.SendJSON(earlyStarted); err != nil {
+		m.logger.Warn("failed to send early session_started", "err", err)
 	}
+
+	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, nil, exitFn)
+	if err != nil {
+		m.registry.Remove(sessionID)
+		return "", fmt.Errorf("spawn PTY: %w", err)
+	}
+
+	// Update placeholder with real PID and PTY handle.
+	placeholder.PID = pid
+	placeholder.ptySession = handle
 
 	return sessionID, nil
 }
@@ -212,35 +221,41 @@ func (m *Manager) StartWithLocalOutput(
 		}
 	}
 
-	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, localFn, exitFn)
-	if err != nil {
-		return "", fmt.Errorf("spawn PTY: %w", err)
-	}
+	startedAt := time.Now().UTC()
 
-	s := &Session{
+	// Register placeholder + send session_started before the ConPTY probe blocks.
+	placeholder := &Session{
 		ID:          sessionID,
-		PID:         pid,
+		PID:         0,
 		ProcessName: command,
 		Workdir:     workdir,
-		StartedAt:   time.Now().UTC(),
+		StartedAt:   startedAt,
 		Command:     command,
-		ptySession:  handle,
 	}
-	m.registry.Add(s)
+	m.registry.Add(placeholder)
 
-	started := sessionStartedMsg{
+	earlyStarted := sessionStartedMsg{
 		Type: "session_started",
 		Session: sessionInfoJSON{
 			ID:          sessionID,
-			PID:         pid,
+			PID:         0,
 			ProcessName: command,
 			Workdir:     workdir,
-			StartedAt:   s.StartedAt.Format(time.RFC3339),
+			StartedAt:   startedAt.Format(time.RFC3339),
 		},
 	}
-	if err := m.messenger.SendJSON(started); err != nil {
-		m.logger.Warn("failed to send session_started", "err", err)
+	if err := m.messenger.SendJSON(earlyStarted); err != nil {
+		m.logger.Warn("failed to send early session_started", "err", err)
 	}
+
+	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, localFn, exitFn)
+	if err != nil {
+		m.registry.Remove(sessionID)
+		return "", fmt.Errorf("spawn PTY: %w", err)
+	}
+
+	placeholder.PID = pid
+	placeholder.ptySession = handle
 
 	return sessionID, nil
 }

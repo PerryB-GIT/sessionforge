@@ -58,6 +58,7 @@ type Manager struct {
 
 // NewManager creates a new Manager.
 func NewManager(ctx context.Context, messenger AgentMessenger, logger *slog.Logger) *Manager {
+	SetConPTYLogger(logger)
 	return &Manager{
 		registry:  NewRegistry(),
 		messenger: messenger,
@@ -82,6 +83,7 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 	)
 
 	outputFn := func(sid, data string) {
+		m.logger.Debug("session_output chunk", "sessionId", sid, "bytes", len(data))
 		msg := sessionOutputMsg{
 			Type:      "session_output",
 			SessionID: sid,
@@ -119,7 +121,7 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 		}
 	}
 
-	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, exitFn)
+	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, nil, exitFn)
 	if err != nil {
 		return "", fmt.Errorf("spawn PTY: %w", err)
 	}
@@ -151,6 +153,106 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 	}
 
 	return sessionID, nil
+}
+
+// StartWithLocalOutput is like Start but also streams raw PTY bytes to localFn.
+// Used by `sessionforge run` to display output in the local terminal simultaneously.
+func (m *Manager) StartWithLocalOutput(
+	requestID, sessionID, command, workdir string,
+	env map[string]string,
+	localFn func(raw []byte),
+) (string, error) {
+	if sessionID == "" {
+		sessionID = uuid.New().String()
+	}
+
+	m.logger.Info("starting session with local output",
+		"sessionId", sessionID,
+		"requestId", requestID,
+		"command", command,
+		"workdir", workdir,
+	)
+
+	outputFn := func(sid, data string) {
+		m.logger.Debug("session_output chunk", "sessionId", sid, "bytes", len(data))
+		msg := sessionOutputMsg{
+			Type:      "session_output",
+			SessionID: sid,
+			Data:      data,
+		}
+		if err := m.messenger.SendJSON(msg); err != nil {
+			m.logger.Warn("failed to send session_output", "sessionId", sid, "err", err)
+		}
+	}
+
+	exitFn := func(sid string, exitCode int, exitErr error) {
+		m.logger.Info("session exited", "sessionId", sid, "exitCode", exitCode, "err", exitErr)
+		m.registry.Remove(sid)
+
+		if exitErr != nil {
+			msg := sessionCrashedMsg{
+				Type:      "session_crashed",
+				SessionID: sid,
+				Error:     exitErr.Error(),
+			}
+			if err := m.messenger.SendJSON(msg); err != nil {
+				m.logger.Warn("failed to send session_crashed", "err", err)
+			}
+			return
+		}
+
+		code := exitCode
+		msg := sessionStoppedMsg{
+			Type:      "session_stopped",
+			SessionID: sid,
+			ExitCode:  &code,
+		}
+		if err := m.messenger.SendJSON(msg); err != nil {
+			m.logger.Warn("failed to send session_stopped", "err", err)
+		}
+	}
+
+	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, localFn, exitFn)
+	if err != nil {
+		return "", fmt.Errorf("spawn PTY: %w", err)
+	}
+
+	s := &Session{
+		ID:          sessionID,
+		PID:         pid,
+		ProcessName: command,
+		Workdir:     workdir,
+		StartedAt:   time.Now().UTC(),
+		Command:     command,
+		ptySession:  handle,
+	}
+	m.registry.Add(s)
+
+	started := sessionStartedMsg{
+		Type: "session_started",
+		Session: sessionInfoJSON{
+			ID:          sessionID,
+			PID:         pid,
+			ProcessName: command,
+			Workdir:     workdir,
+			StartedAt:   s.StartedAt.Format(time.RFC3339),
+		},
+	}
+	if err := m.messenger.SendJSON(started); err != nil {
+		m.logger.Warn("failed to send session_started", "err", err)
+	}
+
+	return sessionID, nil
+}
+
+// WriteInputRaw forwards raw bytes to a session's PTY stdin without base64 encoding.
+// Used by `sessionforge run` for local stdin passthrough.
+func (m *Manager) WriteInputRaw(sessionID string, data []byte) error {
+	s, err := m.registry.Get(sessionID)
+	if err != nil {
+		return err
+	}
+	return s.ptySession.writeInputRaw(data)
 }
 
 // Stop terminates a session. If force is true, the process is killed immediately.

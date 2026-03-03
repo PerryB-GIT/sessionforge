@@ -15,6 +15,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -289,7 +290,112 @@ const (
 	createUnicodeEnvironment uint32 = 0x00000400
 )
 
-// spawnPTY attempts ConPTY first and falls back to pipes on older Windows.
+// conPTYWorkingOnce probes ConPTY exactly once at first use.
+// If the probe fails (e.g. the child exits immediately with 0xC0000142 because
+// the Windows ConDrv infrastructure is not functional on this machine), all
+// subsequent calls to spawnPTY use the pipe-based fallback instead.
+var (
+	conPTYWorkingOnce   sync.Once
+	conPTYWorking       bool
+	conPTYWorkingLogger *slog.Logger
+)
+
+// probeConPTY creates a ConPTY, spawns "cmd.exe /C echo PROBE", and verifies
+// that bytes actually arrive on the output pipe within 3 seconds.
+// This catches machines where CreatePseudoConsole succeeds and the child
+// starts, but the ConDrv/conhost infrastructure is broken and no output ever
+// flows (exit code 0xC0000142 or silent hang).
+func probeConPTY() bool {
+	var ir, iw, or_, ow windows.Handle
+	if windows.CreatePipe(&ir, &iw, nil, 0) != nil {
+		return false
+	}
+	if windows.CreatePipe(&or_, &ow, nil, 0) != nil {
+		windows.CloseHandle(ir)
+		windows.CloseHandle(iw)
+		return false
+	}
+	coord := windows.Coord{X: 80, Y: 25}
+	var hPC windows.Handle
+	if windows.CreatePseudoConsole(coord, ir, ow, 0, &hPC) != nil {
+		windows.CloseHandle(ir)
+		windows.CloseHandle(iw)
+		windows.CloseHandle(or_)
+		windows.CloseHandle(ow)
+		return false
+	}
+	// Parent closes these ends now that the ConPTY owns them.
+	windows.CloseHandle(ir)
+	windows.CloseHandle(ow)
+
+	attrList, err := windows.NewProcThreadAttributeList(1)
+	if err != nil {
+		windows.CloseHandle(or_)
+		windows.ClosePseudoConsole(hPC)
+		windows.CloseHandle(iw)
+		return false
+	}
+	if err := attrList.Update(procThreadAttributePseudoConsole, unsafe.Pointer(&hPC), unsafe.Sizeof(hPC)); err != nil {
+		attrList.Delete()
+		windows.CloseHandle(or_)
+		windows.ClosePseudoConsole(hPC)
+		windows.CloseHandle(iw)
+		return false
+	}
+
+	siEx := windows.StartupInfoEx{}
+	siEx.StartupInfo.Cb = uint32(unsafe.Sizeof(siEx))
+	siEx.ProcThreadAttributeList = attrList.List()
+
+	// Use echo so the ConPTY is forced to produce output bytes we can verify.
+	cmdExe := `C:\Windows\System32\cmd.exe`
+	cmdLine := `"` + cmdExe + `" /C echo CONPTY-PROBE`
+	cmdLinePtr, _ := windows.UTF16PtrFromString(cmdLine)
+	var pi windows.ProcessInformation
+
+	spawnErr := windows.CreateProcess(nil, cmdLinePtr, nil, nil, false,
+		extendedStartupInfoPresent|createUnicodeEnvironment, nil, nil, &siEx.StartupInfo, &pi)
+	attrList.Delete()
+
+	if spawnErr != nil {
+		windows.CloseHandle(or_)
+		windows.ClosePseudoConsole(hPC)
+		windows.CloseHandle(iw)
+		return false
+	}
+	windows.CloseHandle(pi.Thread)
+
+	// Try to read output bytes within 3 seconds.
+	// If ConPTY is broken the ReadFile will block forever; use a goroutine + timer.
+	gotOutput := make(chan bool, 1)
+	go func() {
+		buf := make([]byte, 256)
+		var n uint32
+		readErr := windows.ReadFile(or_, buf, &n, nil)
+		gotOutput <- (readErr == nil && n > 0)
+	}()
+
+	var ok bool
+	select {
+	case ok = <-gotOutput:
+	case <-time.After(3 * time.Second):
+		ok = false
+	}
+
+	// Kill probe process and clean up regardless of result.
+	windows.TerminateProcess(pi.Process, 1)
+	windows.CloseHandle(pi.Process)
+	windows.CloseHandle(or_)
+	windows.ClosePseudoConsole(hPC)
+	windows.CloseHandle(iw)
+
+	return ok
+}
+
+// spawnPTY attempts ConPTY first and falls back to pipes on older Windows or
+// when ConPTY is detected to be non-functional on this machine.
+// localOutputFn, if non-nil, is called with raw bytes before base64 encoding — used by
+// `sessionforge run` to fan output to the local terminal simultaneously.
 func spawnPTY(
 	ctx context.Context,
 	sessionID string,
@@ -297,6 +403,7 @@ func spawnPTY(
 	workdir string,
 	env map[string]string,
 	outputFn func(sessionID, data string),
+	localOutputFn func(raw []byte),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
 	binary, args, err := resolveCommand(command)
@@ -304,12 +411,34 @@ func spawnPTY(
 		return nil, 0, fmt.Errorf("resolve command: %w", err)
 	}
 
-	h, pid, err := spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, exitFn)
+	// Probe ConPTY once on first use; cache the result for all future sessions.
+	conPTYWorkingOnce.Do(func() {
+		conPTYWorking = probeConPTY()
+		if conPTYWorkingLogger != nil {
+			if conPTYWorking {
+				conPTYWorkingLogger.Info("ConPTY probe passed — using pseudo-console for sessions")
+			} else {
+				conPTYWorkingLogger.Warn("ConPTY probe failed — falling back to pipe I/O for sessions (interactive features limited)")
+			}
+		}
+	})
+
+	if !conPTYWorking {
+		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
+	}
+
+	h, pid, err := spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 	if err != nil {
 		// ConPTY unavailable (Windows < 1809) -- fall back to pipe I/O.
-		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, exitFn)
+		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 	}
 	return h, pid, nil
+}
+
+// SetConPTYLogger wires a logger into the ConPTY probe so the probe result is
+// visible in the agent log. Called by the Manager after the logger is available.
+func SetConPTYLogger(l *slog.Logger) {
+	conPTYWorkingLogger = l
 }
 
 // spawnWithConPTY creates a real Windows Pseudo Console for full terminal emulation.
@@ -321,6 +450,7 @@ func spawnWithConPTY(
 	workdir string,
 	env map[string]string,
 	outputFn func(sessionID, data string),
+	localOutputFn func(raw []byte),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
 	// Pipe layout:
@@ -369,7 +499,7 @@ func spawnWithConPTY(
 	// Start the output reader BEFORE CreateProcess so the pipe is drained
 	// from the moment the ConPTY first writes VT initialisation sequences.
 	readerReady := make(chan struct{})
-	go readPipeOutput(sessionID, stdoutPR, outputFn, readerReady)
+	go readPipeOutput(sessionID, stdoutPR, outputFn, localOutputFn, readerReady)
 	<-readerReady
 
 	// Build the PROC_THREAD_ATTRIBUTE_LIST that tells CreateProcess to attach
@@ -560,6 +690,7 @@ func spawnWithPipes(
 	workdir string,
 	env map[string]string,
 	outputFn func(sessionID, data string),
+	localOutputFn func(raw []byte),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
 	cmdCtx, cancel := context.WithCancel(ctx)
@@ -614,7 +745,7 @@ func spawnWithPipes(
 		cancel: cancel,
 	}
 
-	go readPipeOutput(sessionID, pr, outputFn, nil)
+	go readPipeOutput(sessionID, pr, outputFn, localOutputFn, nil)
 
 	go func() {
 		waitErr := cmd.Wait()
@@ -634,9 +765,10 @@ func spawnWithPipes(
 }
 
 // readPipeOutput drains a reader, batches output at ~60fps, and calls outputFn
-// with base64-encoded chunks. If ready is non-nil it is closed once the inner
+// with base64-encoded chunks. If localOutputFn is non-nil it is called with raw
+// bytes before base64 encoding. If ready is non-nil it is closed once the inner
 // read goroutine has started, signalling that the pipe has an active consumer.
-func readPipeOutput(sessionID string, r io.Reader, outputFn func(string, string), ready chan<- struct{}) {
+func readPipeOutput(sessionID string, r io.Reader, outputFn func(string, string), localOutputFn func([]byte), ready chan<- struct{}) {
 	buf := make([]byte, 4096)
 	ticker := time.NewTicker(16 * time.Millisecond)
 	defer ticker.Stop()
@@ -645,6 +777,9 @@ func readPipeOutput(sessionID string, r io.Reader, outputFn func(string, string)
 
 	flush := func() {
 		if len(pending) > 0 {
+			if localOutputFn != nil {
+				localOutputFn(pending)
+			}
 			encoded := base64.StdEncoding.EncodeToString(pending)
 			outputFn(sessionID, encoded)
 			pending = pending[:0]
@@ -695,6 +830,15 @@ func (h *ptyHandle) writeInput(data string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	_, err = h.stdin.Write(decoded)
+	return err
+}
+
+// writeInputRaw forwards raw bytes to the PTY stdin without base64 decoding.
+// Used by StartWithLocalOutput / WriteInputRaw for local terminal passthrough.
+func (h *ptyHandle) writeInputRaw(data []byte) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, err := h.stdin.Write(data)
 	return err
 }
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -14,6 +15,9 @@ import (
 
 	"github.com/creack/pty"
 )
+
+// SetConPTYLogger is a no-op on non-Windows platforms (ConPTY is Windows-only).
+func SetConPTYLogger(_ *slog.Logger) {}
 
 // ptyHandle wraps the PTY file descriptor and process for Unix systems.
 type ptyHandle struct {
@@ -56,6 +60,8 @@ func resolveCommand(command string) (string, []string, error) {
 
 // spawnPTY starts a new PTY process and wires up output streaming.
 // outputFn is called with base64-encoded output chunks; exitFn is called on process exit.
+// localOutputFn, if non-nil, is called with raw bytes before base64 encoding — used by
+// `sessionforge run` to fan output to the local terminal simultaneously.
 func spawnPTY(
 	ctx context.Context,
 	sessionID string,
@@ -63,6 +69,7 @@ func spawnPTY(
 	workdir string,
 	env map[string]string,
 	outputFn func(sessionID, data string),
+	localOutputFn func(raw []byte),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
 	binary, args, err := resolveCommand(command)
@@ -103,7 +110,7 @@ func spawnPTY(
 	}
 
 	// Start output reader goroutine with 16ms debounce (~60fps).
-	go readPTYOutput(sessionID, ptmx, outputFn)
+	go readPTYOutput(sessionID, ptmx, outputFn, localOutputFn)
 
 	// Wait goroutine: detect exit and call exitFn.
 	go func() {
@@ -129,8 +136,9 @@ func spawnPTY(
 }
 
 // readPTYOutput reads bytes from the PTY master, batches them with a 16ms debounce,
-// base64-encodes the batch, and calls outputFn.
-func readPTYOutput(sessionID string, ptmx *os.File, outputFn func(sessionID, data string)) {
+// base64-encodes the batch, and calls outputFn. If localOutputFn is non-nil it is
+// called with the raw bytes before base64 encoding.
+func readPTYOutput(sessionID string, ptmx *os.File, outputFn func(sessionID, data string), localOutputFn func([]byte)) {
 	buf := make([]byte, 4096)
 	ticker := time.NewTicker(16 * time.Millisecond)
 	defer ticker.Stop()
@@ -139,6 +147,9 @@ func readPTYOutput(sessionID string, ptmx *os.File, outputFn func(sessionID, dat
 
 	flush := func() {
 		if len(pending) > 0 {
+			if localOutputFn != nil {
+				localOutputFn(pending)
+			}
 			encoded := base64.StdEncoding.EncodeToString(pending)
 			outputFn(sessionID, encoded)
 			pending = pending[:0]
@@ -184,6 +195,13 @@ func (h *ptyHandle) writeInput(data string) error {
 		return fmt.Errorf("base64 decode: %w", err)
 	}
 	_, err = h.ptmx.Write(decoded)
+	return err
+}
+
+// writeInputRaw forwards raw bytes to the PTY stdin without base64 decoding.
+// Used by StartWithLocalOutput / WriteInputRaw for local terminal passthrough.
+func (h *ptyHandle) writeInputRaw(data []byte) error {
+	_, err := h.ptmx.Write(data)
 	return err
 }
 

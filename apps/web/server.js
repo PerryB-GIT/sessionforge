@@ -544,14 +544,8 @@ function handleAgentWs(ws, userId, remoteAddress) {
     try {
       const [newLastId, messages] = await readStream(StreamKeys.agent(machineId), agentPollLastId)
       agentPollLastId = newLastId
-      if (messages.length > 0) {
-        console.log(`[ws/agent] poll: delivering ${messages.length} msg(s) to machine ${machineId}`)
-        for (const msg of messages) {
-          console.log(
-            `[ws/agent] poll: msg type=${typeof msg} len=${msg?.length} preview=${String(msg).substring(0, 80)}`
-          )
-          if (ws.readyState === WebSocket.OPEN) ws.send(msg)
-        }
+      for (const msg of messages) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(msg)
       }
     } catch (pollErr) {
       console.error('[ws/agent] poll error:', pollErr?.message ?? pollErr)

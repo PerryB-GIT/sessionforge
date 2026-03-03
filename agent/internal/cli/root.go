@@ -72,6 +72,8 @@ func init() {
 	rootCmd.AddCommand(sessionCmd)
 	rootCmd.AddCommand(serviceCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(runCmd)
 }
 
 // versionCmd prints build-time information.

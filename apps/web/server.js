@@ -588,6 +588,9 @@ function handleAgentWs(ws, userId, remoteAddress) {
     } catch {
       return
     }
+    if (msg.type !== 'heartbeat') {
+      console.log('[ws/agent] recv type:', msg.type)
+    }
     try {
       await handleAgentMessage(msg, userId, remoteAddress, sessionStats, (id, hn) => {
         machineId = id
@@ -911,6 +914,14 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       if (startedAt) appendRecordingFrame(sessionId, data, startedAt).catch(console.error)
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
       const ownerUserId = await getMachineUserId(rows[0]?.machine_id)
+      console.log(
+        '[ws/agent] session_output sessionId',
+        sessionId,
+        'ownerUserId',
+        ownerUserId,
+        'dataLen',
+        data?.length
+      )
       if (ownerUserId)
         await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })
       break

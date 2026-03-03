@@ -80,6 +80,43 @@ export function useWebSocket() {
           sessionCount: number
           discoveredProcesses?: import('@/store').DiscoveredProcess[]
         }
+        const knownIds = useStore.getState().machines.map((x) => x.id)
+        if (!knownIds.includes(m.id)) {
+          // Machine not in store yet — fetch full list so it appears in the UI
+          fetch('/api/machines')
+            .then((r) => r.json())
+            .then((json) => {
+              if (json.data?.items) {
+                const list = json.data.items.map(
+                  (x: {
+                    id: string
+                    userId: string
+                    orgId: string | null
+                    name: string
+                    os: string
+                    hostname: string
+                    status: string
+                    lastSeen: string | null
+                    agentVersion: string | null
+                    createdAt: string
+                  }) => ({
+                    id: x.id,
+                    userId: x.userId,
+                    orgId: x.orgId,
+                    name: x.name,
+                    os: x.os,
+                    hostname: x.hostname,
+                    status: x.status,
+                    lastSeen: x.lastSeen ? new Date(x.lastSeen) : null,
+                    agentVersion: x.agentVersion ?? null,
+                    createdAt: new Date(x.createdAt),
+                  })
+                )
+                useStore.getState().setMachines(list)
+              }
+            })
+            .catch(() => {})
+        }
         updateMachine(m.id, {
           status: m.status as 'online' | 'offline' | 'error',
           cpu: m.cpu,

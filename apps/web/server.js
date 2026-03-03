@@ -775,9 +775,18 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       const logKey = StreamKeys.sessionLogs(s.id)
       await redis.expire(logKey, SESSION_LOG_TTL_SECONDS).catch(() => {})
 
+      // Upsert: dashboard-started sessions already have a row (UPDATE path).
+      // CLI-started sessions (sessionforge run) have no prior row (INSERT path).
       await query(
-        `UPDATE sessions SET pid = $1, process_name = $2, workdir = $3, status = 'running', started_at = $4 WHERE id = $5`,
-        [s.pid, s.processName, s.workdir, new Date(s.startedAt), s.id]
+        `INSERT INTO sessions (id, machine_id, user_id, pid, process_name, workdir, status, started_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'running', $7)
+         ON CONFLICT (id) DO UPDATE
+           SET pid = EXCLUDED.pid,
+               process_name = EXCLUDED.process_name,
+               workdir = EXCLUDED.workdir,
+               status = 'running',
+               started_at = EXCLUDED.started_at`,
+        [s.id, machineId, userId, s.pid, s.processName, s.workdir, new Date(s.startedAt)]
       )
       // Track session start time for recording frame timestamps
       sessionStartTimes[s.id] = new Date(s.startedAt)

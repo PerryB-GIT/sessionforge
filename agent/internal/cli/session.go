@@ -89,7 +89,7 @@ func buildAgentComponents(ctx context.Context, cfg *config.Config) (*connection.
 		}
 	}
 
-	logger := buildLogger(cfg.LogLevel)
+	logger := buildLogger(cfg.LogLevel, cfg.LogFile)
 	client := connection.NewClient(cfg, version, dispatchWrapper, logger)
 	mgr := session.NewManager(ctx, client, logger)
 	handler := connection.NewHandler(mgr, client, logger)
@@ -147,7 +147,7 @@ func runSessionStart(cmd *cobra.Command, args []string) error {
 
 	client, mgr := buildAgentComponents(ctx, cfg)
 
-	go connection.RunHeartbeat(ctx, client, cfg.MachineID, mgr, buildLogger(cfg.LogLevel))
+	go connection.RunHeartbeat(ctx, client, cfg.MachineID, mgr, buildLogger(cfg.LogLevel, cfg.LogFile))
 	go client.Run(ctx)
 
 	// Give the WebSocket connection time to register.
@@ -226,7 +226,7 @@ func runSessionAttach(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	logger := buildLogger(cfg.LogLevel)
+	logger := buildLogger(cfg.LogLevel, cfg.LogFile)
 	client = connection.NewClient(cfg, version, dispatchWrapper, logger)
 	mgr = session.NewManager(ctx, client, logger)
 	h := connection.NewHandler(mgr, client, logger)

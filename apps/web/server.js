@@ -223,15 +223,20 @@ async function publishToAgent(machineId, message) {
 async function readStream(key, lastId) {
   const result = await redis.xread(key, lastId, { count: 20 })
   if (!result || result.length === 0) return [lastId, []]
-  // @upstash/redis returns: [[streamName, [[id, {data: "..."}], ...]]]
-  // e[0] = message id, e[1] = field object e.g. {data: "..."}
+  // @upstash/redis xread returns: [[streamName, [[id, [field, parsedValue]], ...]]]
+  // Each entry: e[0] = message id, e[1] = [field, parsedValue] flat array.
+  // The SDK auto-parses the value from JSON, so e[1][1] is already an object.
+  // We re-serialize it to a JSON string for ws.send().
   const entries = result[0]?.[1] ?? []
   if (entries.length === 0) return [lastId, []]
   const newLastId = entries[entries.length - 1][0]
-  const messages = entries.map((e) => {
-    const val = e[1]?.data
-    return typeof val === 'string' ? val : JSON.stringify(val)
-  })
+  const messages = entries
+    .map((e) => {
+      const val = e[1]?.[1] // parsedValue at index 1 of the [field, value] array
+      if (val === undefined || val === null) return null
+      return typeof val === 'string' ? val : JSON.stringify(val)
+    })
+    .filter(Boolean)
   return [newLastId, messages]
 }
 

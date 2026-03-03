@@ -34,6 +34,11 @@ type Config struct {
 	// Used at runtime when the service runs as LocalSystem and the user's npm
 	// directories are not in the system PATH.
 	ClaudePath string `toml:"claude_path,omitempty"`
+	// LogFile is an optional absolute path to a log file. When set, log output
+	// is written to this file instead of (or in addition to) stderr.
+	// Useful for diagnosing issues when the agent runs as a Windows service
+	// where stderr is not visible.
+	LogFile string `toml:"log_file,omitempty"`
 }
 
 // DefaultConfig returns a Config populated with sensible defaults.

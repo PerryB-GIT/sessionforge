@@ -4,6 +4,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -112,7 +113,7 @@ func runDaemonWithContext(ctx context.Context) error {
 		logLevel = flagLogLevel
 	}
 
-	logger := buildLogger(logLevel)
+	logger := buildLogger(logLevel, cfg.LogFile)
 	logger.Info("SessionForge Agent starting",
 		"version", version,
 		"machineId", cfg.MachineID,
@@ -165,7 +166,8 @@ func runDaemonWithContext(ctx context.Context) error {
 }
 
 // buildLogger creates a structured slog logger at the requested level.
-func buildLogger(level string) *slog.Logger {
+// If logFile is non-empty, output is written to that file (appended) instead of stderr.
+func buildLogger(level, logFile string) *slog.Logger {
 	var l slog.Level
 	switch level {
 	case "debug":
@@ -177,5 +179,15 @@ func buildLogger(level string) *slog.Logger {
 	default:
 		l = slog.LevelInfo
 	}
-	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: l}))
+
+	var w io.Writer = os.Stderr
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if err == nil {
+			// Write to both the file and stderr so interactive runs also print to terminal.
+			w = io.MultiWriter(f, os.Stderr)
+		}
+	}
+
+	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: l}))
 }

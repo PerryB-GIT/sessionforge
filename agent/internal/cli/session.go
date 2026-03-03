@@ -95,6 +95,12 @@ func buildAgentComponents(ctx context.Context, cfg *config.Config) (*connection.
 	handler := connection.NewHandler(mgr, client, logger)
 	dispatch = handler.Handle
 
+	// On every (re)connect, replay session_started for all active sessions
+	// so the server stays in sync if the connection was interrupted.
+	client.OnConnect = func() {
+		mgr.ReplayToCloud()
+	}
+
 	return client, mgr
 }
 

@@ -54,6 +54,10 @@ type Client struct {
 	handler MessageHandler
 	logger  *slog.Logger
 
+	// OnConnect is called after every successful registration (initial connect + reconnects).
+	// Use this to replay state (e.g. session_started messages) so the server stays in sync.
+	OnConnect func()
+
 	mu   sync.Mutex
 	conn *websocket.Conn
 
@@ -138,6 +142,11 @@ func (c *Client) connect(ctx context.Context) error {
 	if err := c.sendRegister(); err != nil {
 		conn.Close()
 		return fmt.Errorf("register: %w", err)
+	}
+
+	// Notify listeners (e.g. session replay) after successful registration.
+	if c.OnConnect != nil {
+		go c.OnConnect()
 	}
 
 	// Goroutine for writes.

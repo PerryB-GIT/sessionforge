@@ -342,6 +342,29 @@ func (m *Manager) Count() int {
 	return m.registry.Count()
 }
 
+// ReplayToCloud resends session_started for every currently-active session.
+// Call this after a reconnect so the server stays in sync with the agent's state.
+func (m *Manager) ReplayToCloud() {
+	all := m.registry.GetAll()
+	for _, s := range all {
+		msg := sessionStartedMsg{
+			Type: "session_started",
+			Session: sessionInfoJSON{
+				ID:          s.ID,
+				PID:         s.PID,
+				ProcessName: s.ProcessName,
+				Workdir:     s.Workdir,
+				StartedAt:   s.StartedAt.UTC().Format(time.RFC3339),
+			},
+		}
+		if err := m.messenger.SendJSON(msg); err != nil {
+			m.logger.Warn("replay: failed to send session_started", "sessionId", s.ID, "err", err)
+		} else {
+			m.logger.Info("replay: replayed session_started", "sessionId", s.ID)
+		}
+	}
+}
+
 // ManagedPIDs returns the set of PIDs for all active sessions so that the
 // process scanner can exclude processes already managed by SessionForge.
 func (m *Manager) ManagedPIDs() map[int32]bool {

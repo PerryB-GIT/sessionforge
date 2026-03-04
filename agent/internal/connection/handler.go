@@ -159,6 +159,11 @@ func (h *Handler) handlePauseSession(raw []byte) {
 	h.logger.Info("handler: pause_session", "sessionId", m.SessionID)
 	if err := h.sessions.Pause(m.SessionID); err != nil {
 		h.logger.Warn("handler: pause_session failed", "sessionId", m.SessionID, "err", err)
+		_ = h.client.SendJSON(map[string]any{
+			"type":      "session_error",
+			"sessionId": m.SessionID,
+			"error":     err.Error(),
+		})
 	}
 }
 
@@ -171,6 +176,11 @@ func (h *Handler) handleResumeSession(raw []byte) {
 	h.logger.Info("handler: resume_session", "sessionId", m.SessionID)
 	if err := h.sessions.Resume(m.SessionID); err != nil {
 		h.logger.Warn("handler: resume_session failed", "sessionId", m.SessionID, "err", err)
+		_ = h.client.SendJSON(map[string]any{
+			"type":      "session_error",
+			"sessionId": m.SessionID,
+			"error":     err.Error(),
+		})
 	}
 }
 

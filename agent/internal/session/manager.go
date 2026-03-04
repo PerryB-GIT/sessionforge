@@ -155,6 +155,12 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, nil, exitFn)
 	if err != nil {
 		m.registry.Remove(sessionID)
+		// earlyStarted was already sent — notify the cloud so the DB record is cleaned up.
+		_ = m.messenger.SendJSON(sessionCrashedMsg{
+			Type:      "session_crashed",
+			SessionID: sessionID,
+			Error:     err.Error(),
+		})
 		return "", fmt.Errorf("spawn PTY: %w", err)
 	}
 
@@ -265,6 +271,12 @@ func (m *Manager) StartWithLocalOutput(
 	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, localFn, exitFn)
 	if err != nil {
 		m.registry.Remove(sessionID)
+		// earlyStarted was already sent — notify the cloud so the DB record is cleaned up.
+		_ = m.messenger.SendJSON(sessionCrashedMsg{
+			Type:      "session_crashed",
+			SessionID: sessionID,
+			Error:     err.Error(),
+		})
 		return "", nil, fmt.Errorf("spawn PTY: %w", err)
 	}
 

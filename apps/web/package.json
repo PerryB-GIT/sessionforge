@@ -20,6 +20,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@auth/drizzle-adapter": "^1.11.1",
     "@google-cloud/storage": "^7.19.0",
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.3.4",
     "@opentelemetry/exporter-logs-otlp-http": "^0.212.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.212.0",

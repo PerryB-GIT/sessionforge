@@ -12,7 +12,7 @@ spec:
       annotations:
         # Scaling: scale to zero when no traffic
         autoscaling.knative.dev/minScale: "0"
-        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/maxScale: "1"
         # Use Cloud SQL via connection string, not Cloud SQL proxy sidecar
         run.googleapis.com/execution-environment: gen2
         # VPC connector so Cloud Run can reach Cloud SQL private IP
@@ -131,6 +131,11 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: sessionforge-stripe-enterprise-price-id
+                  key: latest
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sessionforge-gemini-api-key
                   key: latest
             - name: GCS_BUCKET_NAME
               value: sessionforge-session-logs-prod

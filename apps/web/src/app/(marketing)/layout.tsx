@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Zap } from 'lucide-react'
+import { ChatWidget } from '@/components/ChatWidget'
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,7 +16,10 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               <span className="text-sm font-semibold text-white">SessionForge</span>
             </Link>
             <div className="flex items-center gap-4">
-              <Link href="/login" className="text-sm text-gray-400 hover:text-white transition-colors">
+              <Link
+                href="/login"
+                className="text-sm text-gray-400 hover:text-white transition-colors"
+              >
                 Sign in
               </Link>
               <Link
@@ -32,6 +36,8 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       {/* Content */}
       {children}
 
+      <ChatWidget />
+
       {/* Footer */}
       <footer className="border-t border-[#1e1e2e] py-10 mt-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -43,16 +49,28 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               <span className="text-sm font-medium text-white">SessionForge</span>
             </div>
             <div className="flex gap-6">
-              <Link href="/privacy" className="text-sm text-gray-500 hover:text-white transition-colors">
+              <Link
+                href="/privacy"
+                className="text-sm text-gray-500 hover:text-white transition-colors"
+              >
                 Privacy
               </Link>
-              <Link href="/terms" className="text-sm text-gray-500 hover:text-white transition-colors">
+              <Link
+                href="/terms"
+                className="text-sm text-gray-500 hover:text-white transition-colors"
+              >
                 Terms
               </Link>
-              <Link href="/aup" className="text-sm text-gray-500 hover:text-white transition-colors">
+              <Link
+                href="/aup"
+                className="text-sm text-gray-500 hover:text-white transition-colors"
+              >
                 Acceptable Use
               </Link>
-              <Link href="/docs" className="text-sm text-gray-500 hover:text-white transition-colors">
+              <Link
+                href="/docs"
+                className="text-sm text-gray-500 hover:text-white transition-colors"
+              >
                 Docs
               </Link>
             </div>

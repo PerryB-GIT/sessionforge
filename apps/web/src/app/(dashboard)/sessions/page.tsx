@@ -29,13 +29,7 @@ const statusFilters: { label: string; value: FilterStatus }[] = [
   { label: 'Paused', value: 'paused' },
 ]
 
-interface AdoptTarget {
-  machineId: string
-  command: string
-  workdir: string
-}
-
-function DiscoveredProcessesBanner({ onAdopt }: { onAdopt: (target: AdoptTarget) => void }) {
+function DiscoveredProcessesBanner() {
   const machines = useStore((s) => s.machines)
   const [expanded, setExpanded] = useState(true)
 
@@ -61,7 +55,7 @@ function DiscoveredProcessesBanner({ onAdopt }: { onAdopt: (target: AdoptTarget)
         <span className="text-sm font-medium text-purple-300 flex-1">
           {rows.length} unmanaged process{rows.length !== 1 ? 'es' : ''} detected
         </span>
-        <span className="text-xs text-gray-500 mr-2">Click Adopt to bring into SessionForge</span>
+        <span className="text-xs text-muted-foreground mr-2">Adopt — coming soon</span>
         {expanded ? (
           <ChevronUp className="h-4 w-4 text-gray-500" />
         ) : (
@@ -111,20 +105,9 @@ function DiscoveredProcessesBanner({ onAdopt }: { onAdopt: (target: AdoptTarget)
                     {p.workdir || '—'}
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 text-xs px-2 border-purple-500/40 text-purple-300 hover:bg-purple-500/20"
-                      onClick={() =>
-                        onAdopt({
-                          machineId,
-                          command: p.cmdline || p.name,
-                          workdir: p.workdir,
-                        })
-                      }
-                    >
-                      Adopt
-                    </Button>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                      Coming soon
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -140,7 +123,6 @@ export default function SessionsPage() {
   const { sessions, isLoading } = useSessions()
   const { machines } = useMachines()
   const [startOpen, setStartOpen] = useState(false)
-  const [adoptTarget, setAdoptTarget] = useState<AdoptTarget | null>(null)
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all')
   const [machineFilter, setMachineFilter] = useState<string>('all')
 
@@ -156,11 +138,6 @@ export default function SessionsPage() {
     paused: sessions.filter((s) => s.status === 'paused').length,
   }
 
-  function handleAdopt(target: AdoptTarget) {
-    setAdoptTarget(target)
-    setStartOpen(true)
-  }
-
   return (
     <div className="space-y-6 max-w-7xl">
       {/* Header */}
@@ -171,19 +148,14 @@ export default function SessionsPage() {
             {counts.running} active, {counts.stopped + counts.crashed} stopped
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setAdoptTarget(null)
-            setStartOpen(true)
-          }}
-        >
+        <Button onClick={() => setStartOpen(true)}>
           <Plus className="h-4 w-4" />
           Start Session
         </Button>
       </div>
 
       {/* Unmanaged process discovery banner */}
-      <DiscoveredProcessesBanner onAdopt={handleAdopt} />
+      <DiscoveredProcessesBanner />
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -236,14 +208,8 @@ export default function SessionsPage() {
       {/* Session list */}
       <SessionList sessions={filtered} isLoading={isLoading} />
 
-      {/* Start / Adopt session dialog */}
-      <StartSessionDialog
-        open={startOpen}
-        onOpenChange={setStartOpen}
-        defaultMachineId={adoptTarget?.machineId}
-        defaultCommand={adoptTarget?.command}
-        defaultWorkdir={adoptTarget?.workdir}
-      />
+      {/* Start session dialog */}
+      <StartSessionDialog open={startOpen} onOpenChange={setStartOpen} />
     </div>
   )
 }

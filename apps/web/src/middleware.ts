@@ -64,6 +64,44 @@ async function checkIpAllowlistFromCache(orgId: string, ip: string): Promise<boo
 export async function middleware(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl
 
+  // ── Login rate limiting ─────────────────────────────────────────────────────
+  // Intercept POST /api/auth/callback/credentials before NextAuth processes it.
+  // Returns HTTP 429 when the per-IP sliding window (10 req / 15 min) is exceeded.
+  // Shares the same Redis key prefix ('rl:login') as checkLoginRateLimit() in auth.ts
+  // for cumulative enforcement across both layers.
+  if (pathname === '/api/auth/callback/credentials' && req.method === 'POST') {
+    const edgeRedis = getEdgeRedis()
+    if (edgeRedis) {
+      try {
+        const { Ratelimit } = await import('@upstash/ratelimit')
+        const ratelimit = new Ratelimit({
+          redis: edgeRedis,
+          limiter: Ratelimit.slidingWindow(10, '15 m'),
+          prefix: 'rl:login',
+        })
+        const ip =
+          req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+          req.headers.get('x-real-ip') ??
+          '127.0.0.1'
+        const { success } = await ratelimit.limit(ip)
+        if (!success) {
+          return NextResponse.json(
+            {
+              error: {
+                code: 'RATE_LIMITED',
+                message: 'Too many login attempts. Try again later.',
+                statusCode: 429,
+              },
+            },
+            { status: 429, headers: { 'Retry-After': '900' } }
+          )
+        }
+      } catch {
+        // Fail open — never block login on Redis error
+      }
+    }
+  }
+
   const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route))
   const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))

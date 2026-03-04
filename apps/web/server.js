@@ -54,6 +54,7 @@ const StreamKeys = {
 
 const SESSION_LOG_MAX_LINES = 2000
 const SESSION_LOG_TTL_SECONDS = 7 * 24 * 60 * 60
+const SESSION_START_TIME_TTL_SECONDS = 24 * 60 * 60 // 24 h — survives server restarts
 
 // ─── Session Recording ────────────────────────────────────────────────────────
 // Plain-JS equivalents of src/lib/recording.ts — server.js is CJS and cannot
@@ -62,9 +63,27 @@ const SESSION_LOG_TTL_SECONDS = 7 * 24 * 60 * 60
 const RECORDING_BUCKET = process.env.GCS_BUCKET_LOGS ?? 'sessionforge-logs'
 const RECORDING_TTL_SECONDS = 365 * 24 * 60 * 60 // 1 year
 
-// In-memory map: sessionId -> { startedAt: Date }
-// Populated on session_started, consumed on session_stopped / session_crashed.
-const sessionStartTimes = {}
+function sessionStartTimeKey(sessionId) {
+  return `session:starttime:${sessionId}`
+}
+
+async function setSessionStartTime(sessionId, startedAt) {
+  await redis.set(sessionStartTimeKey(sessionId), startedAt.getTime(), {
+    ex: SESSION_START_TIME_TTL_SECONDS,
+  })
+}
+
+async function popSessionStartTime(sessionId) {
+  const key = sessionStartTimeKey(sessionId)
+  const ms = await redis.get(key)
+  await redis.del(key)
+  return ms ? new Date(Number(ms)) : new Date()
+}
+
+async function getSessionStartTime(sessionId) {
+  const ms = await redis.get(sessionStartTimeKey(sessionId))
+  return ms ? new Date(Number(ms)) : null
+}
 
 function recordingRedisKey(sessionId) {
   return `recording:${sessionId}`
@@ -353,6 +372,7 @@ function handleDashboardWs(ws, userId) {
   let lastId = '$'
   let pollTimer = null
   let pingTimer = null
+  const sessionRouteCache = new Map() // sessionId → { machine_id, status }
 
   // Push cached machine metrics immediately on connect so the client doesn't
   // have to wait up to 30 s for the next heartbeat to see Live CPU / Memory.
@@ -434,6 +454,11 @@ function handleDashboardWs(ws, userId) {
       case 'subscribe_session': {
         if (!msg.sessionId) break
         ws.subscribedSessionId = msg.sessionId
+        // Pre-populate the route cache so session_input and resize skip the DB on the hot path.
+        if (!sessionRouteCache.has(msg.sessionId)) {
+          const cached = await getSessionRecord(msg.sessionId, userId)
+          if (cached) sessionRouteCache.set(msg.sessionId, cached)
+        }
         // Replay ring buffer so the client sees output that arrived before this WS connected.
         try {
           const logKey = StreamKeys.sessionLogs(msg.sessionId)
@@ -463,7 +488,11 @@ function handleDashboardWs(ws, userId) {
           console.warn('[ws/dashboard] session_input too large or invalid, dropping')
           break
         }
-        const record = await getSessionRecord(msg.sessionId, userId)
+        let record = sessionRouteCache.get(msg.sessionId)
+        if (!record) {
+          record = await getSessionRecord(msg.sessionId, userId)
+          if (record) sessionRouteCache.set(msg.sessionId, record)
+        }
         if (!record) {
           console.warn(
             '[ws/dashboard] session_input: session not found',
@@ -497,7 +526,11 @@ function handleDashboardWs(ws, userId) {
       }
       case 'resize': {
         if (!msg.sessionId || !msg.cols || !msg.rows) break
-        const record = await getSessionRecord(msg.sessionId, userId)
+        let record = sessionRouteCache.get(msg.sessionId)
+        if (!record) {
+          record = await getSessionRecord(msg.sessionId, userId)
+          if (record) sessionRouteCache.set(msg.sessionId, record)
+        }
         if (!record || record.status !== 'running') break
         await publishToAgent(record.machine_id, {
           type: 'resize',
@@ -513,6 +546,7 @@ function handleDashboardWs(ws, userId) {
   ws.on('close', () => {
     if (pollTimer) clearTimeout(pollTimer)
     if (pingTimer) clearInterval(pingTimer)
+    sessionRouteCache.clear()
   })
 
   pushInitialMetrics()
@@ -788,8 +822,8 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
                started_at = EXCLUDED.started_at`,
         [s.id, machineId, userId, s.pid, s.processName, s.workdir, new Date(s.startedAt)]
       )
-      // Track session start time for recording frame timestamps
-      sessionStartTimes[s.id] = new Date(s.startedAt)
+      // Track session start time in Redis for recording frame timestamps (survives restarts)
+      await setSessionStartTime(s.id, new Date(s.startedAt))
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [s.id])
       if (rows[0])
         await publishToDashboard(userId, {
@@ -828,8 +862,7 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
           rows[0].machine_id,
         ]).catch(() => [])
         if (orgRows[0]?.org_id) {
-          const startedAt = sessionStartTimes[sessionId] ?? new Date()
-          delete sessionStartTimes[sessionId]
+          const startedAt = await popSessionStartTime(sessionId)
           archiveSessionRecording(sessionId, orgRows[0].org_id, startedAt).catch(console.error)
         }
       }
@@ -883,8 +916,7 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
           rows[0].machine_id,
         ]).catch(() => [])
         if (orgRows[0]?.org_id) {
-          const startedAt = sessionStartTimes[sessionId] ?? new Date()
-          delete sessionStartTimes[sessionId]
+          const startedAt = await popSessionStartTime(sessionId)
           archiveSessionRecording(sessionId, orgRows[0].org_id, startedAt).catch(console.error)
         }
       }
@@ -921,20 +953,12 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       await redis.ltrim(logKey, -SESSION_LOG_MAX_LINES, -1)
       await redis.expire(logKey, SESSION_LOG_TTL_SECONDS)
       // Append frame to recording buffer (fire-and-forget; errors are logged inside)
-      const startedAt = sessionStartTimes[sessionId]
-      if (startedAt) appendRecordingFrame(sessionId, data, startedAt).catch(console.error)
-      const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
-      const ownerUserId = await getMachineUserId(rows[0]?.machine_id)
-      console.log(
-        '[ws/agent] session_output sessionId',
-        sessionId,
-        'ownerUserId',
-        ownerUserId,
-        'dataLen',
-        data?.length
-      )
-      if (ownerUserId)
-        await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })
+      getSessionStartTime(sessionId)
+        .then((startedAt) => {
+          if (startedAt) appendRecordingFrame(sessionId, data, startedAt).catch(console.error)
+        })
+        .catch(console.error)
+      if (userId) await publishToDashboard(userId, { type: 'session_output', sessionId, data })
       break
     }
   }

@@ -74,10 +74,10 @@ async function setSessionStartTime(sessionId, startedAt) {
 }
 
 async function popSessionStartTime(sessionId) {
-  const key = sessionStartTimeKey(sessionId)
-  const ms = await redis.get(key)
-  await redis.del(key)
-  return ms ? new Date(Number(ms)) : new Date()
+  // getdel is atomic — avoids a race where concurrent stopped+crashed both read the key
+  const ms = await redis.getdel(sessionStartTimeKey(sessionId))
+  // Return null if key was missing/expired so callers can skip archiving
+  return ms ? new Date(Number(ms)) : null
 }
 
 async function getSessionStartTime(sessionId) {
@@ -823,7 +823,8 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         [s.id, machineId, userId, s.pid, s.processName, s.workdir, new Date(s.startedAt)]
       )
       // Track session start time in Redis for recording frame timestamps (survives restarts)
-      await setSessionStartTime(s.id, new Date(s.startedAt))
+      // Fire-and-forget — Redis failure must not block dashboard notify or webhook delivery
+      setSessionStartTime(s.id, new Date(s.startedAt)).catch(console.error)
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [s.id])
       if (rows[0])
         await publishToDashboard(userId, {
@@ -863,7 +864,8 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         ]).catch(() => [])
         if (orgRows[0]?.org_id) {
           const startedAt = await popSessionStartTime(sessionId)
-          archiveSessionRecording(sessionId, orgRows[0].org_id, startedAt).catch(console.error)
+          if (startedAt)
+            archiveSessionRecording(sessionId, orgRows[0].org_id, startedAt).catch(console.error)
         }
       }
       try {
@@ -917,7 +919,8 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
         ]).catch(() => [])
         if (orgRows[0]?.org_id) {
           const startedAt = await popSessionStartTime(sessionId)
-          archiveSessionRecording(sessionId, orgRows[0].org_id, startedAt).catch(console.error)
+          if (startedAt)
+            archiveSessionRecording(sessionId, orgRows[0].org_id, startedAt).catch(console.error)
         }
       }
       // Notify the session owner

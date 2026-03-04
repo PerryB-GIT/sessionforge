@@ -34,8 +34,18 @@ export async function POST(req: NextRequest) {
   }
 
   // Rate limit by IP — 20 messages per hour
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  // Read the LAST IP in the chain: Cloud Run's load balancer appends the real client IP last,
+  // so reading [0] is spoofable via a fake X-Forwarded-For header.
+  const forwarded = req.headers.get('x-forwarded-for')
+  const ip = forwarded
+    ? forwarded.split(',').at(-1)!.trim()
+    : (req.headers.get('x-real-ip') ?? 'unknown')
   const rl = getRatelimit()
+  if (!rl) {
+    console.warn(
+      '[chat/widget] Rate limiter unavailable — UPSTASH env vars not set. Running unprotected.'
+    )
+  }
   if (rl) {
     const { success } = await rl.limit(ip)
     if (!success) {
@@ -44,9 +54,19 @@ export async function POST(req: NextRequest) {
   }
 
   let message: string
+  let history: Array<{ role: 'user' | 'model'; text: string }> = []
   try {
     const body = await req.json()
     message = typeof body.message === 'string' ? body.message.slice(0, 500) : ''
+    if (Array.isArray(body.history)) {
+      history = body.history
+        .filter((h: unknown) => typeof h === 'object' && h !== null && 'role' in h && 'text' in h)
+        .slice(-10) // cap at last 10 turns to limit token usage
+        .map((h: { role: string; text: string }) => ({
+          role: h.role === 'model' ? 'model' : 'user',
+          text: String(h.text).slice(0, 500),
+        }))
+    }
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
@@ -61,7 +81,13 @@ export async function POST(req: NextRequest) {
       model: 'gemini-1.5-flash',
       systemInstruction: SYSTEM_PROMPT,
     })
-    const result = await model.generateContent(message)
+    const chat = model.startChat({
+      history: history.map((h) => ({
+        role: h.role,
+        parts: [{ text: h.text }],
+      })),
+    })
+    const result = await chat.sendMessage(message)
     const reply = result.response.text()
     return NextResponse.json({ reply })
   } catch (err) {

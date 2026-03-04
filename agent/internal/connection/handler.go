@@ -126,12 +126,6 @@ func (h *Handler) handleStartSession(raw []byte) {
 	sessionID, err := h.sessions.Start(m.RequestID, m.SessionID, m.Command, m.Workdir, m.Env)
 	if err != nil {
 		h.logger.Error("handler: start_session failed", "err", err, "requestId", m.RequestID)
-		// Send a crash notification so the cloud knows the request failed.
-		_ = h.client.SendJSON(map[string]any{
-			"type":      "session_crashed",
-			"sessionId": m.SessionID,
-			"error":     err.Error(),
-		})
 		return
 	}
 

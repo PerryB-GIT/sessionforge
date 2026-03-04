@@ -12,6 +12,8 @@ spec:
       annotations:
         # Scaling: scale to zero when no traffic
         autoscaling.knative.dev/minScale: "0"
+        # maxScale=1: per-connection sessionStats accumulation in handleAgentWs is in-memory and
+        # not shared across instances. Raising this requires moving sessionStats to Redis first.
         autoscaling.knative.dev/maxScale: "1"
         # Use Cloud SQL via connection string, not Cloud SQL proxy sidecar
         run.googleapis.com/execution-environment: gen2
@@ -132,6 +134,9 @@ spec:
                 secretKeyRef:
                   name: sessionforge-stripe-enterprise-price-id
                   key: latest
+            # Added: GEMINI_API_KEY — required for marketing site chat widget (Gemini Flash)
+            # Secret was created 2026-03-04. To rotate:
+            #   echo -n "AIza..." | gcloud secrets versions add sessionforge-gemini-api-key --data-file=-
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:

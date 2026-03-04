@@ -34,18 +34,31 @@ export function ChatWidget() {
       const res = await fetch('/api/chat/widget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({
+          message: text,
+          // Send prior turns as history (exclude the system greeting and current message)
+          history: messages.slice(1).map((m) => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            text: m.text,
+          })),
+        }),
       })
       const data = await res.json()
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', text: data.reply ?? data.error ?? 'Something went wrong.' },
-      ])
+      setMessages((prev) => {
+        const next = [
+          ...prev,
+          { role: 'assistant' as const, text: data.reply ?? data.error ?? 'Something went wrong.' },
+        ]
+        return next.length > 100 ? next.slice(-100) : next
+      })
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', text: 'Connection error — please try again.' },
-      ])
+      setMessages((prev) => {
+        const next = [
+          ...prev,
+          { role: 'assistant' as const, text: 'Connection error — please try again.' },
+        ]
+        return next.length > 100 ? next.slice(-100) : next
+      })
     } finally {
       setLoading(false)
     }
@@ -106,6 +119,7 @@ export function ChatWidget() {
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
               placeholder="Ask me anything..."
               maxLength={500}
+              aria-label="Chat message"
               className="flex-1 rounded-lg bg-[#1e1e2e] border border-[#2a2a3e] px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
             />
             <button

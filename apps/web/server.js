@@ -60,7 +60,8 @@ const SESSION_START_TIME_TTL_SECONDS = 24 * 60 * 60 // 24 h — survives server 
 // Plain-JS equivalents of src/lib/recording.ts — server.js is CJS and cannot
 // import TypeScript modules directly at runtime.
 
-const RECORDING_BUCKET = process.env.GCS_BUCKET_LOGS ?? 'sessionforge-logs'
+const RECORDING_BUCKET =
+  process.env.GCS_BUCKET_NAME ?? process.env.GCS_BUCKET_LOGS ?? 'sessionforge-session-logs-prod'
 const RECORDING_TTL_SECONDS = 365 * 24 * 60 * 60 // 1 year
 
 function sessionStartTimeKey(sessionId) {
@@ -372,7 +373,7 @@ function handleDashboardWs(ws, userId) {
   let lastId = '$'
   let pollTimer = null
   let pingTimer = null
-  const sessionRouteCache = new Map() // sessionId → { machine_id, status }
+  const sessionRouteCache = new Map() // sessionId → machine_id (string; status always checked fresh from DB)
 
   // Push cached machine metrics immediately on connect so the client doesn't
   // have to wait up to 30 s for the next heartbeat to see Live CPU / Memory.
@@ -454,10 +455,10 @@ function handleDashboardWs(ws, userId) {
       case 'subscribe_session': {
         if (!msg.sessionId) break
         ws.subscribedSessionId = msg.sessionId
-        // Pre-populate the route cache so session_input and resize skip the DB on the hot path.
+        // Pre-populate the route cache so session_input and resize can skip a DB lookup on the hot path.
         if (!sessionRouteCache.has(msg.sessionId)) {
           const cached = await getSessionRecord(msg.sessionId, userId)
-          if (cached) sessionRouteCache.set(msg.sessionId, cached)
+          if (cached) sessionRouteCache.set(msg.sessionId, cached.machine_id)
         }
         // Replay ring buffer so the client sees output that arrived before this WS connected.
         try {
@@ -488,10 +489,15 @@ function handleDashboardWs(ws, userId) {
           console.warn('[ws/dashboard] session_input too large or invalid, dropping')
           break
         }
-        let record = sessionRouteCache.get(msg.sessionId)
-        if (!record) {
+        // Cache maps sessionId → machine_id (stable). Status always checked fresh from DB.
+        let machineId = sessionRouteCache.get(msg.sessionId)
+        let record = null
+        if (machineId) {
+          // We have machine_id cached — still need fresh status check
           record = await getSessionRecord(msg.sessionId, userId)
-          if (record) sessionRouteCache.set(msg.sessionId, record)
+        } else {
+          record = await getSessionRecord(msg.sessionId, userId)
+          if (record) sessionRouteCache.set(msg.sessionId, record.machine_id)
         }
         if (!record) {
           console.warn(
@@ -509,6 +515,8 @@ function handleDashboardWs(ws, userId) {
             'sessionId',
             msg.sessionId
           )
+          // Evict stale cache entry so next lookup re-checks
+          sessionRouteCache.delete(msg.sessionId)
           break
         }
         console.log(
@@ -526,12 +534,18 @@ function handleDashboardWs(ws, userId) {
       }
       case 'resize': {
         if (!msg.sessionId || !msg.cols || !msg.rows) break
-        let record = sessionRouteCache.get(msg.sessionId)
-        if (!record) {
+        let cachedMachineId = sessionRouteCache.get(msg.sessionId)
+        let record = null
+        if (cachedMachineId) {
           record = await getSessionRecord(msg.sessionId, userId)
-          if (record) sessionRouteCache.set(msg.sessionId, record)
+        } else {
+          record = await getSessionRecord(msg.sessionId, userId)
+          if (record) sessionRouteCache.set(msg.sessionId, record.machine_id)
         }
-        if (!record || record.status !== 'running') break
+        if (!record || record.status !== 'running') {
+          if (record?.status !== 'running') sessionRouteCache.delete(msg.sessionId)
+          break
+        }
         await publishToAgent(record.machine_id, {
           type: 'resize',
           sessionId: msg.sessionId,
@@ -949,6 +963,20 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
       break
     }
 
+    case 'session_error': {
+      const { sessionId, error } = msg
+      if (!sessionId) break
+      console.warn('[ws/agent] session_error sessionId', sessionId, 'error', error)
+      if (userId) {
+        await publishToDashboard(userId, {
+          type: 'session_error',
+          sessionId,
+          error: error ?? 'Unknown error',
+        }).catch(console.error)
+      }
+      break
+    }
+
     case 'session_output': {
       const { sessionId, data } = msg
       const logKey = StreamKeys.sessionLogs(sessionId)
@@ -961,7 +989,14 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
           if (startedAt) appendRecordingFrame(sessionId, data, startedAt).catch(console.error)
         })
         .catch(console.error)
-      if (userId) await publishToDashboard(userId, { type: 'session_output', sessionId, data })
+      // Use the session row's user_id as authoritative — handles org multi-user scenarios
+      // where the machine's API key owner differs from the session owner.
+      const sessionRow = await query(`SELECT user_id FROM sessions WHERE id = $1 LIMIT 1`, [
+        sessionId,
+      ]).catch(() => [])
+      const ownerUserId = sessionRow[0]?.user_id ?? userId
+      if (ownerUserId)
+        await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })
       break
     }
   }

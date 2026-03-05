@@ -347,27 +347,11 @@ func probeConPTY() bool {
 	siEx.StartupInfo.Cb = uint32(unsafe.Sizeof(siEx))
 	siEx.ProcThreadAttributeList = attrList.List()
 
-	// Use node.exe --version as the probe command rather than a simple echo.
-	// node.exe is the actual runtime used by claude.cmd; it is more representative
-	// of real workloads. If node cannot initialise its console subsystem in Session 0
-	// (STATUS_DLL_INIT_FAILED / 0xC0000142), we correctly detect ConPTY as unusable.
-	// Fall back to cmd.exe echo if node is not found.
-	probeCmd := func() string {
-		if nodePath, err := exec.LookPath("node.exe"); err == nil {
-			return `"` + nodePath + `" --version`
-		}
-		// node not in system PATH — try common locations
-		for _, candidate := range []string{
-			`C:\Program Files\nodejs\node.exe`,
-			`C:\Program Files (x86)\nodejs\node.exe`,
-		} {
-			if _, err := os.Stat(candidate); err == nil {
-				return `"` + candidate + `" --version`
-			}
-		}
-		// Fallback: simple echo (may give false positive in Session 0)
-		return `"C:\Windows\System32\cmd.exe" /C echo CONPTY-PROBE`
-	}()
+	// Use cmd.exe echo as the probe — simple, fast, reliable across all sessions.
+	// node.exe was used previously but hangs when ConPTY infrastructure is broken,
+	// causing ReadFile to block even after TerminateProcess. cmd.exe echo exits
+	// immediately and reliably unblocks the output pipe.
+	probeCmd := `"C:\Windows\System32\cmd.exe" /C echo CONPTY-PROBE`
 	cmdLinePtr, _ := windows.UTF16PtrFromString(probeCmd)
 	var pi windows.ProcessInformation
 
@@ -401,11 +385,12 @@ func probeConPTY() bool {
 	}
 
 	// Kill probe process and clean up regardless of result.
+	// Close or_ BEFORE waiting — this unblocks any pending ReadFile in the goroutine.
 	windows.TerminateProcess(pi.Process, 1)
 	windows.CloseHandle(pi.Process)
-	windows.CloseHandle(or_)
 	windows.ClosePseudoConsole(hPC)
 	windows.CloseHandle(iw)
+	windows.CloseHandle(or_) // closed last so ReadFile goroutine unblocks
 
 	return ok
 }

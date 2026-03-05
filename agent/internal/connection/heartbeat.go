@@ -76,11 +76,24 @@ func scanProcesses(managedPIDs map[int32]bool) []discoveredProcess {
 		}
 		// Normalise: strip .exe suffix, lower-case
 		nameLower := strings.ToLower(strings.TrimSuffix(name, ".exe"))
-		if !processAllowList[nameLower] {
-			continue
-		}
+
 		cmdline, _ := p.Cmdline()
 		cwd, _ := p.Cwd()
+
+		// Direct match (e.g. a native claude binary).
+		matched := processAllowList[nameLower]
+
+		// On Windows, claude is an npm-installed .cmd script run via node.exe.
+		// Detect it by checking if the node process cmdline contains "claude".
+		if !matched && nameLower == "node" && strings.Contains(strings.ToLower(cmdline), "claude") {
+			matched = true
+			nameLower = "claude" // report it as "claude" regardless of the host binary
+		}
+
+		if !matched {
+			continue
+		}
+
 		found = append(found, discoveredProcess{
 			PID:     p.Pid,
 			Name:    nameLower,

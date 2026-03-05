@@ -151,6 +151,10 @@ func runDaemonWithContext(ctx context.Context) error {
 	// Wire up dispatch to the fully-constructed handler.
 	dispatch = handler.Handle
 
+	// Replay session_started for any active sessions after every reconnect so
+	// the cloud DB stays in sync even when the WebSocket drops and reconnects.
+	client.OnConnect = func() { mgr.ReplayToCloud() }
+
 	// Start heartbeat (sends metrics + discovered processes every 10s).
 	go connection.RunHeartbeat(ctx, client, cfg.MachineID, mgr, logger)
 

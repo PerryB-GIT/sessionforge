@@ -347,10 +347,28 @@ func probeConPTY() bool {
 	siEx.StartupInfo.Cb = uint32(unsafe.Sizeof(siEx))
 	siEx.ProcThreadAttributeList = attrList.List()
 
-	// Use echo so the ConPTY is forced to produce output bytes we can verify.
-	cmdExe := `C:\Windows\System32\cmd.exe`
-	cmdLine := `"` + cmdExe + `" /C echo CONPTY-PROBE`
-	cmdLinePtr, _ := windows.UTF16PtrFromString(cmdLine)
+	// Use node.exe --version as the probe command rather than a simple echo.
+	// node.exe is the actual runtime used by claude.cmd; it is more representative
+	// of real workloads. If node cannot initialise its console subsystem in Session 0
+	// (STATUS_DLL_INIT_FAILED / 0xC0000142), we correctly detect ConPTY as unusable.
+	// Fall back to cmd.exe echo if node is not found.
+	probeCmd := func() string {
+		if nodePath, err := exec.LookPath("node.exe"); err == nil {
+			return `"` + nodePath + `" --version`
+		}
+		// node not in system PATH — try common locations
+		for _, candidate := range []string{
+			`C:\Program Files\nodejs\node.exe`,
+			`C:\Program Files (x86)\nodejs\node.exe`,
+		} {
+			if _, err := os.Stat(candidate); err == nil {
+				return `"` + candidate + `" --version`
+			}
+		}
+		// Fallback: simple echo (may give false positive in Session 0)
+		return `"C:\Windows\System32\cmd.exe" /C echo CONPTY-PROBE`
+	}()
+	cmdLinePtr, _ := windows.UTF16PtrFromString(probeCmd)
 	var pi windows.ProcessInformation
 
 	spawnErr := windows.CreateProcess(nil, cmdLinePtr, nil, nil, false,
@@ -411,7 +429,6 @@ func spawnPTY(
 		return nil, 0, fmt.Errorf("resolve command: %w", err)
 	}
 
-	// Probe ConPTY once on first use; cache the result for all future sessions.
 	conPTYWorkingOnce.Do(func() {
 		conPTYWorking = probeConPTY()
 		if conPTYWorkingLogger != nil {
@@ -426,13 +443,7 @@ func spawnPTY(
 	if !conPTYWorking {
 		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 	}
-
-	h, pid, err := spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
-	if err != nil {
-		// ConPTY unavailable (Windows < 1809) -- fall back to pipe I/O.
-		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
-	}
-	return h, pid, nil
+	return spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 }
 
 // SetConPTYLogger wires a logger into the ConPTY probe so the probe result is
@@ -681,7 +692,12 @@ func buildEnvBlock(overlay map[string]string) *uint16 {
 	return &pairs[0]
 }
 
-// spawnWithPipes is the pipe-based fallback for Windows < 1809 (no ConPTY).
+// spawnWithPipes is the pipe-based fallback used when ConPTY is unavailable.
+// It uses windows.CreateProcess directly (not exec.Cmd) so we can set
+// CREATE_NO_WINDOW | DETACHED_PROCESS and STARTF_USESTDHANDLES in the same
+// call — Go's exec.Cmd does not reliably honour CreationFlags when stdin/stdout
+// pipes are wired up, causing cmd.exe to attach to the user's console session
+// instead of using the anonymous pipes.
 func spawnWithPipes(
 	ctx context.Context,
 	sessionID string,
@@ -693,75 +709,140 @@ func spawnWithPipes(
 	localOutputFn func(raw []byte),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
-	cmdCtx, cancel := context.WithCancel(ctx)
-	cmd := exec.CommandContext(cmdCtx, binary, args...)
-	cmd.Dir = workdir
+	_, cancel := context.WithCancel(ctx)
 
-	// Build environment: inherit + overlay, stripping CLAUDECODE so the child
-	// does not think it is running inside an existing Claude Code session.
-	baseEnv := os.Environ()
-	filteredEnv := make([]string, 0, len(baseEnv))
-	for _, kv := range baseEnv {
-		if strings.HasPrefix(kv, "CLAUDECODE=") {
-			continue
-		}
-		filteredEnv = append(filteredEnv, kv)
-	}
-	cmd.Env = filteredEnv
-	for k, v := range env {
-		cmd.Env = append(cmd.Env, k+"="+v)
-	}
-	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
+	// --- stdin pipe (parent writes, child reads) ---
+	// The child-read end must be inheritable; the parent-write end must not be.
+	sa := windows.SecurityAttributes{InheritHandle: 1}
+	sa.Length = uint32(unsafe.Sizeof(sa))
 
-	stdin, err := cmd.StdinPipe()
+	var stdinR, stdinW windows.Handle
+	if err := windows.CreatePipe(&stdinR, &stdinW, &sa, 0); err != nil {
+		cancel()
+		return nil, 0, fmt.Errorf("create stdin pipe: %w", err)
+	}
+	// Make the parent-write end non-inheritable.
+	if err := windows.SetHandleInformation(stdinW, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
+		windows.CloseHandle(stdinR)
+		windows.CloseHandle(stdinW)
+		cancel()
+		return nil, 0, fmt.Errorf("set stdin write non-inheritable: %w", err)
+	}
+
+	// --- stdout+stderr pipe (child writes, parent reads) ---
+	var outR, outW windows.Handle
+	if err := windows.CreatePipe(&outR, &outW, &sa, 0); err != nil {
+		windows.CloseHandle(stdinR)
+		windows.CloseHandle(stdinW)
+		cancel()
+		return nil, 0, fmt.Errorf("create output pipe: %w", err)
+	}
+	// Make the parent-read end non-inheritable.
+	if err := windows.SetHandleInformation(outR, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
+		windows.CloseHandle(stdinR)
+		windows.CloseHandle(stdinW)
+		windows.CloseHandle(outR)
+		windows.CloseHandle(outW)
+		cancel()
+		return nil, 0, fmt.Errorf("set output read non-inheritable: %w", err)
+	}
+
+	// Build STARTUPINFO with STARTF_USESTDHANDLES to wire our pipes.
+	const startfUsestdhandles uint32 = 0x00000100
+	si := windows.StartupInfo{
+		Flags:      startfUsestdhandles,
+		StdInput:   stdinR,
+		StdOutput:  outW,
+		StdErr:     outW,
+	}
+	si.Cb = uint32(unsafe.Sizeof(si))
+
+	// Build command line string.
+	cmdLine := windows.EscapeArg(binary)
+	for _, a := range args {
+		cmdLine += " " + windows.EscapeArg(a)
+	}
+	cmdLinePtr, _ := windows.UTF16PtrFromString(cmdLine)
+
+	// Working directory.
+	var workdirPtr *uint16
+	if workdir != "" && workdir != "." {
+		workdirPtr, _ = windows.UTF16PtrFromString(workdir)
+	}
+
+	// Environment block.
+	envBlock := buildEnvBlock(env)
+
+	// CREATE_NO_WINDOW: child gets no console window.
+	// DETACHED_PROCESS: child is detached from the parent's console entirely.
+	// CREATE_UNICODE_ENVIRONMENT: env block is UTF-16.
+	const createNoWindow uint32 = 0x08000000
+	const detachedProcess uint32 = 0x00000008
+	creationFlags := createNoWindow | detachedProcess | createUnicodeEnvironment
+
+	var procInfo windows.ProcessInformation
+	if err := windows.CreateProcess(
+		nil, cmdLinePtr,
+		nil, nil,
+		true, // inherit handles (our inheritable pipe ends)
+		creationFlags,
+		envBlock,
+		workdirPtr,
+		&si,
+		&procInfo,
+	); err != nil {
+		windows.CloseHandle(stdinR)
+		windows.CloseHandle(stdinW)
+		windows.CloseHandle(outR)
+		windows.CloseHandle(outW)
+		cancel()
+		return nil, 0, fmt.Errorf("CreateProcess: %w", err)
+	}
+
+	// Close the child-side handles in the parent — child owns them now.
+	windows.CloseHandle(stdinR)
+	windows.CloseHandle(outW)
+	windows.CloseHandle(procInfo.Thread)
+
+	stdinWriter := &pipeWriter{h: stdinW}
+	outReader := &pipeReader{h: outR}
+
+	proc, err := os.FindProcess(int(procInfo.ProcessId))
 	if err != nil {
+		windows.CloseHandle(stdinW)
+		windows.CloseHandle(outR)
+		windows.CloseHandle(procInfo.Process)
 		cancel()
-		return nil, 0, fmt.Errorf("stdin pipe: %w", err)
+		return nil, 0, fmt.Errorf("FindProcess: %w", err)
 	}
-
-	// Merge stdout + stderr into one reader.
-	pr, pw, err := os.Pipe()
-	if err != nil {
-		cancel()
-		stdin.Close()
-		return nil, 0, fmt.Errorf("output pipe: %w", err)
-	}
-	cmd.Stdout = pw
-	cmd.Stderr = pw
-
-	if err := cmd.Start(); err != nil {
-		cancel()
-		pw.Close()
-		pr.Close()
-		stdin.Close()
-		return nil, 0, fmt.Errorf("start process: %w", err)
-	}
-	pw.Close()
 
 	h := &ptyHandle{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: pr,
+		stdin:  stdinWriter,
+		stdout: outReader,
 		cancel: cancel,
 	}
 
-	go readPipeOutput(sessionID, pr, outputFn, localOutputFn, nil)
+	go readPipeOutput(sessionID, outReader, outputFn, localOutputFn, nil)
 
 	go func() {
-		waitErr := cmd.Wait()
-		code := 0
+		defer cancel()
+		state, waitErr := proc.Wait()
+		stdinWriter.Close()
+		outReader.Close()
+		windows.CloseHandle(procInfo.Process)
+
 		if waitErr != nil {
-			if exitErr, ok := waitErr.(*exec.ExitError); ok {
-				code = exitErr.ExitCode()
-			} else {
-				exitFn(sessionID, -1, waitErr)
-				return
-			}
+			exitFn(sessionID, -1, waitErr)
+			return
+		}
+		code := 0
+		if state != nil && !state.Success() {
+			code = state.ExitCode()
 		}
 		exitFn(sessionID, code, nil)
 	}()
 
-	return h, cmd.Process.Pid, nil
+	return h, int(procInfo.ProcessId), nil
 }
 
 // readPipeOutput drains a reader, batches output at ~60fps, and calls outputFn

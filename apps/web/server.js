@@ -642,15 +642,22 @@ function handleAgentWs(ws, userId, remoteAddress) {
       console.log('[ws/agent] recv type:', msg.type)
     }
     try {
-      await handleAgentMessage(msg, userId, remoteAddress, sessionStats, (id, hn) => {
-        machineId = id
-        if (hn) machineHostname = hn
-        lastHeartbeatAt = Date.now()
-        if (!pollTimer) {
-          console.log(`[ws/agent] starting poll for machine ${id}`)
-          pollAgentCommands()
-        }
-      })
+      await handleAgentMessage(
+        msg,
+        userId,
+        remoteAddress,
+        sessionStats,
+        (id, hn) => {
+          machineId = id
+          if (hn) machineHostname = hn
+          lastHeartbeatAt = Date.now()
+          if (!pollTimer) {
+            console.log(`[ws/agent] starting poll for machine ${id}`)
+            pollAgentCommands()
+          }
+        },
+        machineId
+      )
       if (msg.type === 'heartbeat') lastHeartbeatAt = Date.now()
     } catch (err) {
       console.error('[ws/agent] error handling message:', msg.type, err)
@@ -715,7 +722,14 @@ async function flushSessionStats(sessionId, sessionStats) {
   }
 }
 
-async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMachineId) {
+async function handleAgentMessage(
+  msg,
+  userId,
+  remoteAddress,
+  sessionStats,
+  onMachineId,
+  currentMachineId
+) {
   switch (msg.type) {
     case 'register': {
       const { machineId, name, os, hostname: h, version, cpuModel, ramGb } = msg
@@ -834,7 +848,7 @@ async function handleAgentMessage(msg, userId, remoteAddress, sessionStats, onMa
                workdir = EXCLUDED.workdir,
                status = 'running',
                started_at = EXCLUDED.started_at`,
-        [s.id, machineId, userId, s.pid, s.processName, s.workdir, new Date(s.startedAt)]
+        [s.id, currentMachineId, userId, s.pid, s.processName, s.workdir, new Date(s.startedAt)]
       )
       // Track session start time in Redis for recording frame timestamps (survives restarts)
       // Fire-and-forget — Redis failure must not block dashboard notify or webhook delivery

@@ -422,8 +422,15 @@ function handleDashboardWs(ws, userId) {
         if (ws.subscribedSessionId) {
           try {
             const parsed = JSON.parse(msg)
-            if (parsed.type === 'session_output' && parsed.sessionId !== ws.subscribedSessionId)
-              continue
+            if (parsed.type === 'session_output') {
+              if (parsed.sessionId !== ws.subscribedSessionId) {
+                console.log(
+                  `[ws/dashboard] filtered session_output sid=${parsed.sessionId} subscribed=${ws.subscribedSessionId}`
+                )
+                continue
+              }
+              console.log(`[ws/dashboard] forwarding session_output sid=${parsed.sessionId}`)
+            }
           } catch {
             /* not valid JSON, forward as-is */
           }
@@ -455,6 +462,7 @@ function handleDashboardWs(ws, userId) {
       case 'subscribe_session': {
         if (!msg.sessionId) break
         ws.subscribedSessionId = msg.sessionId
+        console.log(`[ws/dashboard] subscribe_session sessionId=${msg.sessionId} userId=${userId}`)
         // Pre-populate the route cache so session_input and resize can skip a DB lookup on the hot path.
         if (!sessionRouteCache.has(msg.sessionId)) {
           const cached = await getSessionRecord(msg.sessionId, userId)

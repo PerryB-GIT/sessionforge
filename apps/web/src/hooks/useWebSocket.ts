@@ -172,9 +172,48 @@ export function useWebSocket() {
       }
       case 'session_updated': {
         const s = message.session as { id: string; status: string; machineId: string }
-        updateSession(s.id, {
-          status: s.status as 'running' | 'stopped' | 'crashed' | 'paused',
-        })
+        const knownSessionIds = useStore.getState().sessions.map((x) => x.id)
+        if (!knownSessionIds.includes(s.id)) {
+          // New session not yet in the store — refresh the full sessions list.
+          fetch('/api/sessions')
+            .then((r) => r.json())
+            .then((json) => {
+              if (json.data?.items) {
+                useStore.getState().setSessions(
+                  json.data.items.map(
+                    (x: {
+                      id: string
+                      machineId: string
+                      pid: number | null
+                      processName: string
+                      workdir: string | null
+                      status: string
+                      startedAt: string
+                      stoppedAt: string | null
+                      peakMemoryMb: number | null
+                      avgCpuPercent: number | null
+                    }) => ({
+                      id: x.id,
+                      machineId: x.machineId,
+                      pid: x.pid,
+                      processName: x.processName,
+                      workdir: x.workdir,
+                      status: x.status,
+                      startedAt: new Date(x.startedAt),
+                      stoppedAt: x.stoppedAt ? new Date(x.stoppedAt) : null,
+                      peakMemoryMb: x.peakMemoryMb,
+                      avgCpuPercent: x.avgCpuPercent,
+                    })
+                  )
+                )
+              }
+            })
+            .catch(() => {})
+        } else {
+          updateSession(s.id, {
+            status: s.status as 'running' | 'stopped' | 'crashed' | 'paused',
+          })
+        }
         break
       }
       case 'alert_fired': {

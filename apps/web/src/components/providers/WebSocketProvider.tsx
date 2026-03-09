@@ -1,11 +1,13 @@
 'use client'
 
 import { createContext, useContext, ReactNode } from 'react'
-import { useWebSocket } from '@/hooks/useWebSocket'
+import { useWebSocket, registerSessionOutputListener } from '@/hooks/useWebSocket'
 import { useMachines } from '@/hooks/useMachines'
 
 interface WebSocketContextValue {
   sendMessage: (data: unknown) => void
+  subscribeSession: (sessionId: string) => void
+  registerSessionOutputListener: typeof registerSessionOutputListener
   wsStatus: import('@/store').WsStatus
 }
 
@@ -16,7 +18,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   // Pre-fetch machines at the layout level so StartSessionDialog always has
   // online machines available regardless of which page the user navigates to first.
   useMachines()
-  return <WebSocketContext.Provider value={ws}>{children}</WebSocketContext.Provider>
+  return (
+    <WebSocketContext.Provider value={{ ...ws, registerSessionOutputListener }}>
+      {children}
+    </WebSocketContext.Provider>
+  )
 }
 
 export function useWs(): WebSocketContextValue {

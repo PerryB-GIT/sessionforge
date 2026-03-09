@@ -7,12 +7,43 @@ import { useStore } from '@/store'
 const RECONNECT_DELAY = 3000
 const MAX_RECONNECT_ATTEMPTS = 5
 
+// Session output listeners: sessionId → Set of callbacks
+type OutputListener = (data: string) => void
+const sessionOutputListeners = new Map<string, Set<OutputListener>>()
+
+export function registerSessionOutputListener(sessionId: string, cb: OutputListener) {
+  if (!sessionOutputListeners.has(sessionId)) {
+    sessionOutputListeners.set(sessionId, new Set())
+  }
+  sessionOutputListeners.get(sessionId)!.add(cb)
+  return () => {
+    sessionOutputListeners.get(sessionId)?.delete(cb)
+  }
+}
+
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectAttemptsRef = useRef(0)
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
   const wasConnectedRef = useRef(false)
+  const subscribedSessionsRef = useRef<Set<string>>(new Set())
   const { setWsStatus, updateMachine, updateSession } = useStore()
+
+  const sendRaw = useCallback((data: unknown) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(data))
+    }
+  }, [])
+
+  const subscribeSession = useCallback(
+    (sessionId: string) => {
+      if (subscribedSessionsRef.current.has(sessionId)) return
+      subscribedSessionsRef.current.add(sessionId)
+      sendRaw({ type: 'subscribe_session', sessionId })
+      // Also send current terminal size if available
+    },
+    [sendRaw]
+  )
 
   const connect = useCallback(() => {
     setWsStatus('connecting')
@@ -31,6 +62,10 @@ export function useWebSocket() {
           toast.success('Reconnected to SessionForge', { duration: 2000 })
         }
         wasConnectedRef.current = true
+        // Re-subscribe to any active sessions after reconnect
+        for (const sessionId of subscribedSessionsRef.current) {
+          ws.send(JSON.stringify({ type: 'subscribe_session', sessionId }))
+        }
       }
 
       ws.onmessage = (event) => {
@@ -70,6 +105,14 @@ export function useWebSocket() {
 
   function handleMessage(message: { type: string; [key: string]: unknown }) {
     switch (message.type) {
+      case 'session_output': {
+        const { sessionId, data } = message as unknown as { sessionId: string; data: string }
+        const listeners = sessionOutputListeners.get(sessionId)
+        if (listeners) {
+          for (const cb of listeners) cb(data)
+        }
+        break
+      }
       case 'machine_updated': {
         const m = message.machine as {
           id: string
@@ -170,5 +213,5 @@ export function useWebSocket() {
     }
   }, [])
 
-  return { sendMessage, wsStatus: useStore((s) => s.wsStatus) }
+  return { sendMessage, subscribeSession, wsStatus: useStore((s) => s.wsStatus) }
 }

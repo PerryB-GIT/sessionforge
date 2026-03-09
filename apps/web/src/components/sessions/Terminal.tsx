@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
-import { toast } from 'sonner'
 import type { Terminal as XTermTerminal } from '@xterm/xterm'
 import type { FitAddon as XTermFitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { useWs } from '@/components/providers/WebSocketProvider'
 
 export interface TerminalHandle {
   appendOutput: (data: string) => void
@@ -59,10 +59,12 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<XTermTerminal | null>(null)
   const fitAddonRef = useRef<XTermFitAddon | null>(null)
-  const wsRef = useRef<WebSocket | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
   const [xtermFailed, setXtermFailed] = useState(false)
   const stubRef = useRef(false)
+
+  // Use the shared provider WebSocket instead of a private connection
+  const { sendMessage, subscribeSession, registerSessionOutputListener } = useWs()
 
   useImperativeHandle(ref, () => ({
     appendOutput(data: string) {
@@ -70,84 +72,22 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     },
   }))
 
-  const connectWebSocket = useCallback(() => {
-    if (readOnly) return
+  // Stable ref so the output listener can always access the current terminal
+  const terminalRefStable = useRef(terminalRef)
+  terminalRefStable.current = terminalRef
+
+  const handleOutput = useCallback((b64data: string) => {
+    const term = terminalRefStable.current.current
+    if (!term) return
     try {
-      // Use same-origin WS — relative URL converted to ws(s):// automatically
-      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${proto}//${window.location.host}/api/ws/dashboard`
-      const ws = new WebSocket(wsUrl)
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'subscribe_session', sessionId }))
-
-        // C1: Send current terminal size immediately on open — don't wait for
-        // ResizeObserver to fire, which could be 100–500ms later. Sessions that
-        // start with 80×24 defaults have broken line-wrapping until the first
-        // resize event. fitAddon.fit() was already called before connectWebSocket,
-        // so terminal.cols/rows already reflect the real container dimensions.
-        if (terminalRef.current) {
-          ws.send(
-            JSON.stringify({
-              type: 'resize',
-              sessionId,
-              cols: terminalRef.current.cols,
-              rows: terminalRef.current.rows,
-            })
-          )
-        }
-
-        terminalRef.current?.write('\r\n\x1b[32mConnected to session\x1b[0m\r\n')
-      }
-
-      ws.onmessage = (event) => {
-        // C2: Parse the envelope first. If parsing fails, log and drop — do NOT
-        // write raw event.data (which would be a JSON string like {"type":"..."})
-        // directly into the terminal, creating noise the user cannot dismiss.
-        try {
-          const msg = JSON.parse(event.data as string)
-          if (msg.type === 'session_output' && msg.sessionId === sessionId) {
-            if (typeof msg.data === 'string' && msg.data.length > 0) {
-              try {
-                const binary = atob(msg.data)
-                const bytes = new Uint8Array(binary.length)
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-                terminalRef.current?.write(bytes)
-              } catch (decodeErr) {
-                console.warn('[Terminal] base64 decode failed, writing raw:', decodeErr)
-                terminalRef.current?.write(msg.data)
-              }
-            }
-          }
-        } catch (parseErr) {
-          console.warn('[Terminal] message parse failed:', parseErr)
-          // Do NOT write raw event.data — it would show JSON noise in the terminal
-        }
-      }
-
-      ws.onclose = () => {
-        terminalRef.current?.write('\r\n\x1b[33mConnection closed. Reconnecting...\x1b[0m\r\n')
-        toast.warning('Terminal disconnected — reconnecting...')
-        setTimeout(connectWebSocket, 3000)
-      }
-
-      ws.onerror = () => {
-        // error always followed by close
-      }
+      const binary = atob(b64data)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      term.write(bytes)
     } catch {
-      // Demo mode when no WS server
-      setTimeout(() => {
-        if (terminalRef.current) {
-          terminalRef.current.write('\x1b[33m[DEMO MODE]\x1b[0m No WebSocket server detected.\r\n')
-          terminalRef.current.write('\x1b[36mSessionForge Terminal\x1b[0m v1.0.0\r\n')
-          terminalRef.current.write('$ \x1b[32mclaude\x1b[0m\r\n')
-          terminalRef.current.write('\x1b[90m> Analyzing your codebase...\x1b[0m\r\n')
-          terminalRef.current.write('\x1b[90m> Ready for input.\x1b[0m\r\n$ ')
-        }
-      }, 500)
+      term.write(b64data)
     }
-  }, [sessionId, readOnly])
+  }, [])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -208,29 +148,25 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       fitAddonRef.current = fitAddon
 
       if (!readOnly) {
-        // Handle keyboard input — send to WS only via the terminal's own WebSocket.
-        // Do NOT call onSendInput here: page.tsx wraps data in btoa() again, causing
-        // double base64 encoding. The wsRef path below is the single correct path.
         terminal.onData((data) => {
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(
-              JSON.stringify({
-                type: 'session_input',
-                sessionId,
-                data: btoa(data), // base64 encode PTY input — decoded once by agent writeInput
-              })
-            )
-          }
+          sendMessage({
+            type: 'session_input',
+            sessionId,
+            data: btoa(data),
+          })
         })
       }
 
       // Handle resize with ResizeObserver + fit addon
       const observer = new ResizeObserver(() => {
         fitAddon.fit()
-        if (!readOnly && wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(
-            JSON.stringify({ type: 'resize', sessionId, cols: terminal.cols, rows: terminal.rows })
-          )
+        if (!readOnly) {
+          sendMessage({
+            type: 'resize',
+            sessionId,
+            cols: terminal.cols,
+            rows: terminal.rows,
+          })
         }
       })
       observer.observe(container)
@@ -240,7 +176,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       terminal.write(`\x1b[90mSessionForge Terminal — Session ID: ${sessionId}\x1b[0m\r\n`)
       terminal.write(`\x1b[90m${'─'.repeat(60)}\x1b[0m\r\n`)
 
-      // Write historical logs in readOnly mode
       if (readOnly && initialLogs && initialLogs.length > 0) {
         terminal.write('\x1b[90m── Replay Start ──────────────────────────────────────\x1b[0m\r\n')
         for (const line of initialLogs) {
@@ -251,7 +186,16 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         )
       } else if (!readOnly) {
         terminal.focus()
-        connectWebSocket()
+
+        // Subscribe via the shared WS (sends subscribe_session + initial resize)
+        subscribeSession(sessionId)
+        sendMessage({
+          type: 'resize',
+          sessionId,
+          cols: terminal.cols,
+          rows: terminal.rows,
+        })
+        terminal.write('\r\n\x1b[32mConnected to session\x1b[0m\r\n')
       }
     })
 
@@ -259,9 +203,15 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       mounted = false
       observerRef.current?.disconnect()
       terminalRef.current?.dispose()
-      wsRef.current?.close()
     }
-  }, [sessionId, connectWebSocket, readOnly, initialLogs])
+  }, [sessionId, readOnly, initialLogs, sendMessage, subscribeSession])
+
+  // Register the output listener separately so it survives xterm async init
+  useEffect(() => {
+    if (readOnly) return
+    const unregister = registerSessionOutputListener(sessionId, handleOutput)
+    return unregister
+  }, [sessionId, readOnly, handleOutput, registerSessionOutputListener])
 
   return (
     <div className="relative flex flex-col h-full w-full overflow-hidden rounded-lg bg-[#0a0a0f] border border-[#1e1e2e]">

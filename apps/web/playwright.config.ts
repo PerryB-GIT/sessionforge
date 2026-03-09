@@ -26,10 +26,7 @@ export default defineConfig({
 
   globalSetup: './e2e/global-setup.ts',
 
-  reporter: [
-    ['list'],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-  ],
+  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
 
   use: {
     baseURL: BASE_URL,
@@ -52,7 +49,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: 'e2e/.auth/user.json',
       },
-      testMatch: ['**/dashboard.spec.ts', '**/onboarding.spec.ts'],
+      testMatch: ['**/dashboard.spec.ts', '**/onboarding.spec.ts', '**/terminal.spec.ts'],
     },
   ],
 })

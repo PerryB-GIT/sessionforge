@@ -38,6 +38,10 @@ agent/C*/
 e2e-*.png
 copilot-*.png
 
+# Debug capture output
+debug-output-*.txt
+debug-capture-output.txt
+
 # Scratch scripts and test binaries
 agent/cmd/conpty_test/
 agent/cmd/pty-test/

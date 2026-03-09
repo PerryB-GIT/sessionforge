@@ -639,38 +639,84 @@ function handleAgentWs(ws, userId, remoteAddress) {
     }
   }, HEARTBEAT_INTERVAL_MS)
 
-  // Sequential message queue — prevents register/session_started races where
-  // session_started fires before register's DB await completes, leaving machineId null.
+  // Per-session userId cache — avoids a DB round-trip on every session_output chunk.
+  const sessionUserIdCache = new Map()
+
+  // Sequential queue for control messages only (register, session_started, session_stopped).
+  // session_output and heartbeat are fired concurrently to avoid queue backup under load.
   let agentMsgQueue = Promise.resolve()
+  const onMachineId = (id, hn) => {
+    machineId = id
+    if (hn) machineHostname = hn
+    lastHeartbeatAt = Date.now()
+    if (!pollTimer) {
+      console.log(`[ws/agent] starting poll for machine ${id}`)
+      pollAgentCommands()
+    }
+  }
+
   ws.on('message', (raw) => {
+    let msg
+    try {
+      msg = JSON.parse(raw.toString())
+    } catch {
+      return
+    }
+
+    // Hot path: session_output handled concurrently, never queued.
+    if (msg.type === 'session_output') {
+      const { sessionId, data } = msg
+      ;(async () => {
+        try {
+          const logKey = StreamKeys.sessionLogs(sessionId)
+          await redis.rpush(logKey, data)
+          await redis.ltrim(logKey, -SESSION_LOG_MAX_LINES, -1)
+          await redis.expire(logKey, SESSION_LOG_TTL_SECONDS)
+          // Cache userId per session to avoid a DB hit on every chunk
+          if (!sessionUserIdCache.has(sessionId)) {
+            const rows = await query(`SELECT user_id FROM sessions WHERE id = $1 LIMIT 1`, [
+              sessionId,
+            ]).catch(() => [])
+            sessionUserIdCache.set(sessionId, rows[0]?.user_id ?? userId)
+          }
+          const ownerUserId = sessionUserIdCache.get(sessionId)
+          if (ownerUserId)
+            await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })
+        } catch (err) {
+          console.error('[ws/agent] session_output publish error:', err.message)
+        }
+      })()
+      return
+    }
+
+    // Heartbeat: also concurrent, just update timestamp.
+    if (msg.type === 'heartbeat') {
+      lastHeartbeatAt = Date.now()
+      handleAgentMessage(
+        msg,
+        userId,
+        remoteAddress,
+        sessionStats,
+        onMachineId,
+        () => machineId
+      ).catch((err) => console.error('[ws/agent] error handling message: heartbeat', err))
+      return
+    }
+
+    // Control messages: serialized to prevent register/session_started race.
+    if (msg.type !== 'heartbeat') {
+      console.log('[ws/agent] recv type:', msg.type)
+    }
     agentMsgQueue = agentMsgQueue.then(async () => {
-      let msg
-      try {
-        msg = JSON.parse(raw.toString())
-      } catch {
-        return
-      }
-      if (msg.type !== 'heartbeat') {
-        console.log('[ws/agent] recv type:', msg.type)
-      }
       try {
         await handleAgentMessage(
           msg,
           userId,
           remoteAddress,
           sessionStats,
-          (id, hn) => {
-            machineId = id
-            if (hn) machineHostname = hn
-            lastHeartbeatAt = Date.now()
-            if (!pollTimer) {
-              console.log(`[ws/agent] starting poll for machine ${id}`)
-              pollAgentCommands()
-            }
-          },
+          onMachineId,
           () => machineId
         )
-        if (msg.type === 'heartbeat') lastHeartbeatAt = Date.now()
       } catch (err) {
         console.error('[ws/agent] error handling message:', msg.type, err)
       }
@@ -1004,28 +1050,9 @@ async function handleAgentMessage(
       break
     }
 
-    case 'session_output': {
-      const { sessionId, data } = msg
-      const logKey = StreamKeys.sessionLogs(sessionId)
-      await redis.rpush(logKey, data)
-      await redis.ltrim(logKey, -SESSION_LOG_MAX_LINES, -1)
-      await redis.expire(logKey, SESSION_LOG_TTL_SECONDS)
-      // Append frame to recording buffer (fire-and-forget; errors are logged inside)
-      getSessionStartTime(sessionId)
-        .then((startedAt) => {
-          if (startedAt) appendRecordingFrame(sessionId, data, startedAt).catch(console.error)
-        })
-        .catch(console.error)
-      // Use the session row's user_id as authoritative — handles org multi-user scenarios
-      // where the machine's API key owner differs from the session owner.
-      const sessionRow = await query(`SELECT user_id FROM sessions WHERE id = $1 LIMIT 1`, [
-        sessionId,
-      ]).catch(() => [])
-      const ownerUserId = sessionRow[0]?.user_id ?? userId
-      if (ownerUserId)
-        await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })
+    case 'session_output':
+      // Handled in the hot-path branch above — never reaches handleAgentMessage.
       break
-    }
   }
 }
 

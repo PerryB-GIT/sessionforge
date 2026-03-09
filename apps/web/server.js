@@ -370,7 +370,9 @@ const PING_INTERVAL_MS = 30_000
 const { WebSocket } = require('ws')
 
 function handleDashboardWs(ws, userId) {
-  let lastId = '$'
+  // Use a timestamp-based ID so non-blocking xread works with the Upstash REST API.
+  // '$' always returns empty with REST-based xread (it resolves to "newer than right now").
+  let lastId = `${Date.now()}-0`
   let pollTimer = null
   let pingTimer = null
   const sessionRouteCache = new Map() // sessionId → machine_id (string; status always checked fresh from DB)

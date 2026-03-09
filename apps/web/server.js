@@ -656,7 +656,7 @@ function handleAgentWs(ws, userId, remoteAddress) {
             pollAgentCommands()
           }
         },
-        machineId
+        () => machineId
       )
       if (msg.type === 'heartbeat') lastHeartbeatAt = Date.now()
     } catch (err) {
@@ -728,7 +728,7 @@ async function handleAgentMessage(
   remoteAddress,
   sessionStats,
   onMachineId,
-  currentMachineId
+  getMachineId
 ) {
   switch (msg.type) {
     case 'register': {
@@ -848,7 +848,7 @@ async function handleAgentMessage(
                workdir = EXCLUDED.workdir,
                status = 'running',
                started_at = EXCLUDED.started_at`,
-        [s.id, currentMachineId, userId, s.pid, s.processName, s.workdir, new Date(s.startedAt)]
+        [s.id, getMachineId(), userId, s.pid, s.processName, s.workdir, new Date(s.startedAt)]
       )
       // Track session start time in Redis for recording frame timestamps (survives restarts)
       // Fire-and-forget — Redis failure must not block dashboard notify or webhook delivery

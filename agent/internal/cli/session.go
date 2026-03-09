@@ -92,6 +92,9 @@ func buildAgentComponents(ctx context.Context, cfg *config.Config) (*connection.
 	logger := buildLogger(cfg.LogLevel, cfg.LogFile)
 	client := connection.NewClient(cfg, version, dispatchWrapper, logger)
 	mgr := session.NewManager(ctx, client, logger)
+	if cfg.ClaudeConfigDir != "" {
+		mgr.SetClaudeConfigDir(cfg.ClaudeConfigDir)
+	}
 	handler := connection.NewHandler(mgr, client, logger)
 	dispatch = handler.Handle
 

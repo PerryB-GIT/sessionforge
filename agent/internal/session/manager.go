@@ -51,10 +51,11 @@ type sessionOutputMsg struct {
 
 // Manager handles the lifecycle of all terminal sessions.
 type Manager struct {
-	registry  *Registry
-	messenger AgentMessenger
-	ctx       context.Context
-	logger    *slog.Logger
+	registry        *Registry
+	messenger       AgentMessenger
+	ctx             context.Context
+	logger          *slog.Logger
+	claudeConfigDir string // injected as CLAUDE_CONFIG_DIR into every PTY session
 }
 
 // NewManager creates a new Manager.
@@ -66,6 +67,25 @@ func NewManager(ctx context.Context, messenger AgentMessenger, logger *slog.Logg
 		ctx:       ctx,
 		logger:    logger,
 	}
+}
+
+// SetClaudeConfigDir stores the path to inject as CLAUDE_CONFIG_DIR in every
+// spawned session. Call this after loading config if cfg.ClaudeConfigDir is set.
+func (m *Manager) SetClaudeConfigDir(dir string) {
+	m.claudeConfigDir = dir
+}
+
+// mergeEnv returns a copy of env with CLAUDE_CONFIG_DIR injected if configured.
+func (m *Manager) mergeEnv(env map[string]string) map[string]string {
+	if m.claudeConfigDir == "" {
+		return env
+	}
+	merged := make(map[string]string, len(env)+1)
+	for k, v := range env {
+		merged[k] = v
+	}
+	merged["CLAUDE_CONFIG_DIR"] = m.claudeConfigDir
+	return merged
 }
 
 // Start spawns a new PTY session and sends a 'session_started' message.
@@ -152,7 +172,7 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 		m.logger.Warn("failed to send early session_started", "err", err)
 	}
 
-	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, nil, exitFn)
+	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, m.mergeEnv(env), outputFn, nil, exitFn)
 	if err != nil {
 		m.registry.Remove(sessionID)
 		// earlyStarted was already sent — notify the cloud so the DB record is cleaned up.
@@ -268,7 +288,7 @@ func (m *Manager) StartWithLocalOutput(
 		m.logger.Warn("failed to send early session_started", "err", err)
 	}
 
-	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, env, outputFn, localFn, exitFn)
+	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, m.mergeEnv(env), outputFn, localFn, exitFn)
 	if err != nil {
 		m.registry.Remove(sessionID)
 		// earlyStarted was already sent — notify the cloud so the DB record is cleaned up.

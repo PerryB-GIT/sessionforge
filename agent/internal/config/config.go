@@ -39,6 +39,11 @@ type Config struct {
 	// Useful for diagnosing issues when the agent runs as a Windows service
 	// where stderr is not visible.
 	LogFile string `toml:"log_file,omitempty"`
+	// ClaudeConfigDir is the absolute path to the Claude Code config directory
+	// (~/.claude on the host). When set, it is injected as CLAUDE_CONFIG_DIR
+	// into every spawned PTY session so Claude Code picks up the user's skills,
+	// memory, MCP connections, and CLAUDE.md files.
+	ClaudeConfigDir string `toml:"claude_config_dir,omitempty"`
 }
 
 // DefaultConfig returns a Config populated with sensible defaults.

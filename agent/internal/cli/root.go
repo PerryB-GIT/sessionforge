@@ -146,6 +146,13 @@ func runDaemonWithContext(ctx context.Context) error {
 		logger.Info("using stored claude path from config", "claudePath", cfg.ClaudePath)
 	}
 
+	// Inject the user's Claude config directory into every spawned session so
+	// Claude Code picks up skills, memory, MCP connections, and CLAUDE.md.
+	if cfg.ClaudeConfigDir != "" {
+		mgr.SetClaudeConfigDir(cfg.ClaudeConfigDir)
+		logger.Info("using claude config dir from config", "claudeConfigDir", cfg.ClaudeConfigDir)
+	}
+
 	handler := connection.NewHandler(mgr, client, logger)
 
 	// Wire up dispatch to the fully-constructed handler.

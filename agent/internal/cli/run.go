@@ -61,6 +61,12 @@ func runRun(cmd *cobra.Command, args []string) error {
 	go connection.RunHeartbeat(ctx, client, cfg.MachineID, mgr, logger)
 	go client.Run(ctx)
 
+	// Wait for the WS connection before spawning the PTY so that initial
+	// output doesn't flood sendCh before writeLoop is running.
+	if err := client.WaitConnected(ctx); err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+
 	// Enable raw mode — must be restored in all exit paths.
 	rawState, rawErr := setRawMode()
 	if rawErr != nil {

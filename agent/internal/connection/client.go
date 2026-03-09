@@ -61,21 +61,34 @@ type Client struct {
 	mu   sync.Mutex
 	conn *websocket.Conn
 
-	sendCh chan []byte
-	stopCh chan struct{}
-	doneCh chan struct{}
+	sendCh      chan []byte
+	stopCh      chan struct{}
+	doneCh      chan struct{}
+	connectedCh chan struct{} // closed once on first successful connection
+	connectedOnce sync.Once
 }
 
 // NewClient creates a Client. Call Run() to connect.
 func NewClient(cfg *config.Config, version string, handler MessageHandler, logger *slog.Logger) *Client {
 	return &Client{
-		cfg:     cfg,
-		version: version,
-		handler: handler,
-		logger:  logger,
-		sendCh:  make(chan []byte, 256),
-		stopCh:  make(chan struct{}),
-		doneCh:  make(chan struct{}),
+		cfg:         cfg,
+		version:     version,
+		handler:     handler,
+		logger:      logger,
+		sendCh:      make(chan []byte, 256),
+		stopCh:      make(chan struct{}),
+		doneCh:      make(chan struct{}),
+		connectedCh: make(chan struct{}),
+	}
+}
+
+// WaitConnected blocks until the first successful WS connection or ctx is cancelled.
+func (c *Client) WaitConnected(ctx context.Context) error {
+	select {
+	case <-c.connectedCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -143,6 +156,9 @@ func (c *Client) connect(ctx context.Context) error {
 		conn.Close()
 		return fmt.Errorf("register: %w", err)
 	}
+
+	// Signal WaitConnected on the first successful connection.
+	c.connectedOnce.Do(func() { close(c.connectedCh) })
 
 	// Notify listeners (e.g. session replay) after successful registration.
 	if c.OnConnect != nil {
@@ -234,10 +250,13 @@ func (c *Client) writeLoop(ctx context.Context, conn *websocket.Conn, errCh chan
 			return
 
 		case data := <-c.sendCh:
+			c.logger.Info("writeLoop: sending", "bytes", len(data))
 			if err := send(websocket.TextMessage, data); err != nil {
+				c.logger.Warn("writeLoop: send error", "err", err)
 				errCh <- fmt.Errorf("write: %w", err)
 				return
 			}
+			c.logger.Info("writeLoop: sent ok", "bytes", len(data))
 
 		case <-ticker.C:
 			if err := send(websocket.PingMessage, nil); err != nil {

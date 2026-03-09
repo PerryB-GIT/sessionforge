@@ -135,6 +135,10 @@ func spawnPTY(
 	return h, cmd.Process.Pid, nil
 }
 
+// maxChunkBytes is the maximum raw bytes per session_output frame.
+// Kept small so Cloud Run's HTTP/2 ingress does not buffer frames.
+const maxChunkBytes = 512
+
 // readPTYOutput reads bytes from the PTY master, batches them with a 16ms debounce,
 // base64-encodes the batch, and calls outputFn. If localOutputFn is non-nil it is
 // called with the raw bytes before base64 encoding.
@@ -146,13 +150,18 @@ func readPTYOutput(sessionID string, ptmx *os.File, outputFn func(sessionID, dat
 	var pending []byte
 
 	flush := func() {
-		if len(pending) > 0 {
-			if localOutputFn != nil {
-				localOutputFn(pending)
+		for len(pending) > 0 {
+			size := len(pending)
+			if size > maxChunkBytes {
+				size = maxChunkBytes
 			}
-			encoded := base64.StdEncoding.EncodeToString(pending)
+			chunk := pending[:size]
+			pending = pending[size:]
+			if localOutputFn != nil {
+				localOutputFn(chunk)
+			}
+			encoded := base64.StdEncoding.EncodeToString(chunk)
 			outputFn(sessionID, encoded)
-			pending = pending[:0]
 		}
 	}
 

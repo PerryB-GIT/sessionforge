@@ -193,7 +193,7 @@ func (m *Manager) StartWithLocalOutput(
 	)
 
 	outputFn := func(sid, data string) {
-		m.logger.Debug("session_output chunk", "sessionId", sid, "bytes", len(data))
+		m.logger.Info("session_output chunk", "sessionId", sid, "bytes", len(data))
 		msg := sessionOutputMsg{
 			Type:      "session_output",
 			SessionID: sid,

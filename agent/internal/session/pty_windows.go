@@ -367,30 +367,28 @@ func probeConPTY() bool {
 	}
 	windows.CloseHandle(pi.Thread)
 
-	// Try to read output bytes within 3 seconds.
-	// If ConPTY is broken the ReadFile will block forever; use a goroutine + timer.
-	gotOutput := make(chan bool, 1)
-	go func() {
-		buf := make([]byte, 256)
-		var n uint32
-		readErr := windows.ReadFile(or_, buf, &n, nil)
-		gotOutput <- (readErr == nil && n > 0)
-	}()
-
-	var ok bool
-	select {
-	case ok = <-gotOutput:
-	case <-time.After(3 * time.Second):
-		ok = false
-	}
-
-	// Kill probe process and clean up regardless of result.
-	// Close or_ BEFORE waiting — this unblocks any pending ReadFile in the goroutine.
-	windows.TerminateProcess(pi.Process, 1)
+	// Wait for the probe process to exit (max 2s), then close the ConPTY so
+	// the output pipe gets EOF and ReadFile returns. Without closing the ConPTY
+	// first, ReadFile on the output pipe blocks indefinitely even after the child
+	// exits — the pipe stays open until all ConPTY handles are closed.
+	waitResult, _ := windows.WaitForSingleObject(pi.Process, 2000)
+	windows.TerminateProcess(pi.Process, 1) // no-op if already exited
 	windows.CloseHandle(pi.Process)
+
+	// Close ConPTY and the input write handle — this signals EOF on the output pipe.
 	windows.ClosePseudoConsole(hPC)
 	windows.CloseHandle(iw)
-	windows.CloseHandle(or_) // closed last so ReadFile goroutine unblocks
+
+	// Now ReadFile will return immediately with whatever the process wrote.
+	// We attempt the read regardless of whether the process exited cleanly or
+	// timed out — ClosePseudoConsole above guarantees the pipe has EOF so
+	// ReadFile will not block.
+	_ = waitResult
+	buf := make([]byte, 256)
+	var n uint32
+	readErr := windows.ReadFile(or_, buf, &n, nil)
+	ok := readErr == nil && n > 0
+	windows.CloseHandle(or_)
 
 	return ok
 }
@@ -420,7 +418,7 @@ func spawnPTY(
 			if conPTYWorking {
 				conPTYWorkingLogger.Info("ConPTY probe passed — using pseudo-console for sessions")
 			} else {
-				conPTYWorkingLogger.Warn("ConPTY probe failed — falling back to pipe I/O for sessions (interactive features limited)")
+				conPTYWorkingLogger.Warn("ConPTY probe failed — falling back to pipe I/O for sessions")
 			}
 		}
 	})

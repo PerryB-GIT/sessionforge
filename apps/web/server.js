@@ -639,37 +639,42 @@ function handleAgentWs(ws, userId, remoteAddress) {
     }
   }, HEARTBEAT_INTERVAL_MS)
 
-  ws.on('message', async (raw) => {
-    let msg
-    try {
-      msg = JSON.parse(raw.toString())
-    } catch {
-      return
-    }
-    if (msg.type !== 'heartbeat') {
-      console.log('[ws/agent] recv type:', msg.type)
-    }
-    try {
-      await handleAgentMessage(
-        msg,
-        userId,
-        remoteAddress,
-        sessionStats,
-        (id, hn) => {
-          machineId = id
-          if (hn) machineHostname = hn
-          lastHeartbeatAt = Date.now()
-          if (!pollTimer) {
-            console.log(`[ws/agent] starting poll for machine ${id}`)
-            pollAgentCommands()
-          }
-        },
-        () => machineId
-      )
-      if (msg.type === 'heartbeat') lastHeartbeatAt = Date.now()
-    } catch (err) {
-      console.error('[ws/agent] error handling message:', msg.type, err)
-    }
+  // Sequential message queue — prevents register/session_started races where
+  // session_started fires before register's DB await completes, leaving machineId null.
+  let agentMsgQueue = Promise.resolve()
+  ws.on('message', (raw) => {
+    agentMsgQueue = agentMsgQueue.then(async () => {
+      let msg
+      try {
+        msg = JSON.parse(raw.toString())
+      } catch {
+        return
+      }
+      if (msg.type !== 'heartbeat') {
+        console.log('[ws/agent] recv type:', msg.type)
+      }
+      try {
+        await handleAgentMessage(
+          msg,
+          userId,
+          remoteAddress,
+          sessionStats,
+          (id, hn) => {
+            machineId = id
+            if (hn) machineHostname = hn
+            lastHeartbeatAt = Date.now()
+            if (!pollTimer) {
+              console.log(`[ws/agent] starting poll for machine ${id}`)
+              pollAgentCommands()
+            }
+          },
+          () => machineId
+        )
+        if (msg.type === 'heartbeat') lastHeartbeatAt = Date.now()
+      } catch (err) {
+        console.error('[ws/agent] error handling message:', msg.type, err)
+      }
+    })
   })
 
   ws.on('close', async () => {

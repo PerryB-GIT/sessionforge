@@ -110,8 +110,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           if (msg.type === 'session_output' && msg.sessionId === sessionId) {
             if (typeof msg.data === 'string' && msg.data.length > 0) {
               try {
-                const decoded = atob(msg.data)
-                terminalRef.current?.write(decoded)
+                const binary = atob(msg.data)
+                const bytes = new Uint8Array(binary.length)
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+                terminalRef.current?.write(bytes)
               } catch (decodeErr) {
                 console.warn('[Terminal] base64 decode failed, writing raw:', decodeErr)
                 terminalRef.current?.write(msg.data)

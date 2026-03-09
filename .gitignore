@@ -24,3 +24,23 @@ restore-env.env
 e2e-secret.env
 *.secret.env
 *-secret.env
+
+# Agent build artifacts
+agent/sessionforge*.exe
+agent/sessionforge-linux*
+agent/sessionforge_*.exe
+agent/sessionforge-new.exe
+agent/.claude/
+agent/C*/
+
+# Screenshot / QA artifacts
+*.png
+e2e-*.png
+copilot-*.png
+
+# Scratch scripts and test binaries
+agent/cmd/conpty_test/
+agent/cmd/pty-test/
+check-agent-owner.mjs
+build-agent.ps1
+tasks/

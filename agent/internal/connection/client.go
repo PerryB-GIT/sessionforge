@@ -250,13 +250,13 @@ func (c *Client) writeLoop(ctx context.Context, conn *websocket.Conn, errCh chan
 			return
 
 		case data := <-c.sendCh:
-			c.logger.Info("writeLoop: sending", "bytes", len(data))
+			c.logger.Debug("writeLoop: sending", "bytes", len(data))
 			if err := send(websocket.TextMessage, data); err != nil {
 				c.logger.Warn("writeLoop: send error", "err", err)
 				errCh <- fmt.Errorf("write: %w", err)
 				return
 			}
-			c.logger.Info("writeLoop: sent ok", "bytes", len(data))
+			c.logger.Debug("writeLoop: sent ok", "bytes", len(data))
 
 		case <-ticker.C:
 			if err := send(websocket.PingMessage, nil); err != nil {

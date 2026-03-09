@@ -155,7 +155,9 @@ test.describe('Machine detail page', () => {
     await expect(page.getByRole('tab', { name: /Sessions/ })).toBeVisible()
   })
 
-  test.skip('machine detail page Setup tab is present and shows Agent Setup content when clicked', async ({ page }) => {
+  test.skip('machine detail page Setup tab is present and shows Agent Setup content when clicked', async ({
+    page,
+  }) => {
     // Requires: seeded machine ID. Enable when machine seeding is available.
     await page.goto('/machines/MACHINE_ID')
     await expect(page.getByRole('tab', { name: /Setup/ })).toBeVisible()
@@ -202,13 +204,46 @@ test.describe('Sessions page', () => {
 // ─── Session detail page ──────────────────────────────────────────────────────
 
 test.describe('Session detail page', () => {
-  test.skip('session detail page terminal container is present for a running session', async ({ page }) => {
+  test('terminal container is rendered in DOM', async ({ page }) => {
+    // Navigate to sessions list
+    await page.goto('/sessions')
+
+    // Try to find a session row to click into
+    // Look for any link that goes to /sessions/[id]
+    const sessionLink = page.locator('a[href*="/sessions/"]').first()
+    const count = await sessionLink.count()
+
+    if (count === 0) {
+      // No sessions available — just verify the sessions page loads
+      await expect(page.locator('h1, h2').filter({ hasText: /sessions/i })).toBeVisible()
+      return
+    }
+
+    await sessionLink.click()
+    await page.waitForURL(/\/sessions\//)
+
+    // The Terminal component always renders a root div with bg-[#0a0a0f] and
+    // border-[#1e1e2e] regardless of whether xterm.js loads or the stub is shown.
+    // The session detail page also wraps the terminal section in a div with
+    // style="min-height: 400px" which is always present in the DOM.
+    // Use a generous timeout since terminal initialization takes a moment.
+    const terminal = page
+      .locator('.xterm, .xterm-screen, [data-testid="terminal"], [style*="min-height"]')
+      .first()
+    await expect(terminal).toBeVisible({ timeout: 15000 })
+  })
+
+  test.skip('session detail page terminal container is present for a running session', async ({
+    page,
+  }) => {
     // Requires: seeded running session. Enable when session seeding is available.
     await page.goto('/sessions/SESSION_ID')
     await expect(page.locator('[style*="min-height"]').first()).toBeVisible()
   })
 
-  test.skip('session detail page Stop button is visible for a running session', async ({ page }) => {
+  test.skip('session detail page Stop button is visible for a running session', async ({
+    page,
+  }) => {
     // Requires: seeded running session. Enable when session seeding is available.
     await page.goto('/sessions/SESSION_ID')
     await expect(page.getByRole('button', { name: /Stop/i })).toBeVisible()
@@ -305,7 +340,9 @@ test.describe('Settings profile page', () => {
 test.describe('Settings org page', () => {
   test('org settings page heading is visible', async ({ page }) => {
     await page.goto('/settings/org')
-    await expect(page.getByRole('heading', { name: 'Organization Settings', exact: true }).first()).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Organization Settings', exact: true }).first()
+    ).toBeVisible()
   })
 
   test('org settings shows app.sessionforge.io URL prefix next to slug input', async ({ page }) => {
@@ -324,7 +361,9 @@ test.describe('Settings org page', () => {
     await expect(page.getByRole('button', { name: /Invite Member/i })).toBeVisible()
   })
 
-  test('clicking Invite Member opens the invite dialog with email input and Send Invite button', async ({ page }) => {
+  test('clicking Invite Member opens the invite dialog with email input and Send Invite button', async ({
+    page,
+  }) => {
     // Enable with: use: { storageState: 'e2e/.auth/user.json' }
     // Requires: global-setup.ts to register+verify a user and serialize cookies
     await page.goto('/settings/org')

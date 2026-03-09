@@ -665,11 +665,6 @@ function handleAgentWs(ws, userId, remoteAddress) {
       return
     }
 
-    // Raw arrival log — shows every message type reaching Node.js WS layer.
-    if (msg.type !== 'heartbeat' && msg.type !== 'pong') {
-      console.log('[ws/agent] RAW ARRIVAL type:', msg.type, 'bytes:', raw.length)
-    }
-
     // Hot path: session_output handled concurrently, never queued.
     if (msg.type === 'session_output') {
       const { sessionId, data } = msg
@@ -687,12 +682,6 @@ function handleAgentWs(ws, userId, remoteAddress) {
             sessionUserIdCache.set(sessionId, rows[0]?.user_id ?? userId)
           }
           const ownerUserId = sessionUserIdCache.get(sessionId)
-          console.log(
-            '[ws/agent] session_output publishing sid:',
-            sessionId,
-            'ownerUserId:',
-            ownerUserId
-          )
           if (ownerUserId)
             await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })
         } catch (err) {

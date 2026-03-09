@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -55,7 +57,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	logger := buildLogger(cfg.LogLevel, cfg.LogFile)
+	logger := buildRunLogger(cfg.LogLevel, cfg.LogFile)
 	client, mgr := buildAgentComponents(ctx, cfg)
 
 	go connection.RunHeartbeat(ctx, client, cfg.MachineID, mgr, logger)
@@ -132,4 +134,38 @@ func runRun(cmd *cobra.Command, args []string) error {
 		os.Exit(sessionExitCode)
 	}
 	return nil
+}
+
+// buildRunLogger builds a logger for 'sessionforge run' mode.
+// PTY output owns stdout; logs must not interleave with it.
+// If a log file is configured, write logs there only (not stderr).
+// If no log file, suppress to Error level so only crashes appear.
+func buildRunLogger(level, logFile string) *slog.Logger {
+	var l slog.Level
+	var w io.Writer = io.Discard
+
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if err == nil {
+			w = f
+			// With a log file, use the requested level
+			switch level {
+			case "debug":
+				l = slog.LevelDebug
+			case "warn":
+				l = slog.LevelWarn
+			case "error":
+				l = slog.LevelError
+			default:
+				l = slog.LevelInfo
+			}
+		} else {
+			l = slog.LevelError
+		}
+	} else {
+		// No log file — suppress info/debug to avoid polluting PTY output
+		l = slog.LevelError
+	}
+
+	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: l}))
 }

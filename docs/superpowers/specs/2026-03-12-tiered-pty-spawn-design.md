@@ -191,9 +191,13 @@ Layout inside the agent install directory:
 New function in `pty_windows.go`. The key insight: **Git Bash's `bash.exe` is a Windows executable** — it can be spawned with `CreateProcess` using the existing pipe infrastructure. No ConPTY needed. Git Bash's MSYS2 runtime handles terminal emulation internally.
 
 ```
-spawnWithGitBash(ctx, sessionID, command, args, workdir, env, outputFn, localOutputFn, exitFn):
+spawnWithGitBash(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn):
+  // command is the raw string e.g. "claude --profile work" — NOT pre-split.
+  // Git Bash and WSL tiers accept the raw command string and pass it to bash -c / sh -c,
+  // which handles word splitting natively. This differs from spawnWithConPTY/spawnWithPipes
+  // which receive pre-split (binary, args) from resolveCommand().
   1. binary = <install-dir>/gitbash/bin/bash.exe
-  2. bashArgs = ["-l", "-c", "claude <original-args>"]
+  2. bashArgs = ["-l", "-c", command]  // e.g. ["-l", "-c", "claude --profile work"]
      - "-l" = login shell (sources /etc/profile, sets up PATH)
      - "-c" = execute command string
   3. env additions:
@@ -258,9 +262,10 @@ Each step has a 5-second timeout. If any step fails or times out, WSL tier is sk
 New function in `pty_windows.go`:
 
 ```
-spawnWithWSL(ctx, sessionID, command, args, workdir, env, outputFn, localOutputFn, exitFn):
+spawnWithWSL(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn):
+  // command is the raw string — same convention as spawnWithGitBash.
   1. binary = "wsl.exe" (resolved via exec.LookPath)
-  2. wslArgs = ["-d", <distro>, "--", "sh", "-c", "cd <wsl-path> && exec claude <original-args>"]
+  2. wslArgs = ["-d", <distro>, "--", "sh", "-c", "cd <wsl-path> && exec <command>"]
      Note: Using "sh -c" with "cd" instead of "--cd" flag for WSL version compatibility.
      The "--cd" flag was introduced in WSL 0.67.6 (2022) and may not be available on older installs.
   3. workdir translation:
@@ -291,13 +296,13 @@ At spawn time, `spawnWithWSL()` generates a temp file path: `/tmp/sf-<sessionID>
 sh -c "echo $$ > /tmp/sf-<sessionID>.pid && exec claude <args>"
 ```
 
-After `CreateProcess` returns, the agent reads the PID via a separate, short-lived command:
+After `CreateProcess` returns, the agent reads the PID via a separate, short-lived WSL command that polls for the file. This avoids a race condition where `CreateProcess` returns (the host `wsl.exe` process is launched) before the Linux `sh -c` has written the PID file:
 
 ```
-wsl -d <distro> -- cat /tmp/sf-<sessionID>.pid
+wsl -d <distro> -- sh -c "for i in 1 2 3 4 5 6; do [ -f /tmp/sf-<sessionID>.pid ] && cat /tmp/sf-<sessionID>.pid && exit 0; sleep 0.5; done; exit 1"
 ```
 
-This runs in a goroutine with a 3-second timeout. If it fails, `linuxPID` stays 0 and the WSL tier falls back to killing the host-side `wsl.exe` process directly (less clean but functional). The temp file is cleaned up in `close()` via `wsl -d <distro> -- rm -f /tmp/sf-<sessionID>.pid`.
+This runs in a goroutine with a 3-second overall timeout on the Go side (matching the 3s of polling inside the WSL command). If the file never appears (shell startup failure, WSL hang, etc.), `linuxPID` stays 0 and the WSL tier falls back to killing the host-side `wsl.exe` process directly (less clean but functional). The temp file is cleaned up in `close()` via `wsl -d <distro> -- rm -f /tmp/sf-<sessionID>.pid`.
 
 **Why sideband, not stdout parsing:** The `echo $$ && exec claude` approach sends the PID into the same pipe that carries Claude Code's output. Parsing the first line requires a buffered reader with a delimiter, races with Claude's own startup output, and complicates the `readPipeOutput` goroutine. A temp file keeps the output pipe clean and requires no changes to the output reader.
 
@@ -388,6 +393,10 @@ The `tier` field is set at construction time by each `spawnWith*()` function and
 - **Pipe tier (force=false):** Write Ctrl+C to stdin. **(force=true):** Call `proc.Kill()`.
 
 The Manager's `StopAll()` (line 421-430 of `manager.go`) calls `stop(false)` then `stop(true)` as a fallback — this pattern works correctly with all tiers once the parameter is no longer discarded.
+
+> **Note:** The ConPTY/pipes tiers' graceful stop (`force=false`) changes from the current behavior (`proc.Kill()` regardless of force) to writing Ctrl+C to stdin. This is an intentional improvement — `proc.Kill()` was only used because `force` was discarded. The implementer should test ConPTY graceful stop specifically, as Claude Code may need a moment to clean up after receiving Ctrl+C.
+
+**Per-tier `close()` behavior:** The `close()` method is extended with tier-aware dispatch. All tiers call the existing `cancel()` + pipe cleanup. The WSL tier additionally removes the temp PID file (`wsl -d <distro> -- rm -f /tmp/sf-<sessionID>.pid`) and ensures the host-side `wsl.exe` process is killed. The `close()` dispatch checks `h.tier` the same way `stop()` does.
 
 ### Agent Log Observability
 

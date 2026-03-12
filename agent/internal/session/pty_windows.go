@@ -1061,8 +1061,32 @@ func (h *ptyHandle) resize(cols, rows uint16) error {
 	return windows.ResizePseudoConsole(h.hPC, coord)
 }
 
-// stop terminates the child process.
-func (h *ptyHandle) stop(_ bool) error {
+// stop terminates the child process. Behavior depends on tier and force flag.
+func (h *ptyHandle) stop(force bool) error {
+	switch h.tier {
+	case "wsl":
+		return h.stopWSL(force)
+	default:
+		if force {
+			return h.forceKill()
+		}
+		return h.gracefulStop()
+	}
+}
+
+// gracefulStop sends Ctrl+C (\x03) to the stdin pipe.
+func (h *ptyHandle) gracefulStop() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.stdin != nil {
+		_, err := h.stdin.Write([]byte{0x03}) // Ctrl+C
+		return err
+	}
+	return nil
+}
+
+// forceKill terminates the Windows-side process immediately.
+func (h *ptyHandle) forceKill() error {
 	if h.proc != nil {
 		return h.proc.Kill()
 	}
@@ -1070,6 +1094,28 @@ func (h *ptyHandle) stop(_ bool) error {
 		return h.cmd.Process.Kill()
 	}
 	h.cancel()
+	return nil
+}
+
+// stopWSL handles WSL-specific stop behavior.
+func (h *ptyHandle) stopWSL(force bool) error {
+	if h.linuxPID > 0 && h.wslDistro != "" {
+		sig := "-TERM"
+		if force {
+			sig = "-9"
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = exec.CommandContext(ctx, "wsl", "-d", h.wslDistro, "--", "kill", sig, fmt.Sprintf("%d", h.linuxPID)).Run()
+	}
+
+	if force {
+		return h.forceKill()
+	}
+
+	if h.linuxPID == 0 {
+		return h.gracefulStop()
+	}
 	return nil
 }
 

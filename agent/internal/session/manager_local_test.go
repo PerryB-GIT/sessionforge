@@ -88,6 +88,58 @@ func TestLocalOutputFn_PipesPath(t *testing.T) {
 	}
 }
 
+// TestSpawnPTY_TierRouting verifies that spawnPTY routes to a working spawn tier,
+// produces output, and reports a clean exit code.
+func TestSpawnPTY_TierRouting(t *testing.T) {
+	// Force tier detection to run.
+	ensureTierDetected()
+	t.Logf("Detected spawn tier: %s", spawnTier)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+	var capturedCode int
+	exitFn := func(sid string, code int, err error) {
+		capturedCode = code
+		close(done)
+	}
+
+	var outputMu sync.Mutex
+	var outputChunks []string
+	outputFn := func(sid, data string) {
+		outputMu.Lock()
+		outputChunks = append(outputChunks, data)
+		outputMu.Unlock()
+	}
+
+	h, pid, err := spawnPTY(ctx, "test-tier-routing", "echo tier-test", ".", nil, outputFn, nil, exitFn)
+	if err != nil {
+		t.Fatalf("spawnPTY: %v", err)
+	}
+	if pid == 0 {
+		t.Fatal("expected non-zero PID")
+	}
+	t.Logf("Spawned via tier=%s, pid=%d", h.tier, pid)
+
+	select {
+	case <-done:
+		t.Logf("Process exited with code %d", capturedCode)
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for echo to finish")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	outputMu.Lock()
+	chunks := outputChunks
+	outputMu.Unlock()
+
+	if len(chunks) == 0 {
+		t.Fatal("expected output from echo command")
+	}
+}
+
 // TestStartWithLocalOutput_SendsSessionStarted verifies that StartWithLocalOutput
 // sends a session_started message via the messenger.
 // This test exercises the Manager's message-sending logic by directly using

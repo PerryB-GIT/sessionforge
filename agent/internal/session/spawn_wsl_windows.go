@@ -47,7 +47,7 @@ func spawnWithWSL(
 	}
 
 	pidFile := fmt.Sprintf("/tmp/sf-%s.pid", sessionID)
-	shellCmd := fmt.Sprintf("echo $$ > %s && cd %s && exec %s", pidFile, wslWorkdir, command)
+	shellCmd := fmt.Sprintf("echo $$ > %s && cd '%s' && exec %s", pidFile, wslWorkdir, command)
 
 	binary := wslBin
 	args := []string{"-d", distro, "--", "sh", "-c", shellCmd}

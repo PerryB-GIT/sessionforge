@@ -77,6 +77,24 @@ jobs:
           GONOSUMDB: "*"
           GOFLAGS: "-mod=mod"
 
+      - name: Download MinGit portable
+        run: |
+          MINGIT_VERSION="2.47.1"
+          MINGIT_URL="https://github.com/git-for-windows/git/releases/download/v${MINGIT_VERSION}.windows.1/MinGit-${MINGIT_VERSION}-64-bit.zip"
+          echo "Downloading MinGit ${MINGIT_VERSION}..."
+          curl -L -o /tmp/mingit.zip "${MINGIT_URL}"
+          mkdir -p agent/gitbash
+          cd agent/gitbash
+          unzip -q /tmp/mingit.zip
+          rm /tmp/mingit.zip
+          echo "MinGit extracted to agent/gitbash/"
+          ls -la bin/bash.exe || echo "WARNING: bash.exe not found"
+
+      - name: Package Windows release
+        run: |
+          cd agent
+          zip -r sessionforge-windows-amd64.zip sessionforge.exe gitbash/
+
       - name: Delete existing "latest" release (if present)
         run: gh release delete latest --yes --cleanup-tag 2>/dev/null || true
         env:
@@ -102,7 +120,9 @@ jobs:
             Invoke-WebRequest -Uri "https://github.com/PerryB-GIT/sessionforge/releases/latest/download/sessionforge.exe" -OutFile "sessionforge.exe"
             ```
           prerelease: true
-          files: agent/sessionforge.exe
+          files: |
+            agent/sessionforge-windows-amd64.zip
+            agent/sessionforge.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

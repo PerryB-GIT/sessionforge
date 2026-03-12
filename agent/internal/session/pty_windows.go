@@ -91,6 +91,12 @@ type ptyHandle struct {
 	stdout io.ReadCloser  // read end  <- PTY output
 	cancel context.CancelFunc
 	mu     sync.Mutex
+
+	// Tier-specific fields (added for tiered spawn).
+	tier      string // "wsl", "gitbash", "conpty", or "pipes"
+	wslDistro string // WSL distro name (only set for WSL tier)
+	linuxPID  int    // Linux-side PID for WSL kill (0 if capture failed)
+	sessionID string // For temp file cleanup in WSL tier
 }
 
 // configuredClaudePath is the claude binary path stored in config.toml at install
@@ -160,13 +166,8 @@ func resolveCommand(command string) (string, []string, error) {
 	if storedPath != "" && baseLower == "claude" {
 		if _, err := os.Stat(storedPath); err == nil {
 			resolved := storedPath
-			isCmdScript := strings.ToLower(filepath.Ext(resolved)) == ".cmd"
-			if isCmdScript {
-				cmdExe, cmdErr := exec.LookPath("cmd.exe")
-				if cmdErr != nil {
-					cmdExe = `C:\Windows\System32\cmd.exe`
-				}
-				return cmdExe, append([]string{"/C", resolved}, args...), nil
+			if strings.ToLower(filepath.Ext(resolved)) == ".cmd" {
+				return resolveCmdScript(resolved, args)
 			}
 			return resolved, args, nil
 		}
@@ -186,18 +187,94 @@ func resolveCommand(command string) (string, []string, error) {
 	}
 
 	// Windows CreateProcess cannot execute .cmd script files directly.
-	// Wrap them as: cmd.exe /C "<script>" [args...]
-	isCmdScript := strings.ToLower(filepath.Ext(resolved)) == ".cmd"
-
-	if isCmdScript {
-		cmdExe, cmdErr := exec.LookPath("cmd.exe")
-		if cmdErr != nil {
-			cmdExe = `C:\Windows\System32\cmd.exe`
-		}
-		return cmdExe, append([]string{"/C", resolved}, args...), nil
+	// Parse the .cmd to extract the real node + script invocation so we get a
+	// proper long-lived process with working pipes/ConPTY instead of a cmd.exe
+	// wrapper that exits immediately and orphans the child.
+	if strings.ToLower(filepath.Ext(resolved)) == ".cmd" {
+		return resolveCmdScript(resolved, args)
 	}
 
 	return resolved, args, nil
+}
+
+// resolveCmdScript parses a Windows npm-generated .cmd shim and extracts the
+// underlying node.exe + script path so we can spawn the real process directly.
+// npm shims follow the pattern:
+//
+//	"%dp0%\node.exe"  "%dp0%\node_modules\...\cli.js" %*
+//
+// If parsing fails we fall back to cmd.exe /C (original behaviour).
+func resolveCmdScript(cmdPath string, extraArgs []string) (string, []string, error) {
+	data, err := os.ReadFile(cmdPath)
+	if err != nil {
+		return fallbackCmdExe(cmdPath, extraArgs)
+	}
+	content := string(data)
+	dir := filepath.Dir(cmdPath)
+
+	// Look for the execution line: ends with %* and contains a .js file.
+	// Example: endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\node_modules\...\cli.js" %*
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, ".js") || !strings.HasSuffix(strings.TrimSpace(line), "%*") {
+			continue
+		}
+		// Extract quoted tokens — they are the node binary and script path.
+		var tokens []string
+		rest := line
+		for {
+			start := strings.Index(rest, `"`)
+			if start < 0 {
+				break
+			}
+			end := strings.Index(rest[start+1:], `"`)
+			if end < 0 {
+				break
+			}
+			token := rest[start+1 : start+1+end]
+			tokens = append(tokens, token)
+			rest = rest[start+1+end+1:]
+		}
+		if len(tokens) < 2 {
+			break
+		}
+		// tokens[0] = node binary or %_prog% placeholder, tokens[1] = script path
+		nodeBin := tokens[0]
+		scriptPath := tokens[1]
+
+		// Expand %dp0% -> dir of the .cmd file
+		nodeBin = strings.ReplaceAll(nodeBin, "%dp0%", dir)
+		nodeBin = strings.ReplaceAll(nodeBin, "%DP0%", dir)
+		scriptPath = strings.ReplaceAll(scriptPath, "%dp0%", dir)
+		scriptPath = strings.ReplaceAll(scriptPath, "%DP0%", dir)
+
+		// If node binary is a placeholder or doesn't exist, use node from PATH.
+		if strings.Contains(nodeBin, "%") || nodeBin == "" {
+			if n, nerr := exec.LookPath("node.exe"); nerr == nil {
+				nodeBin = n
+			} else {
+				nodeBin = "node"
+			}
+		}
+		if _, serr := os.Stat(scriptPath); serr != nil {
+			break // script not found — fall back
+		}
+
+		finalArgs := append([]string{scriptPath}, extraArgs...)
+		return nodeBin, finalArgs, nil
+	}
+
+	// Parsing failed — fall back to cmd.exe /C (no interactive TUI but functional).
+	return fallbackCmdExe(cmdPath, extraArgs)
+}
+
+// fallbackCmdExe wraps a .cmd script with cmd.exe /C as a last resort.
+func fallbackCmdExe(cmdPath string, args []string) (string, []string, error) {
+	cmdExe, err := exec.LookPath("cmd.exe")
+	if err != nil {
+		cmdExe = `C:\Windows\System32\cmd.exe`
+	}
+	return cmdExe, append([]string{"/C", cmdPath}, args...), nil
 }
 
 // cachedClaudePath caches the result of the first successful npm fallback scan
@@ -374,22 +451,50 @@ func probeConPTY() bool {
 	waitResult, _ := windows.WaitForSingleObject(pi.Process, 2000)
 	windows.TerminateProcess(pi.Process, 1) // no-op if already exited
 	windows.CloseHandle(pi.Process)
-
-	// Close ConPTY and the input write handle — this signals EOF on the output pipe.
-	windows.ClosePseudoConsole(hPC)
-	windows.CloseHandle(iw)
-
-	// Now ReadFile will return immediately with whatever the process wrote.
-	// We attempt the read regardless of whether the process exited cleanly or
-	// timed out — ClosePseudoConsole above guarantees the pipe has EOF so
-	// ReadFile will not block.
 	_ = waitResult
+
+	// ReadFile first — or_ is still open so conhost can write its output.
+	// Use a short timeout via a goroutine since we can't pass a deadline to ReadFile.
+	// We read whatever arrived (the echo output), then close or_.
+	// Closing or_ before ClosePseudoConsole is critical: conhost won't exit
+	// (and ClosePseudoConsole won't return) while a reader holds or_ open.
 	buf := make([]byte, 256)
 	var n uint32
-	readErr := windows.ReadFile(or_, buf, &n, nil)
-	ok := readErr == nil && n > 0
-	windows.CloseHandle(or_)
+	readDone := make(chan error, 1)
+	go func() {
+		var readN uint32
+		err := windows.ReadFile(or_, buf, &readN, nil)
+		n = readN
+		readDone <- err
+	}()
 
+	// Give the process 1s to write output before we give up and close the pipe.
+	var readErr error
+	select {
+	case readErr = <-readDone:
+		// ReadFile returned normally.
+	case <-time.After(1 * time.Second):
+		// Timed out — close or_ to unblock the goroutine.
+	}
+
+	windows.CloseHandle(or_) // close reader — unblocks conhost output drain
+
+	// ClosePseudoConsole can hang on some Windows 10 builds (conhost doesn't
+	// always exit cleanly). Run it in a goroutine with a 2s timeout.
+	closeDone := make(chan struct{}, 1)
+	go func() {
+		windows.ClosePseudoConsole(hPC)
+		closeDone <- struct{}{}
+	}()
+	select {
+	case <-closeDone:
+	case <-time.After(2 * time.Second):
+		// Timed out — conhost is stuck. The goroutine leaks but the probe
+		// result is already determined by whether we read bytes above.
+	}
+	windows.CloseHandle(iw)
+
+	ok := readErr == nil && n > 0
 	return ok
 }
 
@@ -412,6 +517,11 @@ func spawnPTY(
 		return nil, 0, fmt.Errorf("resolve command: %w", err)
 	}
 
+	if conPTYWorkingLogger != nil {
+		conPTYWorkingLogger.Info("spawnPTY: resolved command", "binary", binary, "args", args, "sessionId", sessionID)
+	}
+
+	// WarmUpConPTY runs the probe at startup; Once.Do is a no-op if already done.
 	conPTYWorkingOnce.Do(func() {
 		conPTYWorking = probeConPTY()
 		if conPTYWorkingLogger != nil {
@@ -423,6 +533,10 @@ func spawnPTY(
 		}
 	})
 
+	if conPTYWorkingLogger != nil {
+		conPTYWorkingLogger.Info("spawnPTY: spawn path", "conPTYWorking", conPTYWorking, "sessionId", sessionID)
+	}
+
 	if !conPTYWorking {
 		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 	}
@@ -433,6 +547,21 @@ func spawnPTY(
 // visible in the agent log. Called by the Manager after the logger is available.
 func SetConPTYLogger(l *slog.Logger) {
 	conPTYWorkingLogger = l
+}
+
+// WarmUpConPTY triggers the ConPTY probe immediately so it completes before the
+// first session request arrives. Call this in a goroutine at agent startup.
+func WarmUpConPTY() {
+	conPTYWorkingOnce.Do(func() {
+		conPTYWorking = probeConPTY()
+		if conPTYWorkingLogger != nil {
+			if conPTYWorking {
+				conPTYWorkingLogger.Info("ConPTY probe passed — using pseudo-console for sessions")
+			} else {
+				conPTYWorkingLogger.Warn("ConPTY probe failed — falling back to pipe I/O for sessions")
+			}
+		}
+	})
 }
 
 // spawnWithConPTY creates a real Windows Pseudo Console for full terminal emulation.
@@ -610,12 +739,28 @@ func spawnWithConPTY(
 		cancel: cancel,
 	}
 
+	if conPTYWorkingLogger != nil {
+		conPTYWorkingLogger.Info("spawnWithConPTY: process created", "pid", procInfo.ProcessId, "sessionId", sessionID)
+	}
+
 	go func() {
 		defer cancel()
+		if conPTYWorkingLogger != nil {
+			conPTYWorkingLogger.Info("spawnWithConPTY: waiting for process exit", "pid", procInfo.ProcessId, "sessionId", sessionID)
+		}
 		state, waitErr := proc.Wait()
+		if conPTYWorkingLogger != nil {
+			conPTYWorkingLogger.Info("spawnWithConPTY: process exited", "pid", procInfo.ProcessId, "sessionId", sessionID)
+		}
 		stdinPW.Close()
 		stdoutPR.Close()
+		if conPTYWorkingLogger != nil {
+			conPTYWorkingLogger.Info("spawnWithConPTY: closing pseudo console", "pid", procInfo.ProcessId, "sessionId", sessionID)
+		}
 		windows.ClosePseudoConsole(hPC)
+		if conPTYWorkingLogger != nil {
+			conPTYWorkingLogger.Info("spawnWithConPTY: pseudo console closed", "pid", procInfo.ProcessId, "sessionId", sessionID)
+		}
 		windows.CloseHandle(procInfo.Process)
 
 		if waitErr != nil {

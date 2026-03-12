@@ -44,6 +44,9 @@ type Config struct {
 	// into every spawned PTY session so Claude Code picks up the user's skills,
 	// memory, MCP connections, and CLAUDE.md files.
 	ClaudeConfigDir string `toml:"claude_config_dir,omitempty"`
+	// ClaudeInstalledVia records how Claude Code was installed (informational).
+	// Values: "gitbash", "" (not set). Not used for tier selection.
+	ClaudeInstalledVia string `toml:"claude_installed_via,omitempty"`
 }
 
 // DefaultConfig returns a Config populated with sensible defaults.

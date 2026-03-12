@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/sessionforge/agent/internal/config"
 	"github.com/spf13/cobra"
@@ -147,6 +148,35 @@ func runServiceInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("WARNING: could not save config: %v\n", saveErr)
 	} else if claudePath != "" {
 		fmt.Printf("Stored claude path in config: %s\n", claudePath)
+	}
+
+	// ── Git Bash: Check for bundled MinGit and install Claude Code ──────────
+	gitBashBin := filepath.Join(filepath.Dir(execPath), "gitbash", "bin", "bash.exe")
+	if _, err := os.Stat(gitBashBin); err == nil {
+		fmt.Printf("Found bundled Git Bash: %s\n", gitBashBin)
+
+		fmt.Println("Installing Claude Code via Git Bash...")
+		installCtx, installCancel := context.WithTimeout(context.Background(), 60*time.Second)
+		installCmd := exec.CommandContext(installCtx, gitBashBin, "-l", "-c", "npm install -g @anthropic-ai/claude-code")
+		installOut, installErr := installCmd.CombinedOutput()
+		installCancel()
+
+		if installErr != nil {
+			fmt.Printf("WARNING: Claude Code install via Git Bash failed: %v\n", installErr)
+			fmt.Printf("  Output: %s\n", string(installOut))
+			fmt.Println("  The agent will attempt to install at startup.")
+		} else {
+			fmt.Println("Claude Code installed successfully via Git Bash.")
+			cfg.ClaudeInstalledVia = "gitbash"
+		}
+	} else {
+		fmt.Println("Note: Bundled Git Bash not found — will use system Claude CLI.")
+	}
+	// Re-save config if ClaudeInstalledVia was updated.
+	if cfg.ClaudeInstalledVia != "" {
+		if saveErr := config.SaveFrom(configDir, cfg); saveErr != nil {
+			fmt.Printf("WARNING: could not save config after Git Bash install: %v\n", saveErr)
+		}
 	}
 
 	// ── SCM: install the service ───────────────────────────────────────────────

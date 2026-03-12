@@ -80,6 +80,8 @@ func runTierDetection() {
 
 	// Step 3: ConPTY probe (existing logic)
 	conPTYWorking = probeConPTY()
+	// Mark conPTYWorkingOnce as done so spawnPTY does not re-probe.
+	conPTYWorkingOnce.Do(func() {})
 	if conPTYWorking {
 		spawnTier = "conpty"
 	} else {
@@ -102,15 +104,6 @@ func runTierDetection() {
 func detectWSL() (string, bool) {
 	logger := conPTYWorkingLogger
 
-	ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel1()
-	if out, err := exec.CommandContext(ctx1, "wsl", "--status").CombinedOutput(); err != nil {
-		if logger != nil {
-			logger.Debug("WSL detection: --status failed", "err", err, "output", string(out))
-		}
-		return "", false
-	}
-
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel2()
 	out, err := exec.CommandContext(ctx2, "wsl", "--list", "--quiet").CombinedOutput()
@@ -129,7 +122,7 @@ func detectWSL() (string, bool) {
 	}
 	distro := strings.TrimSpace(lines[0])
 	distro = strings.ReplaceAll(distro, "\x00", "")
-	distro = strings.TrimLeft(distro, "\ufeff")
+	distro = strings.TrimPrefix(distro, "\ufeff")
 	distro = strings.TrimSpace(distro)
 	if distro == "" {
 		return "", false
@@ -173,10 +166,7 @@ func detectGitBash() (string, bool) {
 	out, err := exec.CommandContext(ctx, bashPath, "-l", "-c", "which claude").CombinedOutput()
 	if err != nil {
 		if logger != nil {
-			logger.Debug("Git Bash detection: claude not found, attempting install", "err", err, "output", string(out))
-		}
-		if ensureClaudeInGitBash(bashPath) {
-			return bashPath, true
+			logger.Debug("Git Bash detection: claude not found", "err", err, "output", string(out))
 		}
 		return "", false
 	}
@@ -221,6 +211,9 @@ func ensureClaudeInGitBash(bashPath string) bool {
 func gitBashPath() string {
 	exe, err := os.Executable()
 	if err != nil {
+		if logger := conPTYWorkingLogger; logger != nil {
+			logger.Warn("gitBashPath: os.Executable failed", "err", err)
+		}
 		return ""
 	}
 	installDir := filepath.Dir(exe)

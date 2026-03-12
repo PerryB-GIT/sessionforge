@@ -1052,9 +1052,16 @@ func (h *ptyHandle) writeInputRaw(data []byte) error {
 }
 
 // resize updates the ConPTY window dimensions.
-// In pipe-fallback mode this is a no-op (no PTY to resize).
+// Only the ConPTY tier supports mid-session resize. WSL and Git Bash tiers
+// set COLUMNS/LINES at spawn time; resize calls are logged and no-opped.
 func (h *ptyHandle) resize(cols, rows uint16) error {
 	if h.hPC == 0 {
+		if conPTYWorkingLogger != nil {
+			conPTYWorkingLogger.Debug("resize no-op: no ConPTY handle",
+				"tier", h.tier, "sessionId", h.sessionID,
+				"cols", cols, "rows", rows,
+			)
+		}
 		return nil
 	}
 	coord := windows.Coord{X: int16(cols), Y: int16(rows)}
@@ -1129,10 +1136,25 @@ func (h *ptyHandle) resume() error {
 	return fmt.Errorf("resume not supported on Windows")
 }
 
-// close cancels the context and releases stdin.
+// close cancels the context, releases stdin, and performs tier-specific cleanup.
 func (h *ptyHandle) close() {
 	h.cancel()
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.stdin.Close()
+	if h.stdin != nil {
+		h.stdin.Close()
+	}
+
+	// WSL-specific cleanup: remove the PID temp file and ensure wsl.exe is dead.
+	if h.tier == "wsl" && h.wslDistro != "" && h.sessionID != "" {
+		pidFile := fmt.Sprintf("/tmp/sf-%s.pid", h.sessionID)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = exec.CommandContext(ctx, "wsl", "-d", h.wslDistro, "--", "rm", "-f", pidFile).Run()
+	}
+
+	// Force-kill the host-side process to prevent orphaned wsl.exe / bash.exe.
+	if h.proc != nil {
+		_ = h.proc.Kill()
+	}
 }

@@ -711,11 +711,13 @@ func spawnWithConPTY(
 	}
 
 	h := &ptyHandle{
-		hPC:    hPC,
-		proc:   proc,
-		stdin:  stdinPW,
-		stdout: stdoutPR,
-		cancel: cancel,
+		hPC:       hPC,
+		proc:      proc,
+		stdin:     stdinPW,
+		stdout:    stdoutPR,
+		cancel:    cancel,
+		tier:      "conpty",
+		sessionID: sessionID,
 	}
 
 	if conPTYWorkingLogger != nil {
@@ -924,9 +926,11 @@ func spawnWithPipes(
 	}
 
 	h := &ptyHandle{
-		stdin:  stdinWriter,
-		stdout: outReader,
-		cancel: cancel,
+		stdin:     stdinWriter,
+		stdout:    outReader,
+		cancel:    cancel,
+		tier:      "pipes",
+		sessionID: sessionID,
 	}
 
 	go readPipeOutput(sessionID, outReader, outputFn, localOutputFn, nil)

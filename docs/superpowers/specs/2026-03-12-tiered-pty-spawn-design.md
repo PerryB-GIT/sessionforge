@@ -75,6 +75,10 @@ detectSpawnTier():
   3. Run existing ConPTY probe -> spawnTier = "conpty" or "pipes"
 ```
 
+Each npm install step has a **60-second timeout** to prevent blocking session spawns. The `detectSpawnTier()` function runs in a background goroutine; `spawnPTY()` waits on a `sync.Once`-guarded result with a 90-second overall timeout.
+
+**Startup detection is authoritative.** Install-time config entries (`claude_installed_via`) are purely informational/diagnostic. If WSL was available at install time but removed before next startup, the startup detection correctly falls through.
+
 The result is stored in a package-level `spawnTier` string. The existing `spawnPTY()` function's decision tree changes from:
 
 ```go
@@ -88,6 +92,72 @@ case "gitbash": spawnWithGitBash(...)
 default:       // existing ConPTY/pipe logic unchanged
 }
 ```
+
+### Command String Handling Per Tier
+
+The `command` parameter passed to `spawnPTY()` may contain arguments (e.g., `"claude --profile work"`). Each tier handles this differently:
+
+- **WSL/Git Bash:** The entire command string is passed as a single argument to `sh -c` or `bash -c`, which handles word splitting natively. No splitting needed in Go.
+- **ConPTY/Pipes:** The existing `resolveCommand()` calls `strings.Fields(command)` to split the command, then resolves the binary path. This behavior is unchanged.
+
+### `resolveCommand` Bypass
+
+The existing `resolveCommand()` function (which resolves `claude` to a Windows `.cmd` shim path and parses it for `node.exe`) is **only called in the `default` (ConPTY/pipes) branch**. The WSL and Git Bash tiers skip `resolveCommand` entirely — they pass the raw command string (`"claude"`) to their respective shell environments, which handle PATH resolution natively.
+
+```go
+func spawnPTY(...) (*ptyHandle, int, error) {
+    switch spawnTier {
+    case "wsl":
+        // No resolveCommand — WSL's shell resolves "claude" via Linux PATH
+        return spawnWithWSL(...)
+    case "gitbash":
+        // No resolveCommand — bash -l -c resolves "claude" via Git Bash PATH
+        return spawnWithGitBash(...)
+    default:
+        // Only the ConPTY/pipes path needs Windows-specific command resolution
+        binary, args, err := resolveCommand(command)
+        if err != nil { return nil, 0, err }
+        // ... existing ConPTY/pipe logic
+    }
+}
+```
+
+### `configuredClaudePath` Interaction
+
+The `configuredClaudePath` package-level variable (set from `config.toml`'s `claude_path`) is **only used by `resolveCommand()`**, which is only called in the ConPTY/pipes fallback path. The WSL and Git Bash tiers ignore it entirely — they rely on their respective shell environments to find `claude` on PATH.
+
+### `WarmUpSpawnTier()` Definition
+
+Replaces the existing `WarmUpConPTY()` call in `root.go`:
+
+```go
+// Package-level state — replaces the existing conPTYWorkingOnce/conPTYWorking pair.
+var (
+    tierOnce  sync.Once
+    spawnTier string // "wsl", "gitbash", "conpty", or "pipes"
+    // conPTYWorking is still set during detection for the default tier's sub-decision.
+)
+
+func WarmUpSpawnTier() {
+    tierOnce.Do(func() {
+        // 1. Try WSL (detectWSL with 5s per-step timeouts)
+        // 2. Try Git Bash (detectGitBash, with 60s npm install timeout if needed)
+        // 3. Fall back to ConPTY probe:
+        //    - Calls existing probeConPTY() internally
+        //    - Sets conPTYWorking = true/false (used by default branch in spawnPTY)
+        //    - Sets spawnTier = "conpty" or "pipes" based on probe result
+    })
+}
+```
+
+**Relationship to existing `conPTYWorkingOnce`:** The new `tierOnce` **replaces** `conPTYWorkingOnce` entirely. The existing `conPTYWorkingOnce.Do(probeConPTY)` call is removed; `probeConPTY()` is called directly inside `tierOnce.Do()` as step 3 of the cascade. The `conPTYWorking` boolean is still set by `probeConPTY()` and still read by the `default` branch of `spawnPTY()` to decide between ConPTY and pipes. This means:
+
+- `WarmUpConPTY()` is deleted (replaced by `WarmUpSpawnTier()`)
+- `conPTYWorkingOnce` is deleted (replaced by `tierOnce`)
+- `conPTYWorking` is **kept** (set inside `tierOnce.Do`, read by `spawnPTY`'s default branch)
+- The `root.go` call changes from `go session.WarmUpConPTY()` to `go session.WarmUpSpawnTier()`
+
+Called as `go session.WarmUpSpawnTier()` in `root.go` daemon init. The `sync.Once` ensures it runs exactly once even if called from multiple goroutines.
 
 ---
 
@@ -138,11 +208,30 @@ spawnWithGitBash(ctx, sessionID, command, args, workdir, env, outputFn, localOut
   5. Output reader goroutine (existing readPipeOutput) works unchanged
 ```
 
-### Why This Works Without ConPTY
+### Forcing TTY Mode in Piped Context
 
-Git Bash's `bash.exe` (built on MSYS2) includes its own terminal emulation layer. When stdin/stdout are pipes (not a console), it operates in non-interactive piped mode but still processes ANSI/VT escape sequences. Claude Code detects `TERM=xterm-256color` and emits VT sequences. The output flows through the pipes to our reader, then to xterm.js in the browser — which is itself a VT terminal emulator.
+**Critical:** When stdin/stdout are pipes (not a console/PTY), Node.js's `process.stdout.isTTY` returns `false`. Claude Code may detect this and disable interactive terminal output (no colors, no TUI, no progress bars). The Git Bash tier must force Claude Code into TTY-compatible mode.
 
-The chain: Claude Code -> VT sequences -> bash.exe pipes -> agent reader -> base64 -> WebSocket -> xterm.js
+Required env vars set at spawn time:
+
+```
+FORCE_COLOR=1          # Forces Node.js color output regardless of isTTY
+TERM=xterm-256color    # Signals VT-256color capability
+COLUMNS=<cols>         # Terminal width (from dashboard resize)
+LINES=<rows>           # Terminal height (from dashboard resize)
+```
+
+Additionally, the spawn command wraps Claude Code with the `script` utility (available in MSYS2 coreutils) to create a pseudo-TTY layer:
+
+```
+bash -l -c "script -qfc 'claude <args>' /dev/null"
+```
+
+The `script` command allocates a PTY inside Git Bash, making `process.stdout.isTTY` return `true` in the spawned process. This is the standard Unix technique for forcing TTY mode in piped contexts, and it works in MSYS2's bash.
+
+**If `script` is not available in MinGit** (validation required during implementation), fall back to `FORCE_COLOR=1` + `TERM=xterm-256color` and accept potential TUI degradation.
+
+The output chain: Claude Code -> VT sequences -> script PTY -> bash.exe pipes -> agent reader -> base64 -> WebSocket -> xterm.js
 
 ### Resize Handling
 
@@ -171,18 +260,52 @@ New function in `pty_windows.go`:
 ```
 spawnWithWSL(ctx, sessionID, command, args, workdir, env, outputFn, localOutputFn, exitFn):
   1. binary = "wsl.exe" (resolved via exec.LookPath)
-  2. wslArgs = ["-d", <distro>, "--", "claude", <original-args>]
+  2. wslArgs = ["-d", <distro>, "--", "sh", "-c", "cd <wsl-path> && exec claude <original-args>"]
+     Note: Using "sh -c" with "cd" instead of "--cd" flag for WSL version compatibility.
+     The "--cd" flag was introduced in WSL 0.67.6 (2022) and may not be available on older installs.
   3. workdir translation:
      - Windows "C:\Users\Jakeb\project" -> WSL "/mnt/c/Users/Jakeb/project"
-     - Simple string replacement: drive letter -> /mnt/<lowercase letter>/
-     - Pass via: wsl -d <distro> --cd <wsl-path> -- claude
+     - Translation steps:
+       a. Replace all backslashes with forward slashes
+       b. Extract drive letter, convert to lowercase
+       c. Replace "C:/" with "/mnt/c/"
+     - UNC paths (\\server\share) are NOT supported — fall through to Git Bash tier if workdir is UNC
   4. env: WSL inherits Windows env vars by default (WSLENV controls this)
      - Set TERM=xterm-256color
+     - Set FORCE_COLOR=1
      - Strip CLAUDECODE
      - Claude Code inside WSL finds its own ~/.claude/ config naturally
   5. Spawn via CreateProcess with pipes (same as Git Bash — wsl.exe is a Windows binary)
   6. Output reader goroutine works unchanged
 ```
+
+### Process Termination in WSL
+
+Killing `wsl.exe` (the host-side process) does NOT reliably propagate the kill signal to the Linux process inside WSL. The `stop()` method for WSL-spawned sessions must:
+
+**PID capture via sideband file** (avoids mixing PID into the output pipe):
+
+At spawn time, `spawnWithWSL()` generates a temp file path: `/tmp/sf-<sessionID>.pid`. The shell command becomes:
+
+```
+sh -c "echo $$ > /tmp/sf-<sessionID>.pid && exec claude <args>"
+```
+
+After `CreateProcess` returns, the agent reads the PID via a separate, short-lived command:
+
+```
+wsl -d <distro> -- cat /tmp/sf-<sessionID>.pid
+```
+
+This runs in a goroutine with a 3-second timeout. If it fails, `linuxPID` stays 0 and the WSL tier falls back to killing the host-side `wsl.exe` process directly (less clean but functional). The temp file is cleaned up in `close()` via `wsl -d <distro> -- rm -f /tmp/sf-<sessionID>.pid`.
+
+**Why sideband, not stdout parsing:** The `echo $$ && exec claude` approach sends the PID into the same pipe that carries Claude Code's output. Parsing the first line requires a buffered reader with a delimiter, races with Claude's own startup output, and complicates the `readPipeOutput` goroutine. A temp file keeps the output pipe clean and requires no changes to the output reader.
+
+**Stop behavior per tier:**
+
+1. **Graceful stop (force=false):** Send `wsl -d <distro> -- kill -TERM <linux-pid>` if `linuxPID > 0`. If `linuxPID == 0` (PID capture failed), send Ctrl+C (`\x03`) to the stdin pipe.
+2. **Force stop (force=true):** Send `wsl -d <distro> -- kill -9 <linux-pid>`, then kill the host-side `wsl.exe` process as a fallback.
+3. **Cleanup:** The `close()` method kills the host-side process unconditionally to prevent orphaned `wsl.exe` instances, and removes the PID temp file.
 
 ### Resize Handling
 
@@ -238,6 +361,33 @@ func spawnPTY(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, ex
 ```
 
 All three tiers return the same `*ptyHandle` struct. The `ptyHandle` methods (`writeInput`, `writeInputRaw`, `resize`, `stop`, `close`) work the same regardless of which tier created the handle. The rest of the codebase never knows which tier is running.
+
+**New `ptyHandle` fields for WSL tier:**
+
+```go
+type ptyHandle struct {
+    // ... existing fields (hPC, proc, stdinPipe, cancel, etc.)
+    tier      string // "wsl", "gitbash", "conpty", "pipes"
+    wslDistro string // WSL distro name (only set for WSL tier)
+    linuxPID  int    // Linux-side PID (only set for WSL tier, 0 if capture failed)
+    sessionID string // For temp file cleanup in WSL tier
+}
+```
+
+The `tier` field is set at construction time by each `spawnWith*()` function and drives the per-tier `stop()` and `resize()` behavior.
+
+**Per-tier `resize()` behavior:** The existing `ptyHandle.resize()` checks `if h.hPC == 0` (no ConPTY handle) and no-ops. For WSL and Git Bash tiers, `hPC` is always 0 (no ConPTY involved), so `resize()` is a no-op. The Manager's `Resize()` call (line 364 of `manager.go`) continues to work — it just silently does nothing for non-ConPTY tiers. A `DEBUG`-level log message is added so operators can see resize calls being received but not applied.
+
+**Per-tier `stop()` behavior:**
+
+> **Implementation note:** The existing `pty_windows.go` `stop()` method currently discards the `force` parameter (declared as `_ bool`). This must be refactored as part of this work: rename the parameter to `force bool` and implement per-tier behavior.
+
+- **ConPTY tier (force=false):** Write Ctrl+C (`\x03`) to stdin pipe for graceful shutdown. **(force=true):** Call `proc.Kill()`.
+- **Git Bash tier (force=false):** Write Ctrl+C (`\x03`) to stdin pipe. **(force=true):** Call `proc.Kill()`.
+- **WSL tier:** Uses WSL-specific kill mechanism (see Section 3 — Process Termination in WSL).
+- **Pipe tier (force=false):** Write Ctrl+C to stdin. **(force=true):** Call `proc.Kill()`.
+
+The Manager's `StopAll()` (line 421-430 of `manager.go`) calls `stop(false)` then `stop(true)` as a fallback — this pattern works correctly with all tiers once the parameter is no longer discarded.
 
 ### Agent Log Observability
 
@@ -366,9 +516,18 @@ WARN spawn tier detection complete  selected=conpty  wsl=unavailable  gitbash=no
 
 ---
 
-## Open Questions / Future Work
+## Implementation Prerequisites
+
+These must be validated before implementation begins:
+
+1. **Git Bash PATH inheritance under LocalSystem** — The agent service runs as `LocalSystem`, which has a minimal PATH. During `sessionforge service install` (elevated, user context), the install captures the user's PATH and injects it into the service's environment via `buildUserEnv()`. Verify that `bash -l` inside Git Bash correctly picks up the host's `node`/`npm` from this injected PATH. If not, the Git Bash tier's Claude install and all subsequent spawns fail. **Mitigation if PATH injection fails:** The install flow should capture `where node` and `where npm` at install time and write the absolute paths into a Git Bash `~/.bashrc` or `/etc/profile.d/` snippet.
+
+2. **MinGit `script` command availability** — Verify that the MinGit portable distribution includes `script` (from util-linux) in `usr/bin/`. If not, the TTY-forcing technique described in Section 2 falls back to `FORCE_COLOR=1` env var only, which may cause degraded TUI experience in Claude Code.
+
+3. **MinGit version and architecture** — Bundle the 64-bit MinGit (matching the `windows-amd64` agent build). Pin a specific MinGit release version in CI for reproducible builds. ARM64 Windows is not supported in v1.
+
+## Future Work
 
 1. **Mid-session resize for Git Bash/WSL** — Currently set `COLUMNS`/`LINES` at spawn time only. Could use ConPTY-attached `wsl.exe` for WSL resize support in a future version.
 2. **Auto-install Claude Code inside WSL** — Currently WSL tier requires Claude Code to already be installed in the distro. Could add auto-install in a future version, but this changes the user's WSL environment which is more invasive.
-3. **Git Bash PATH inheritance** — Verify that `bash -l` correctly picks up the host's `node`/`npm` from the Windows PATH in all scenarios (including LocalSystem context where PATH is injected).
-4. **MinGit version pinning** — Pin the MinGit version in CI to ensure reproducible builds.
+3. **WSL 1 vs WSL 2 detection** — Both return success from `wsl --status`, but WSL 1 has known PTY I/O issues. A future version could detect and prefer WSL 2 explicitly.

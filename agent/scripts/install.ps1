@@ -40,7 +40,7 @@ if (-not $VERSION) { Write-Fail "Could not determine latest version." }
 Write-Step "Latest version: $VERSION"
 
 # ── Download ───────────────────────────────────────────────────────────────────
-$ARCHIVE      = "sessionforge_windows_$goArch.zip"
+$ARCHIVE      = "sessionforge-windows-$goArch.zip"
 $DOWNLOAD_URL = "https://github.com/$REPO/releases/download/$VERSION/$ARCHIVE"
 $ZIP_PATH     = "$env:TEMP\sessionforge-$VERSION.zip"
 
@@ -78,6 +78,14 @@ Get-Process -Name "sessionforge" -ErrorAction SilentlyContinue |
 
 Expand-Archive -Path $ZIP_PATH -DestinationPath $INSTALL_DIR -Force
 Remove-Item $ZIP_PATH -Force
+
+# Verify Git Bash was extracted.
+$GitBash = "$INSTALL_DIR\gitbash\bin\bash.exe"
+if (Test-Path $GitBash) {
+    Write-Host "[sessionforge] Git Bash extracted: $GitBash" -ForegroundColor Green
+} else {
+    Write-Host "[sessionforge] Note: Git Bash not found in archive — will use system fallback." -ForegroundColor Yellow
+}
 
 $SF = "$INSTALL_DIR\$BINARY"
 Write-Ok "SessionForge Agent $VERSION installed to $SF"

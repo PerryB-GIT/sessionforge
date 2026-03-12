@@ -367,10 +367,9 @@ const (
 	createUnicodeEnvironment uint32 = 0x00000400
 )
 
-// conPTYWorkingOnce probes ConPTY exactly once at first use.
-// If the probe fails (e.g. the child exits immediately with 0xC0000142 because
-// the Windows ConDrv infrastructure is not functional on this machine), all
-// subsequent calls to spawnPTY use the pipe-based fallback instead.
+// conPTYWorking is set by runTierDetection (via probeConPTY) and read by spawnPTY.
+// conPTYWorkingOnce ensures the probe runs at most once when WarmUpSpawnTier is
+// not called before the first session request.
 var (
 	conPTYWorkingOnce   sync.Once
 	conPTYWorking       bool
@@ -498,10 +497,6 @@ func probeConPTY() bool {
 	return ok
 }
 
-// spawnPTY attempts ConPTY first and falls back to pipes on older Windows or
-// when ConPTY is detected to be non-functional on this machine.
-// localOutputFn, if non-nil, is called with raw bytes before base64 encoding — used by
-// `sessionforge run` to fan output to the local terminal simultaneously.
 func spawnPTY(
 	ctx context.Context,
 	sessionID string,
@@ -512,56 +507,40 @@ func spawnPTY(
 	localOutputFn func(raw []byte),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
-	binary, args, err := resolveCommand(command)
-	if err != nil {
-		return nil, 0, fmt.Errorf("resolve command: %w", err)
-	}
+	ensureTierDetected()
 
 	if conPTYWorkingLogger != nil {
-		conPTYWorkingLogger.Info("spawnPTY: resolved command", "binary", binary, "args", args, "sessionId", sessionID)
+		conPTYWorkingLogger.Info("spawnPTY: routing session",
+			"tier", spawnTier, "command", command, "sessionId", sessionID,
+		)
 	}
 
-	// WarmUpConPTY runs the probe at startup; Once.Do is a no-op if already done.
-	conPTYWorkingOnce.Do(func() {
-		conPTYWorking = probeConPTY()
-		if conPTYWorkingLogger != nil {
-			if conPTYWorking {
-				conPTYWorkingLogger.Info("ConPTY probe passed — using pseudo-console for sessions")
-			} else {
-				conPTYWorkingLogger.Warn("ConPTY probe failed — falling back to pipe I/O for sessions")
-			}
+	switch spawnTier {
+	case "wsl":
+		return spawnWithWSL(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn)
+	case "gitbash":
+		return spawnWithGitBash(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn)
+	default:
+		binary, args, err := resolveCommand(command)
+		if err != nil {
+			return nil, 0, fmt.Errorf("resolve command: %w", err)
 		}
-	})
-
-	if conPTYWorkingLogger != nil {
-		conPTYWorkingLogger.Info("spawnPTY: spawn path", "conPTYWorking", conPTYWorking, "sessionId", sessionID)
-	}
-
-	if !conPTYWorking {
+		if conPTYWorkingLogger != nil {
+			conPTYWorkingLogger.Info("spawnPTY: resolved command",
+				"binary", binary, "args", args, "sessionId", sessionID,
+			)
+		}
+		if conPTYWorking {
+			return spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
+		}
 		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 	}
-	return spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 }
 
 // SetConPTYLogger wires a logger into the ConPTY probe so the probe result is
 // visible in the agent log. Called by the Manager after the logger is available.
 func SetConPTYLogger(l *slog.Logger) {
 	conPTYWorkingLogger = l
-}
-
-// WarmUpConPTY triggers the ConPTY probe immediately so it completes before the
-// first session request arrives. Call this in a goroutine at agent startup.
-func WarmUpConPTY() {
-	conPTYWorkingOnce.Do(func() {
-		conPTYWorking = probeConPTY()
-		if conPTYWorkingLogger != nil {
-			if conPTYWorking {
-				conPTYWorkingLogger.Info("ConPTY probe passed — using pseudo-console for sessions")
-			} else {
-				conPTYWorkingLogger.Warn("ConPTY probe failed — falling back to pipe I/O for sessions")
-			}
-		}
-	})
 }
 
 // spawnWithConPTY creates a real Windows Pseudo Console for full terminal emulation.

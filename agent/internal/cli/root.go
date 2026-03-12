@@ -138,6 +138,11 @@ func runDaemonWithContext(ctx context.Context) error {
 	client := connection.NewClient(cfg, version, dispatchWrapper, logger)
 	mgr := session.NewManager(ctx, client, logger)
 
+	// Run the ConPTY probe eagerly at startup so it completes before the first
+	// session request arrives. Without this the probe blocks the session goroutine
+	// for up to 3 seconds and causes session_started to be sent with pid=0.
+	go session.WarmUpSpawnTier()
+
 	// If install stored a resolved claude path in config, prime the session
 	// package so the service (running as LocalSystem) can find claude without
 	// needing the user's npm directories in the system PATH.

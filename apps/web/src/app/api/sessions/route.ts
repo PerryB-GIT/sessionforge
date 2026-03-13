@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq, desc, and, count } from 'drizzle-orm'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
+import { validateApiKey } from '@/lib/api-keys'
 import { db, sessions, machines } from '@/db'
 import { redis, RedisKeys } from '@/lib/redis'
 import { checkSessionLimit, checkMachineLimit, PlanLimitError } from '@/lib/plan-enforcement'
@@ -97,15 +98,33 @@ const startSessionSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json(
-      {
-        data: null,
-        error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 },
-      } satisfies ApiError,
-      { status: 401 }
-    )
+  // Support both session-cookie auth and API key auth (Bearer sf_live_...)
+  let userId: string
+  const authHeader = req.headers.get('authorization')
+  if (authHeader?.startsWith('Bearer sf_live_')) {
+    const apiKeyRecord = await validateApiKey(authHeader.slice(7))
+    if (!apiKeyRecord) {
+      return NextResponse.json(
+        {
+          data: null,
+          error: { code: 'UNAUTHORIZED', message: 'Invalid API key', statusCode: 401 },
+        } satisfies ApiError,
+        { status: 401 }
+      )
+    }
+    userId = apiKeyRecord.userId
+  } else {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        {
+          data: null,
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required', statusCode: 401 },
+        } satisfies ApiError,
+        { status: 401 }
+      )
+    }
+    userId = session.user.id
   }
 
   const body = await req.json()
@@ -131,7 +150,7 @@ export async function POST(req: NextRequest) {
   const [machine] = await db
     .select({ id: machines.id, status: machines.status, orgId: machines.orgId })
     .from(machines)
-    .where(and(eq(machines.id, machineId), eq(machines.userId, session.user.id)))
+    .where(and(eq(machines.id, machineId), eq(machines.userId, userId)))
     .limit(1)
 
   if (!machine) {
@@ -159,8 +178,10 @@ export async function POST(req: NextRequest) {
   }
 
   // If this is an org machine, require at least member role in that org
-  if (machine.orgId) {
+  // (skip org check for API key auth since the key is user-scoped)
+  if (machine.orgId && !authHeader?.startsWith('Bearer sf_live_')) {
     try {
+      const session = await auth()
       await requireOrgRole(session, machine.orgId, 'member')
     } catch (err) {
       const { status, code, message } = orgAuthErrorResponse(err)
@@ -173,7 +194,7 @@ export async function POST(req: NextRequest) {
 
   // Enforce plan limits
   try {
-    await checkSessionLimit(session.user.id)
+    await checkSessionLimit(userId)
   } catch (err) {
     if (err instanceof PlanLimitError) {
       return NextResponse.json(
@@ -194,7 +215,7 @@ export async function POST(req: NextRequest) {
     .insert(sessions)
     .values({
       machineId,
-      userId: session.user.id,
+      userId,
       processName: command,
       workdir: workdir ?? null,
       status: 'running',

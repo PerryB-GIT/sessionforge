@@ -50,7 +50,10 @@ const StreamKeys = {
   agent: (machineId) => `stream:agent:${machineId}`,
   sessionLogs: (sessionId) => `session:logs:${sessionId}`,
   machineMetrics: (machineId) => `machine:metrics:${machineId}`,
+  sessionStats: (sessionId) => `session:stats:${sessionId}`,
 }
+
+const SESSION_STATS_TTL_SECONDS = 300 // 5 min — heartbeats arrive every ~10s; stale data auto-expires
 
 const SESSION_LOG_MAX_LINES = 2000
 const SESSION_LOG_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -594,8 +597,8 @@ function handleAgentWs(ws, userId, remoteAddress) {
   // '$' with the Upstash REST API always returns null (it means "newer than the absolute
   // latest at query time"), whereas a concrete millisecond ID means "newer than this".
   let agentPollLastId = `${Date.now()}-0`
-  // Per-session stats accumulator: sessionId -> { peakMemory, cpuTotal, cpuSamples }
-  const sessionStats = {}
+  // Per-session stats are stored in Redis (session:stats:{sessionId}) so they survive
+  // horizontal scaling across multiple Cloud Run instances. See flushSessionStats().
 
   async function pollAgentCommands() {
     if (!machineId || ws.readyState !== WebSocket.OPEN) return
@@ -694,14 +697,9 @@ function handleAgentWs(ws, userId, remoteAddress) {
     // Heartbeat: also concurrent, just update timestamp.
     if (msg.type === 'heartbeat') {
       lastHeartbeatAt = Date.now()
-      handleAgentMessage(
-        msg,
-        userId,
-        remoteAddress,
-        sessionStats,
-        onMachineId,
-        () => machineId
-      ).catch((err) => console.error('[ws/agent] error handling message: heartbeat', err))
+      handleAgentMessage(msg, userId, remoteAddress, onMachineId, () => machineId).catch((err) =>
+        console.error('[ws/agent] error handling message: heartbeat', err)
+      )
       return
     }
 
@@ -711,14 +709,7 @@ function handleAgentWs(ws, userId, remoteAddress) {
     }
     agentMsgQueue = agentMsgQueue.then(async () => {
       try {
-        await handleAgentMessage(
-          msg,
-          userId,
-          remoteAddress,
-          sessionStats,
-          onMachineId,
-          () => machineId
-        )
+        await handleAgentMessage(msg, userId, remoteAddress, onMachineId, () => machineId)
       } catch (err) {
         console.error('[ws/agent] error handling message:', msg.type, err)
       }
@@ -767,11 +758,12 @@ function handleAgentWs(ws, userId, remoteAddress) {
 }
 
 // flushSessionStats writes accumulated peak_memory_mb and avg_cpu_percent to the DB
-// for a given sessionId, then removes the entry from the in-memory accumulator.
-async function flushSessionStats(sessionId, sessionStats) {
-  const stats = sessionStats[sessionId]
+// for a given sessionId, then deletes the Redis key so stale data doesn't linger.
+async function flushSessionStats(sessionId) {
+  const statsKey = StreamKeys.sessionStats(sessionId)
+  const stats = await redis.get(statsKey)
   if (!stats) return
-  delete sessionStats[sessionId]
+  await redis.del(statsKey)
   const peakMemory = stats.peakMemory ?? null
   const avgCpu = stats.cpuSamples > 0 ? stats.cpuTotal / stats.cpuSamples : null
   if (peakMemory !== null || avgCpu !== null) {
@@ -783,14 +775,7 @@ async function flushSessionStats(sessionId, sessionStats) {
   }
 }
 
-async function handleAgentMessage(
-  msg,
-  userId,
-  remoteAddress,
-  sessionStats,
-  onMachineId,
-  getMachineId
-) {
+async function handleAgentMessage(msg, userId, remoteAddress, onMachineId, getMachineId) {
   switch (msg.type) {
     case 'register': {
       const { machineId, name, os, hostname: h, version, cpuModel, ramGb } = msg
@@ -858,6 +843,8 @@ async function handleAgentMessage(
       })
 
       // Update per-session stats accumulators for any running sessions on this machine.
+      // Stored in Redis (session:stats:{sessionId}) with a 5-minute TTL so stale data
+      // auto-expires and the service can scale horizontally across instances.
       if (machineId && (cpu != null || memory != null)) {
         const runningSessions = await query(
           `SELECT id FROM sessions WHERE machine_id = $1 AND status = 'running'`,
@@ -865,8 +852,9 @@ async function handleAgentMessage(
         ).catch(() => [])
         for (const row of runningSessions) {
           const sid = row.id
-          if (!sessionStats[sid]) sessionStats[sid] = { peakMemory: 0, cpuTotal: 0, cpuSamples: 0 }
-          const s = sessionStats[sid]
+          const statsKey = StreamKeys.sessionStats(sid)
+          const existing = await redis.get(statsKey)
+          const s = existing ?? { peakMemory: 0, cpuTotal: 0, cpuSamples: 0 }
           // memory from heartbeat is a percentage (0-100); store as-is in peak_memory_mb field
           // (column is named peak_memory_mb but we store percentage since we don't have absolute MB here)
           if (memory != null && memory > s.peakMemory) s.peakMemory = memory
@@ -874,6 +862,7 @@ async function handleAgentMessage(
             s.cpuTotal += cpu
             s.cpuSamples++
           }
+          await redis.setex(statsKey, SESSION_STATS_TTL_SECONDS, s)
         }
       }
       break
@@ -934,7 +923,7 @@ async function handleAgentMessage(
 
     case 'session_stopped': {
       const { sessionId, exitCode } = msg
-      await flushSessionStats(sessionId, sessionStats)
+      await flushSessionStats(sessionId)
       await query(
         `UPDATE sessions SET status = 'stopped', exit_code = $1, stopped_at = NOW() WHERE id = $2`,
         [exitCode, sessionId]
@@ -986,7 +975,7 @@ async function handleAgentMessage(
 
     case 'session_crashed': {
       const { sessionId, error } = msg
-      await flushSessionStats(sessionId, sessionStats)
+      await flushSessionStats(sessionId)
       await query(`UPDATE sessions SET status = 'crashed', stopped_at = NOW() WHERE id = $1`, [
         sessionId,
       ])

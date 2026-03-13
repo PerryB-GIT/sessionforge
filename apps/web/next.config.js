@@ -111,10 +111,14 @@ const nextConfig = {
 
 module.exports = withBundleAnalyzer(
   withSentryConfig(nextConfig, {
+    org: 'support-forge',
+    project: 'sessionforge',
+    authToken: process.env.SENTRY_AUTH_TOKEN,
     silent: true,
     disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
     disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
     hideSourceMaps: true,
     widenClientFileUpload: true,
+    tunnelRoute: '/monitoring',
   })
 )

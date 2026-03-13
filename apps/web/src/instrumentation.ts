@@ -1,6 +1,15 @@
+export { captureRequestError as onRequestError } from '@sentry/nextjs'
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     await import('../sentry.server.config')
+  }
+
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    await import('../sentry.edge.config')
+  }
+
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
     try {
       await setupOTel()
     } catch (err) {
@@ -53,7 +62,7 @@ async function setupOTel() {
 
   if (cxEndpoint && cxKey) {
     const headers = {
-      'Authorization': `Bearer ${cxKey}`,
+      Authorization: `Bearer ${cxKey}`,
       'CX-Application-Name': appName,
       'CX-Subsystem-Name': 'web',
     }
@@ -63,7 +72,7 @@ async function setupOTel() {
 
   if (grafanaEndpoint && grafanaKey && grafanaOrgId) {
     const credentials = Buffer.from(`${grafanaOrgId}:${grafanaKey}`).toString('base64')
-    const headers = { 'Authorization': `Basic ${credentials}` }
+    const headers = { Authorization: `Basic ${credentials}` }
     traceExporters.push(new OTLPTraceExporter({ url: `${grafanaEndpoint}/v1/traces`, headers }))
     logExporters.push(new OTLPLogExporter({ url: `${grafanaEndpoint}/v1/logs`, headers }))
   }
@@ -71,7 +80,7 @@ async function setupOTel() {
   if (traceExporters.length > 0) {
     const provider = new NodeTracerProvider({
       resource,
-      spanProcessors: traceExporters.map(e => new SimpleSpanProcessor(e)),
+      spanProcessors: traceExporters.map((e) => new SimpleSpanProcessor(e)),
     })
     provider.register()
   }

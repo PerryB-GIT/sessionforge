@@ -95,37 +95,49 @@ func (m *Manager) mergeEnv(env map[string]string) map[string]string {
 // requestId is echoed back so the cloud can correlate the response.
 // sessionID is the cloud-assigned session ID; if empty, a new UUID is generated.
 // sanitizeWorkdir validates a client-supplied working directory.
-// Rejects UNC paths (\\server\share) and absolute paths outside the user's
-// home directory. Falls back to home dir on any rejection so the session
-// always starts somewhere safe.
-func sanitizeWorkdir(workdir string) string {
-	if workdir == "" || workdir == "." {
-		home, _ := os.UserHomeDir()
-		return home
-	}
+// Rejects UNC paths (\\server\share). Falls back to fallbackHome on any
+// rejection so the session always starts somewhere safe and writable.
+// fallbackHome should be the real user's home dir (from claude_config_dir),
+// NOT os.UserHomeDir() which returns LocalSystem's profile when running
+// as a Windows service (C:\Windows\system32\config\systemprofile).
+func sanitizeWorkdir(workdir, fallbackHome string) string {
 	// Reject UNC paths — could be used to capture NTLM credentials.
 	if strings.HasPrefix(workdir, `\\`) || strings.HasPrefix(workdir, "//") {
-		home, _ := os.UserHomeDir()
-		return home
+		return fallbackHome
+	}
+	if workdir == "" || workdir == "." {
+		return fallbackHome
 	}
 	// Resolve to absolute and verify the path exists.
 	abs, err := filepath.Abs(workdir)
 	if err != nil {
-		home, _ := os.UserHomeDir()
-		return home
+		return fallbackHome
 	}
 	if _, err := os.Stat(abs); err != nil {
-		home, _ := os.UserHomeDir()
-		return home
+		return fallbackHome
 	}
 	return abs
+}
+
+// userHomeFromConfig derives the real user's home directory from the
+// claude_config_dir path (e.g. C:\Users\Jakeb\.claude -> C:\Users\Jakeb).
+// Falls back to os.UserHomeDir() if claudeConfigDir is empty.
+func userHomeFromConfig(claudeConfigDir string) string {
+	if claudeConfigDir != "" {
+		parent := filepath.Dir(claudeConfigDir)
+		if _, err := os.Stat(parent); err == nil {
+			return parent
+		}
+	}
+	home, _ := os.UserHomeDir()
+	return home
 }
 
 func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[string]string) (string, error) {
 	if sessionID == "" {
 		sessionID = uuid.New().String()
 	}
-	workdir = sanitizeWorkdir(workdir)
+	workdir = sanitizeWorkdir(workdir, userHomeFromConfig(m.claudeConfigDir))
 
 	m.logger.Info("starting session",
 		"sessionId", sessionID,
@@ -205,8 +217,8 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 
 	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, m.mergeEnv(env), outputFn, nil, exitFn)
 	if err != nil {
+		m.logger.Error("spawnPTY failed", "sessionId", sessionID, "command", command, "workdir", workdir, "err", err)
 		m.registry.Remove(sessionID)
-		// earlyStarted was already sent — notify the cloud so the DB record is cleaned up.
 		_ = m.messenger.SendJSON(sessionCrashedMsg{
 			Type:      "session_crashed",
 			SessionID: sessionID,
@@ -233,7 +245,7 @@ func (m *Manager) StartWithLocalOutput(
 	if sessionID == "" {
 		sessionID = uuid.New().String()
 	}
-	workdir = sanitizeWorkdir(workdir)
+	workdir = sanitizeWorkdir(workdir, userHomeFromConfig(m.claudeConfigDir))
 
 	exitCh := make(chan int, 1)
 

@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -513,11 +514,11 @@ func spawnPTY(
 ) (*ptyHandle, int, error) {
 	ensureTierDetected()
 
-	if conPTYWorkingLogger != nil {
-		conPTYWorkingLogger.Info("spawnPTY: routing session",
-			"tier", spawnTier, "command", command, "sessionId", sessionID,
-		)
-	}
+	// Unconditional — always visible regardless of conPTYWorkingLogger state.
+	slog.Default().Info("spawnPTY: routing session",
+		"tier", spawnTier, "command", command, "sessionId", sessionID,
+		"conPTYWorking", conPTYWorking,
+	)
 
 	switch spawnTier {
 	case "wsl":
@@ -535,6 +536,9 @@ func spawnPTY(
 	default:
 		binary, args, err := resolveCommand(command)
 		if err != nil {
+			slog.Default().Error("spawnPTY: resolveCommand failed",
+				"command", command, "sessionId", sessionID, "err", err,
+			)
 			return nil, 0, fmt.Errorf("resolve command: %w", err)
 		}
 		// Inject --dangerously-skip-permissions into args AFTER resolveCommand
@@ -546,13 +550,24 @@ func spawnPTY(
 			// node.exe: args[0] is cli.js, append flag after it
 			args = append(args, "--dangerously-skip-permissions")
 		}
-		if conPTYWorkingLogger != nil {
-			conPTYWorkingLogger.Info("spawnPTY: resolved command",
-				"binary", binary, "args", args, "sessionId", sessionID,
-			)
-		}
+		// Unconditional — always visible.
+		slog.Default().Info("spawnPTY: resolved command",
+			"binary", binary, "args", args, "sessionId", sessionID,
+			"conPTYWorking", conPTYWorking, "workdir", workdir,
+		)
 		if conPTYWorking {
 			return spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
+		}
+		// LocalSystem: attempt user-session ConPTY so Claude Code gets a TTY.
+		// Falls back to pipes if no active console session.
+		if isLocalSystem() {
+			h, pid, err := spawnWithUserConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
+			if err == nil {
+				return h, pid, nil
+			}
+			slog.Default().Warn("spawnWithUserConPTY failed, falling back to pipes",
+				"sessionId", sessionID, "err", err,
+			)
 		}
 		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 	}
@@ -562,6 +577,191 @@ func spawnPTY(
 // visible in the agent log. Called by the Manager after the logger is available.
 func SetConPTYLogger(l *slog.Logger) {
 	conPTYWorkingLogger = l
+}
+
+// wtsapi32 and kernel32 procs for user-session spawning from LocalSystem.
+var (
+	modWtsapi32               = windows.NewLazySystemDLL("wtsapi32.dll")
+	procWTSQueryUserToken     = modWtsapi32.NewProc("WTSQueryUserToken")
+	modKernel32Spawn          = windows.NewLazySystemDLL("kernel32.dll")
+	procWTSGetActiveConsole   = modKernel32Spawn.NewProc("WTSGetActiveConsoleSessionId")
+	modAdvapi32               = windows.NewLazySystemDLL("advapi32.dll")
+	procCreateProcessWithToken = modAdvapi32.NewProc("CreateProcessWithTokenW")
+)
+
+// getUserSessionToken returns the primary token of the user logged into the
+// active console session. Only works when running as LocalSystem.
+func getUserSessionToken() (windows.Token, error) {
+	sessionIDRaw, _, _ := procWTSGetActiveConsole.Call()
+	sessionID := uint32(sessionIDRaw)
+	if sessionID == 0xFFFFFFFF {
+		return 0, fmt.Errorf("no active console session")
+	}
+	var token windows.Token
+	r, _, err := procWTSQueryUserToken.Call(uintptr(sessionID), uintptr(unsafe.Pointer(&token)))
+	if r == 0 {
+		return 0, fmt.Errorf("WTSQueryUserToken: %w", err)
+	}
+	return token, nil
+}
+
+// spawnWithUserConPTY creates a ConPTY and launches the process in the active
+// user's session using CreateProcessWithTokenW. Used when the service runs as
+// LocalSystem — ConPTY requires an interactive user session, not Session 0.
+func spawnWithUserConPTY(
+	ctx context.Context,
+	sessionID string,
+	binary string,
+	args []string,
+	workdir string,
+	env map[string]string,
+	outputFn func(sessionID, data string),
+	localOutputFn func(raw []byte),
+	exitFn func(sessionID string, exitCode int, err error),
+) (*ptyHandle, int, error) {
+	userToken, err := getUserSessionToken()
+	if err != nil {
+		return nil, 0, fmt.Errorf("getUserSessionToken: %w", err)
+	}
+	defer userToken.Close()
+
+	// Duplicate to a primary token suitable for CreateProcessWithTokenW.
+	var primaryToken windows.Token
+	err = windows.DuplicateTokenEx(
+		userToken,
+		windows.TOKEN_ALL_ACCESS,
+		nil,
+		windows.SecurityImpersonation,
+		windows.TokenPrimary,
+		&primaryToken,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("DuplicateTokenEx: %w", err)
+	}
+	defer primaryToken.Close()
+
+	// Create ConPTY pipes.
+	var inputRead, inputWrite windows.Handle
+	if err := windows.CreatePipe(&inputRead, &inputWrite, nil, 0); err != nil {
+		return nil, 0, fmt.Errorf("create input pipe: %w", err)
+	}
+	var outputRead, outputWrite windows.Handle
+	if err := windows.CreatePipe(&outputRead, &outputWrite, nil, 0); err != nil {
+		windows.CloseHandle(inputRead)
+		windows.CloseHandle(inputWrite)
+		return nil, 0, fmt.Errorf("create output pipe: %w", err)
+	}
+
+	coord := windows.Coord{X: 220, Y: 50}
+	var hPC windows.Handle
+	if err := windows.CreatePseudoConsole(coord, inputRead, outputWrite, 0, &hPC); err != nil {
+		windows.CloseHandle(inputRead)
+		windows.CloseHandle(inputWrite)
+		windows.CloseHandle(outputRead)
+		windows.CloseHandle(outputWrite)
+		return nil, 0, fmt.Errorf("CreatePseudoConsole: %w", err)
+	}
+	windows.CloseHandle(inputRead)
+	windows.CloseHandle(outputWrite)
+
+	attrList, err := windows.NewProcThreadAttributeList(1)
+	if err != nil {
+		windows.CloseHandle(inputWrite)
+		windows.CloseHandle(outputRead)
+		windows.ClosePseudoConsole(hPC)
+		return nil, 0, fmt.Errorf("NewProcThreadAttributeList: %w", err)
+	}
+	if err := attrList.Update(procThreadAttributePseudoConsole, unsafe.Pointer(&hPC), unsafe.Sizeof(hPC)); err != nil {
+		attrList.Delete()
+		windows.CloseHandle(inputWrite)
+		windows.CloseHandle(outputRead)
+		windows.ClosePseudoConsole(hPC)
+		return nil, 0, fmt.Errorf("attrList.Update: %w", err)
+	}
+
+	siEx := windows.StartupInfoEx{}
+	siEx.StartupInfo.Cb = uint32(unsafe.Sizeof(siEx))
+	siEx.ProcThreadAttributeList = attrList.List()
+
+	// Build command line and environment.
+	cmdLine := binary
+	for _, a := range args {
+		cmdLine += " " + windows.EscapeArg(a)
+	}
+	cmdLinePtr, _ := windows.UTF16PtrFromString(cmdLine)
+
+	workdirPtr, _ := windows.UTF16PtrFromString(workdir)
+
+	envBlock := buildEnvBlock(env)
+
+	var pi windows.ProcessInformation
+	const createProcessWithTokenLogonNetcredentialsOnly = 0
+	r, _, spawnErr := procCreateProcessWithToken.Call(
+		uintptr(primaryToken),
+		uintptr(createProcessWithTokenLogonNetcredentialsOnly),
+		0, // lpApplicationName (nil — use cmdLine)
+		uintptr(unsafe.Pointer(cmdLinePtr)),
+		0, // lpProcessAttributes
+		0, // lpThreadAttributes
+		0, // bInheritHandles = false
+		uintptr(extendedStartupInfoPresent|createUnicodeEnvironment),
+		uintptr(unsafe.Pointer(envBlock)),
+		uintptr(unsafe.Pointer(workdirPtr)),
+		uintptr(unsafe.Pointer(&siEx.StartupInfo)),
+		uintptr(unsafe.Pointer(&pi)),
+	)
+	attrList.Delete()
+	if r == 0 {
+		windows.CloseHandle(inputWrite)
+		windows.CloseHandle(outputRead)
+		windows.ClosePseudoConsole(hPC)
+		return nil, 0, fmt.Errorf("CreateProcessWithTokenW: %w", spawnErr)
+	}
+	windows.CloseHandle(pi.Thread)
+
+	pid := int(pi.ProcessId)
+	slog.Default().Info("spawnWithUserConPTY: process started",
+		"pid", pid, "sessionId", sessionID, "binary", binary,
+	)
+
+	outReader := os.NewFile(uintptr(outputRead), "conpty-output")
+	inWriter := os.NewFile(uintptr(inputWrite), "conpty-input")
+
+	proc, err := os.FindProcess(int(pi.ProcessId))
+	if err != nil {
+		// Shouldn't happen — process was just created.
+		proc = nil
+	}
+	_ = proc // ptyHandle.proc used for stop/pause/resume via os.Process methods
+
+	h := &ptyHandle{
+		hPC:       hPC,
+		proc:      proc,
+		stdin:     inWriter,
+		stdout:    outReader,
+		tier:      "conpty-user",
+		sessionID: sessionID,
+	}
+
+	go readPipeOutput(sessionID, outReader, outputFn, localOutputFn, nil)
+
+	procHandle := pi.Process // captured before any defer closes it
+	go func() {
+		windows.WaitForSingleObject(procHandle, windows.INFINITE)
+		var code uint32
+		windows.GetExitCodeProcess(procHandle, &code)
+		exitCode := int(code)
+		slog.Default().Info("spawnWithUserConPTY: process exited",
+			"pid", pid, "sessionId", sessionID, "exitCode", exitCode,
+		)
+		outReader.Close()
+		inWriter.Close()
+		windows.ClosePseudoConsole(hPC)
+		windows.CloseHandle(procHandle)
+		exitFn(sessionID, exitCode, nil)
+	}()
+
+	return h, pid, nil
 }
 
 // spawnWithConPTY creates a real Windows Pseudo Console for full terminal emulation.
@@ -868,13 +1068,17 @@ func spawnWithPipes(
 	// Suppress console window — equivalent to CREATE_NO_WINDOW.
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
-	// os.Pipe() creates FILE_FLAG_OVERLAPPED handles (required by libuv/node.js).
-	stdinR, stdinW, err := os.Pipe()
+	// overlappedPipe creates a pipe pair where the child-side write handle has
+	// FILE_FLAG_OVERLAPPED. Node.js/libuv detects a pipe on stdout and switches
+	// to IOCP-based async I/O (WriteFileEx). Without FILE_FLAG_OVERLAPPED the
+	// write end is synchronous and libuv's uv_write silently drops all output.
+	// We use CreateNamedPipe (overlapped) + CreateFile to get the right flags.
+	stdinR, stdinW, err := overlappedPipe()
 	if err != nil {
 		cancel()
 		return nil, 0, fmt.Errorf("create stdin pipe: %w", err)
 	}
-	outR, outW, err := os.Pipe()
+	outR, outW, err := overlappedPipe()
 	if err != nil {
 		stdinR.Close()
 		stdinW.Close()
@@ -908,12 +1112,11 @@ func spawnWithPipes(
 		sessionID: sessionID,
 	}
 
-	if conPTYWorkingLogger != nil {
-		conPTYWorkingLogger.Info("spawnWithPipes: process started",
-			"pid", cmd.Process.Pid, "sessionId", sessionID,
-			"binary", binary,
-		)
-	}
+	// Unconditional — always visible.
+	slog.Default().Info("spawnWithPipes: process started",
+		"pid", cmd.Process.Pid, "sessionId", sessionID,
+		"binary", binary, "args", args, "workdir", cmd.Dir,
+	)
 
 	go readPipeOutput(sessionID, outR, outputFn, localOutputFn, nil)
 
@@ -923,18 +1126,89 @@ func spawnWithPipes(
 		stdinW.Close()
 		outR.Close()
 
+		exitCode := 0
+		if cmd.ProcessState != nil {
+			exitCode = cmd.ProcessState.ExitCode()
+		}
+		slog.Default().Info("spawnWithPipes: process exited",
+			"pid", cmd.Process.Pid, "sessionId", sessionID,
+			"exitCode", exitCode, "waitErr", waitErr,
+		)
+
 		if waitErr != nil {
 			exitFn(sessionID, -1, waitErr)
 			return
 		}
-		code := 0
-		if cmd.ProcessState != nil && !cmd.ProcessState.Success() {
-			code = cmd.ProcessState.ExitCode()
-		}
-		exitFn(sessionID, code, nil)
+		exitFn(sessionID, exitCode, nil)
 	}()
 
 	return h, cmd.Process.Pid, nil
+}
+
+// pipeCounter generates unique pipe names to avoid collisions between sessions.
+var pipeCounter int64
+
+// overlappedPipe creates an anonymous pipe pair where the write end has
+// FILE_FLAG_OVERLAPPED. Node.js/libuv detects a pipe on stdout and switches
+// to IOCP async I/O (WriteFileEx). Non-overlapped handles cause libuv to
+// silently drop all output (zero bytes received by parent).
+//
+// Windows anonymous pipes (CreatePipe) are always synchronous.
+// We emulate an anonymous pipe via CreateNamedPipe with FILE_FLAG_OVERLAPPED
+// on the server (write) end, then connect via CreateFile.
+//
+// Returns (readEnd, writeEnd, error). Caller must close both ends.
+func overlappedPipe() (*os.File, *os.File, error) {
+	id := atomic.AddInt64(&pipeCounter, 1)
+	name, _ := windows.UTF16PtrFromString(
+		fmt.Sprintf(`\\.\pipe\sessionforge-pipe-%d-%d`, os.Getpid(), id),
+	)
+
+	const (
+		fileFlagOverlapped    = 0x40000000
+		pipeAccessDuplex      = 0x00000003
+		pipeModeByteStream    = 0x00000000
+		fileGenericRead       = 0x80000000 | 0x00020000 | 0x00000001
+		fileGenericWrite      = 0x40000000 | 0x00100000 | 0x00000002
+		openExisting          = 3
+		fileAttributeNormal   = 0x00000080
+	)
+
+	// Server end (read side for parent, created with overlapped flag).
+	serverH, err := windows.CreateNamedPipe(
+		name,
+		pipeAccessDuplex|fileFlagOverlapped,
+		pipeModeByteStream,
+		1,    // max instances
+		4096, // out buffer
+		4096, // in buffer
+		0,
+		nil,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("CreateNamedPipe: %w", err)
+	}
+
+	// Client end (write side for child, inheritable).
+	sa := &windows.SecurityAttributes{InheritHandle: 1}
+	sa.Length = uint32(unsafe.Sizeof(*sa))
+	clientH, err := windows.CreateFile(
+		name,
+		fileGenericRead|fileGenericWrite,
+		0,
+		sa,
+		openExisting,
+		fileAttributeNormal|fileFlagOverlapped,
+		0,
+	)
+	if err != nil {
+		windows.CloseHandle(serverH)
+		return nil, nil, fmt.Errorf("CreateFile (pipe client): %w", err)
+	}
+
+	readFile := os.NewFile(uintptr(serverH), "pipe-read")
+	writeFile := os.NewFile(uintptr(clientH), "pipe-write")
+	return readFile, writeFile, nil
 }
 
 // buildEnvSlice converts the overlay map into a []string env block for exec.Cmd,

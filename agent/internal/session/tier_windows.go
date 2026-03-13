@@ -12,6 +12,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sys/windows/registry"
+	"golang.org/x/sys/windows"
 )
 
 // ── Package-level tier state ────────────────────────────────────────────────
@@ -78,7 +81,25 @@ func runTierDetection() {
 		return
 	}
 
-	// Step 3: ConPTY probe (existing logic)
+	// Step 3: Skip ConPTY probe if running as LocalSystem — CreatePseudoConsole
+	// hangs indefinitely in Session 0 (service context). Use pipes tier directly.
+	if isLocalSystem() {
+		conPTYWorking = false
+		spawnTier = "pipes"
+		conPTYWorkingOnce.Do(func() {})
+		if logger != nil {
+			logger.Info("spawn tier detection complete",
+				"selected", "pipes",
+				"reason", "LocalSystem: ConPTY unavailable in Session 0",
+				"wsl", "unavailable",
+				"gitbash", "unavailable",
+				"conpty", "skipped",
+			)
+		}
+		return
+	}
+
+	// Step 4: ConPTY probe
 	conPTYWorking = probeConPTY()
 	// Mark conPTYWorkingOnce as done so spawnPTY does not re-probe.
 	conPTYWorkingOnce.Do(func() {})
@@ -104,48 +125,74 @@ func runTierDetection() {
 func detectWSL() (string, bool) {
 	logger := conPTYWorkingLogger
 
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel2()
-	out, err := exec.CommandContext(ctx2, "wsl", "--list", "--quiet").CombinedOutput()
+	// wsl --list fails when running as LocalSystem (WSL is per-user).
+	// Instead, probe known distro names directly via wsl -d <name>.
+	// This works even as LocalSystem because wsl.exe resolves the user context
+	// from the Windows session, not the service account.
+	candidates := wslDistrocandidates()
+	for _, distro := range candidates {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		claudeOut, err := exec.CommandContext(ctx, "wsl", "-d", distro, "--", "which", "claude").CombinedOutput()
+		cancel()
+		if err != nil {
+			if logger != nil {
+				logger.Debug("WSL detection: claude not found in distro", "distro", distro, "err", err)
+			}
+			continue
+		}
+		claudePath := strings.TrimSpace(string(claudeOut))
+		if claudePath == "" {
+			continue
+		}
+		if logger != nil {
+			logger.Info("WSL detection: claude found", "distro", distro, "claudePath", claudePath)
+		}
+		return distro, true
+	}
+	return "", false
+}
+
+// wslDistrocandidates returns distro names to probe, in preference order.
+// Reads from the user registry first; falls back to common names.
+func wslDistrocandidates() []string {
+	// Try reading from HKCU registry (works when running as the logged-in user).
+	names := wslDistrosFromRegistry()
+	if len(names) > 0 {
+		return names
+	}
+	// Fallback: probe common distro names.
+	return []string{"Ubuntu", "Ubuntu-22.04", "Ubuntu-20.04", "Debian", "kali-linux"}
+}
+
+// wslDistrosFromRegistry reads installed WSL distro names from the current
+// user's registry hive. Returns nil if the key is inaccessible (e.g. LocalSystem).
+func wslDistrosFromRegistry() []string {
+	key, err := registry.OpenKey(registry.CURRENT_USER,
+		`SOFTWARE\Microsoft\Windows\CurrentVersion\Lxss`,
+		registry.READ)
 	if err != nil {
-		if logger != nil {
-			logger.Debug("WSL detection: --list failed", "err", err)
-		}
-		return "", false
+		return nil
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
-		if logger != nil {
-			logger.Debug("WSL detection: no distros found")
-		}
-		return "", false
-	}
-	distro := strings.TrimSpace(lines[0])
-	distro = strings.ReplaceAll(distro, "\x00", "")
-	distro = strings.TrimPrefix(distro, "\ufeff")
-	distro = strings.TrimSpace(distro)
-	if distro == "" {
-		return "", false
+	defer key.Close()
+
+	subkeys, err := key.ReadSubKeyNames(-1)
+	if err != nil {
+		return nil
 	}
 
-	ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel3()
-	claudeOut, err := exec.CommandContext(ctx3, "wsl", "-d", distro, "--", "which", "claude").CombinedOutput()
-	if err != nil {
-		if logger != nil {
-			logger.Debug("WSL detection: claude not found in distro", "distro", distro, "err", err)
+	var names []string
+	for _, sub := range subkeys {
+		sk, err := registry.OpenKey(key, sub, registry.READ)
+		if err != nil {
+			continue
 		}
-		return "", false
+		name, _, err := sk.GetStringValue("DistributionName")
+		sk.Close()
+		if err == nil && name != "" {
+			names = append(names, name)
+		}
 	}
-	claudePath := strings.TrimSpace(string(claudeOut))
-	if claudePath == "" {
-		return "", false
-	}
-
-	if logger != nil {
-		logger.Info("WSL detection: claude found", "distro", distro, "claudePath", claudePath)
-	}
-	return distro, true
+	return names
 }
 
 // ── Git Bash Detection ──────────────────────────────────────────────────────
@@ -236,4 +283,25 @@ func windowsToWSLPath(winPath string) (string, bool) {
 	}
 
 	return p, true
+}
+
+// isLocalSystem returns true when the current process is running as the
+// Windows NT AUTHORITY\SYSTEM (LocalSystem) account. ConPTY is skipped
+// for LocalSystem because CreatePseudoConsole hangs in Session 0.
+func isLocalSystem() bool {
+	token, err := windows.OpenCurrentProcessToken()
+	if err != nil {
+		return false
+	}
+	defer token.Close()
+	user, err := token.GetTokenUser()
+	if err != nil {
+		return false
+	}
+	// S-1-5-18 is the well-known SID for LocalSystem.
+	localSystem, err := windows.StringToSid("S-1-5-18")
+	if err != nil {
+		return false
+	}
+	return user.User.Sid.Equals(localSystem)
 }

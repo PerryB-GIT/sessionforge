@@ -215,21 +215,27 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 		m.logger.Warn("failed to send early session_started", "err", err)
 	}
 
-	handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, m.mergeEnv(env), outputFn, nil, exitFn)
-	if err != nil {
-		m.logger.Error("spawnPTY failed", "sessionId", sessionID, "command", command, "workdir", workdir, "err", err)
-		m.registry.Remove(sessionID)
-		_ = m.messenger.SendJSON(sessionCrashedMsg{
-			Type:      "session_crashed",
-			SessionID: sessionID,
-			Error:     err.Error(),
-		})
-		return "", fmt.Errorf("spawn PTY: %w", err)
-	}
-
-	// Update placeholder with real PID and PTY handle.
-	placeholder.PID = pid
-	placeholder.ptySession = handle
+	// spawnPTY blocks until tier detection completes (ConPTY probe can take
+	// 40+ seconds as LocalSystem). Run it in a goroutine so Start() returns
+	// immediately and the WebSocket read loop is not blocked.
+	go func() {
+		m.logger.Info("manager: calling spawnPTY", "sessionId", sessionID, "command", command, "workdir", workdir)
+		handle, pid, err := spawnPTY(m.ctx, sessionID, command, workdir, m.mergeEnv(env), outputFn, nil, exitFn)
+		m.logger.Info("manager: spawnPTY returned", "sessionId", sessionID, "pid", pid, "err", err)
+		if err != nil {
+			m.logger.Error("spawnPTY failed", "sessionId", sessionID, "command", command, "workdir", workdir, "err", err)
+			m.registry.Remove(sessionID)
+			_ = m.messenger.SendJSON(sessionCrashedMsg{
+				Type:      "session_crashed",
+				SessionID: sessionID,
+				Error:     err.Error(),
+			})
+			return
+		}
+		// Update placeholder with real PID and PTY handle.
+		placeholder.PID = pid
+		placeholder.ptySession = handle
+	}()
 
 	return sessionID, nil
 }

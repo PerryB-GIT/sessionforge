@@ -116,6 +116,7 @@ func runDaemonWithContext(ctx context.Context) error {
 	}
 
 	logger := buildLogger(logLevel, cfg.LogFile)
+	slog.SetDefault(logger) // route slog.Default() to the file logger
 	logger.Info("SessionForge Agent starting",
 		"version", version,
 		"machineId", cfg.MachineID,

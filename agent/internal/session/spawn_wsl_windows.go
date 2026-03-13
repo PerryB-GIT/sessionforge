@@ -47,7 +47,13 @@ func spawnWithWSL(
 	}
 
 	pidFile := fmt.Sprintf("/tmp/sf-%s.pid", sessionID)
-	shellCmd := fmt.Sprintf("echo $$ > %s && cd '%s' && exec %s", pidFile, wslWorkdir, command)
+	// Wrap with `script -qfc` to force a PTY for the child process.
+	// Without this, Claude detects no TTY and redirects its own I/O through
+	// an internally-created PTY (fd /dev/ptmx), breaking our stdout pipe.
+	// script creates a real PTY and bridges it to our pipe so output flows through.
+	// Single-quote escape: replace ' with '\'' for safe POSIX sh embedding.
+	escapedCmd := strings.ReplaceAll(command, "'", `'\''`)
+	shellCmd := fmt.Sprintf("echo $$ > %s && cd '%s' && script -qfc '%s' /dev/null", pidFile, wslWorkdir, escapedCmd)
 
 	binary := wslBin
 	args := []string{"-d", distro, "--", "sh", "-c", shellCmd}

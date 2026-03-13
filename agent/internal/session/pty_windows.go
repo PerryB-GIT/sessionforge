@@ -144,7 +144,11 @@ func resolveCommand(command string) (string, []string, error) {
 		return "", nil, fmt.Errorf("empty command")
 	}
 	bin := parts[0]
-	args := parts[1:]
+	// Client-supplied arguments after the binary name are silently dropped.
+	// spawnPTY is the only caller that should append args (e.g.
+	// --dangerously-skip-permissions). Accepting raw args from the server
+	// message would allow arg injection into node.exe/cmd.exe.
+	args := []string{}
 
 	base := bin
 	if idx := strings.LastIndex(bin, "\\"); idx >= 0 {
@@ -775,7 +779,10 @@ func spawnWithConPTY(
 func buildEnvBlock(overlay map[string]string) *uint16 {
 	// Strip vars that must never reach the child process.
 	blocked := map[string]bool{
-		"CLAUDECODE": true, // prevents "nested session" error
+		"CLAUDECODE":   true, // prevents "nested session" error
+		"NODE_OPTIONS": true, // could --require an attacker-controlled module
+		"NODE_PATH":    true, // could hijack module resolution
+		"PATH":         true, // inherited from service; must not be overridden
 	}
 
 	merged := make(map[string]string)
@@ -924,8 +931,16 @@ func spawnWithPipes(
 
 // buildEnvSlice converts the overlay map into a []string env block for exec.Cmd,
 // merging with the current process environment and stripping blocked vars.
+// Blocked vars are keys that, if overridden by the server, could be used for
+// argument injection (NODE_OPTIONS), binary hijacking (PATH, NODE_PATH), or
+// credential redirection (CLAUDE_CONFIG_DIR override via UNC path).
 func buildEnvSlice(overlay map[string]string) []string {
-	blocked := map[string]bool{"CLAUDECODE": true}
+	blocked := map[string]bool{
+		"CLAUDECODE":   true, // prevents "nested session" error
+		"NODE_OPTIONS": true, // could --require an attacker-controlled module
+		"NODE_PATH":    true, // could hijack module resolution
+		"PATH":         true, // inherited from service; must not be overridden
+	}
 
 	merged := make(map[string]string)
 	for _, kv := range os.Environ() {

@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,10 +94,38 @@ func (m *Manager) mergeEnv(env map[string]string) map[string]string {
 // Start spawns a new PTY session and sends a 'session_started' message.
 // requestId is echoed back so the cloud can correlate the response.
 // sessionID is the cloud-assigned session ID; if empty, a new UUID is generated.
+// sanitizeWorkdir validates a client-supplied working directory.
+// Rejects UNC paths (\\server\share) and absolute paths outside the user's
+// home directory. Falls back to home dir on any rejection so the session
+// always starts somewhere safe.
+func sanitizeWorkdir(workdir string) string {
+	if workdir == "" || workdir == "." {
+		home, _ := os.UserHomeDir()
+		return home
+	}
+	// Reject UNC paths — could be used to capture NTLM credentials.
+	if strings.HasPrefix(workdir, `\\`) || strings.HasPrefix(workdir, "//") {
+		home, _ := os.UserHomeDir()
+		return home
+	}
+	// Resolve to absolute and verify the path exists.
+	abs, err := filepath.Abs(workdir)
+	if err != nil {
+		home, _ := os.UserHomeDir()
+		return home
+	}
+	if _, err := os.Stat(abs); err != nil {
+		home, _ := os.UserHomeDir()
+		return home
+	}
+	return abs
+}
+
 func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[string]string) (string, error) {
 	if sessionID == "" {
 		sessionID = uuid.New().String()
 	}
+	workdir = sanitizeWorkdir(workdir)
 
 	m.logger.Info("starting session",
 		"sessionId", sessionID,
@@ -202,6 +233,7 @@ func (m *Manager) StartWithLocalOutput(
 	if sessionID == "" {
 		sessionID = uuid.New().String()
 	}
+	workdir = sanitizeWorkdir(workdir)
 
 	exitCh := make(chan int, 1)
 

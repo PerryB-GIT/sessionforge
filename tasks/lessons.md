@@ -87,3 +87,44 @@
 **Fix path:** Either switch `spawnWithPipes` to use `exec.Cmd`, or replace `CreatePipe` with `CreateNamedPipe(FILE_FLAG_OVERLAPPED)`.
 
 **Apply when:** All Windows pipe-based spawning of node.js processes.
+
+---
+
+## L009 · 2026-03-12: Debugging Rules of Engagement
+
+These rules govern how all debugging is conducted on this project. They apply to every engineer and every AI agent.
+
+### Rule 1 — Reproduce quickly; save the failing input
+Before touching any code, reproduce the failure and capture the minimal input that triggers it (log line, request payload, test case). A bug you cannot reproduce consistently is a bug you cannot safely fix. Save the reproduction artifact — it becomes the regression test.
+
+**Why:** Three sessions were spent guessing at the zero-output bug before `spawn-diag.exe` captured the exact reproduction (0 bytes, anonymous pipe, node.exe). Once saved, the fix was trivial.
+
+**How to apply:** First action on any bug report — write a script or test that reproduces it. If it won't reproduce, gather more data before proposing fixes.
+
+### Rule 2 — Ask for a path + risk summary first, not a blind patch
+Before implementing, produce: (a) the probable root cause with evidence, (b) the files/functions affected, (c) the risks of the proposed change. No code until this summary exists and has been reviewed.
+
+**Why:** Blind patches stack on each other. Every fix that doesn't start from a confirmed root cause adds noise and may mask the real issue.
+
+**How to apply:** When asking Claude to fix a bug, lead with: "Give me a path and risk summary first." Review it before saying "implement."
+
+### Rule 3 — Turn successful prompts into slash commands for next time
+When a debugging prompt, diagnostic sequence, or investigation pattern works well, convert it into a reusable slash command or script. Don't repeat the same manual steps next session.
+
+**Why:** `scripts/check-session-output.ps1` and `spawn-diag.exe` exist because the manual log-grepping steps were repeated three times. Codify once, reuse forever.
+
+**How to apply:** After resolving any bug — ask "should this become a script or slash command?" If yes, create it before closing the session.
+
+### Rule 4 — Run /security-review locally and in CI when the bug touches auth, cookies, headers, or parsing
+Any fix that modifies: authentication, session handling, cookie logic, HTTP headers, input parsing, environment variable injection, or process spawning arguments — must pass a security review before merge. Run `/security-review` locally first, then add it to the CI gate for that path.
+
+**Why:** Process spawning (this bug) involved injecting environment variables and command arguments into child processes. That surface is an injection risk. A security review catches it before it ships.
+
+**How to apply:** Check the diff. If any of the above surfaces are touched — run `/security-review`. No exceptions for "simple" fixes.
+
+### Rule 5 — Land a test that would have caught it. Future-proof > heroics
+Every bug fix must be accompanied by a test that would have caught the original bug. A fix without a test is a fix that will regress. The test is not optional; it is part of the definition of done.
+
+**Why:** `smoke_pipes_windows_test.go` (TestSpawnWithPipes_NodeOutputFlows) now guards against reverting to `windows.CreatePipe`. Without it, the zero-output bug could silently return in any future refactor.
+
+**How to apply:** Before marking a bug fixed — ask "what test would have caught this?" Write it. The test must fail on the unfixed code and pass on the fixed code.

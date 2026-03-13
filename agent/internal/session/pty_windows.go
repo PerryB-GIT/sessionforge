@@ -509,6 +509,15 @@ func spawnPTY(
 ) (*ptyHandle, int, error) {
 	ensureTierDetected()
 
+	// Claude Code requires --dangerously-skip-permissions when running
+	// non-interactively (no real TTY) to bypass the "trust this directory?"
+	// prompt. Without this flag Claude hangs waiting for keyboard input.
+	// Append the flag if the command starts with "claude" and doesn't already
+	// include it.
+	if strings.HasPrefix(command, "claude") && !strings.Contains(command, "--dangerously-skip-permissions") {
+		command = command + " --dangerously-skip-permissions"
+	}
+
 	if conPTYWorkingLogger != nil {
 		conPTYWorkingLogger.Info("spawnPTY: routing session",
 			"tier", spawnTier, "command", command, "sessionId", sessionID,
@@ -802,11 +811,20 @@ func buildEnvBlock(overlay map[string]string) *uint16 {
 }
 
 // spawnWithPipes is the pipe-based fallback used when ConPTY is unavailable.
-// It uses windows.CreateProcess directly (not exec.Cmd) so we can set
-// CREATE_NO_WINDOW | DETACHED_PROCESS and STARTF_USESTDHANDLES in the same
-// call — Go's exec.Cmd does not reliably honour CreationFlags when stdin/stdout
-// pipes are wired up, causing cmd.exe to attach to the user's console session
-// instead of using the anonymous pipes.
+//
+// IMPORTANT: This uses exec.Cmd (not raw CreateProcess + windows.CreatePipe).
+//
+// Root cause of the previous zero-output bug (L001 in tasks/lessons.md):
+// windows.CreatePipe creates non-overlapped (synchronous) pipe handles.
+// Node.js uses libuv which calls uv_guess_handle_type on stdout at startup;
+// when it detects a pipe it initialises IOCP-based overlapped I/O via
+// WriteFileEx. Non-overlapped handles make every libuv write fail silently —
+// the child process produces zero bytes on stdout.
+//
+// exec.Cmd uses os.Pipe() which calls CreatePipe via the Go runtime with the
+// FILE_FLAG_OVERLAPPED flag set, producing handles that libuv's IOCP path
+// can write to correctly. Confirmed by spawn-diag.exe (CreatePipe → 0 bytes)
+// vs pipedump.exe (exec.Cmd/os.Pipe → output flows).
 func spawnWithPipes(
 	ctx context.Context,
 	sessionID string,
@@ -818,142 +836,118 @@ func spawnWithPipes(
 	localOutputFn func(raw []byte),
 	exitFn func(sessionID string, exitCode int, err error),
 ) (*ptyHandle, int, error) {
-	_, cancel := context.WithCancel(ctx)
+	cmdCtx, cancel := context.WithCancel(ctx)
 
-	// --- stdin pipe (parent writes, child reads) ---
-	// The child-read end must be inheritable; the parent-write end must not be.
-	sa := windows.SecurityAttributes{InheritHandle: 1}
-	sa.Length = uint32(unsafe.Sizeof(sa))
+	cmd := exec.CommandContext(cmdCtx, binary, args...)
 
-	var stdinR, stdinW windows.Handle
-	if err := windows.CreatePipe(&stdinR, &stdinW, &sa, 0); err != nil {
+	// Working directory.
+	if workdir != "" && workdir != "." {
+		cmd.Dir = workdir
+	} else {
+		cmd.Dir, _ = os.UserHomeDir()
+	}
+
+	// Environment: merge parent env + overlay, strip CLAUDECODE.
+	cmd.Env = buildEnvSlice(env)
+
+	// Suppress console window — equivalent to CREATE_NO_WINDOW.
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	// os.Pipe() creates FILE_FLAG_OVERLAPPED handles (required by libuv/node.js).
+	stdinR, stdinW, err := os.Pipe()
+	if err != nil {
 		cancel()
 		return nil, 0, fmt.Errorf("create stdin pipe: %w", err)
 	}
-	// Make the parent-write end non-inheritable.
-	if err := windows.SetHandleInformation(stdinW, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
-		windows.CloseHandle(stdinR)
-		windows.CloseHandle(stdinW)
-		cancel()
-		return nil, 0, fmt.Errorf("set stdin write non-inheritable: %w", err)
-	}
-
-	// --- stdout+stderr pipe (child writes, parent reads) ---
-	var outR, outW windows.Handle
-	if err := windows.CreatePipe(&outR, &outW, &sa, 0); err != nil {
-		windows.CloseHandle(stdinR)
-		windows.CloseHandle(stdinW)
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		stdinR.Close()
+		stdinW.Close()
 		cancel()
 		return nil, 0, fmt.Errorf("create output pipe: %w", err)
 	}
-	// Make the parent-read end non-inheritable.
-	if err := windows.SetHandleInformation(outR, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
-		windows.CloseHandle(stdinR)
-		windows.CloseHandle(stdinW)
-		windows.CloseHandle(outR)
-		windows.CloseHandle(outW)
+
+	cmd.Stdin = stdinR
+	cmd.Stdout = outW
+	cmd.Stderr = outW
+
+	if err := cmd.Start(); err != nil {
+		stdinR.Close()
+		stdinW.Close()
+		outR.Close()
+		outW.Close()
 		cancel()
-		return nil, 0, fmt.Errorf("set output read non-inheritable: %w", err)
+		return nil, 0, fmt.Errorf("cmd.Start: %w", err)
 	}
 
-	// Build STARTUPINFO with STARTF_USESTDHANDLES to wire our pipes.
-	const startfUsestdhandles uint32 = 0x00000100
-	si := windows.StartupInfo{
-		Flags:      startfUsestdhandles,
-		StdInput:   stdinR,
-		StdOutput:  outW,
-		StdErr:     outW,
-	}
-	si.Cb = uint32(unsafe.Sizeof(si))
-
-	// Build command line string.
-	cmdLine := windows.EscapeArg(binary)
-	for _, a := range args {
-		cmdLine += " " + windows.EscapeArg(a)
-	}
-	cmdLinePtr, _ := windows.UTF16PtrFromString(cmdLine)
-
-	// Working directory.
-	var workdirPtr *uint16
-	if workdir != "" && workdir != "." {
-		workdirPtr, _ = windows.UTF16PtrFromString(workdir)
-	}
-
-	// Environment block.
-	envBlock := buildEnvBlock(env)
-
-	// CREATE_NO_WINDOW: child gets no console window.
-	// DETACHED_PROCESS: child is detached from the parent's console entirely.
-	// CREATE_UNICODE_ENVIRONMENT: env block is UTF-16.
-	const createNoWindow uint32 = 0x08000000
-	const detachedProcess uint32 = 0x00000008
-	creationFlags := createNoWindow | detachedProcess | createUnicodeEnvironment
-
-	var procInfo windows.ProcessInformation
-	if err := windows.CreateProcess(
-		nil, cmdLinePtr,
-		nil, nil,
-		true, // inherit handles (our inheritable pipe ends)
-		creationFlags,
-		envBlock,
-		workdirPtr,
-		&si,
-		&procInfo,
-	); err != nil {
-		windows.CloseHandle(stdinR)
-		windows.CloseHandle(stdinW)
-		windows.CloseHandle(outR)
-		windows.CloseHandle(outW)
-		cancel()
-		return nil, 0, fmt.Errorf("CreateProcess: %w", err)
-	}
-
-	// Close the child-side handles in the parent — child owns them now.
-	windows.CloseHandle(stdinR)
-	windows.CloseHandle(outW)
-	windows.CloseHandle(procInfo.Thread)
-
-	stdinWriter := &pipeWriter{h: stdinW}
-	outReader := &pipeReader{h: outR}
-
-	proc, err := os.FindProcess(int(procInfo.ProcessId))
-	if err != nil {
-		windows.CloseHandle(stdinW)
-		windows.CloseHandle(outR)
-		windows.CloseHandle(procInfo.Process)
-		cancel()
-		return nil, 0, fmt.Errorf("FindProcess: %w", err)
-	}
+	// Child owns the child-side ends; close them in the parent so EOF propagates.
+	stdinR.Close()
+	outW.Close()
 
 	h := &ptyHandle{
-		stdin:     stdinWriter,
-		stdout:    outReader,
+		cmd:       cmd,
+		stdin:     stdinW,
+		stdout:    outR,
 		cancel:    cancel,
 		tier:      "pipes",
 		sessionID: sessionID,
 	}
 
-	go readPipeOutput(sessionID, outReader, outputFn, localOutputFn, nil)
+	if conPTYWorkingLogger != nil {
+		conPTYWorkingLogger.Info("spawnWithPipes: process started",
+			"pid", cmd.Process.Pid, "sessionId", sessionID,
+			"binary", binary,
+		)
+	}
+
+	go readPipeOutput(sessionID, outR, outputFn, localOutputFn, nil)
 
 	go func() {
 		defer cancel()
-		state, waitErr := proc.Wait()
-		stdinWriter.Close()
-		outReader.Close()
-		windows.CloseHandle(procInfo.Process)
+		waitErr := cmd.Wait()
+		stdinW.Close()
+		outR.Close()
 
 		if waitErr != nil {
 			exitFn(sessionID, -1, waitErr)
 			return
 		}
 		code := 0
-		if state != nil && !state.Success() {
-			code = state.ExitCode()
+		if cmd.ProcessState != nil && !cmd.ProcessState.Success() {
+			code = cmd.ProcessState.ExitCode()
 		}
 		exitFn(sessionID, code, nil)
 	}()
 
-	return h, int(procInfo.ProcessId), nil
+	return h, cmd.Process.Pid, nil
+}
+
+// buildEnvSlice converts the overlay map into a []string env block for exec.Cmd,
+// merging with the current process environment and stripping blocked vars.
+func buildEnvSlice(overlay map[string]string) []string {
+	blocked := map[string]bool{"CLAUDECODE": true}
+
+	merged := make(map[string]string)
+	for _, kv := range os.Environ() {
+		if idx := strings.IndexByte(kv, '='); idx > 0 {
+			key := kv[:idx]
+			if !blocked[key] {
+				merged[key] = kv[idx+1:]
+			}
+		}
+	}
+	for k, v := range overlay {
+		if !blocked[k] {
+			merged[k] = v
+		}
+	}
+	merged["TERM"] = "xterm-256color"
+
+	env := make([]string, 0, len(merged))
+	for k, v := range merged {
+		env = append(env, k+"="+v)
+	}
+	return env
 }
 
 // readPipeOutput drains a reader, batches output at ~60fps, and calls outputFn

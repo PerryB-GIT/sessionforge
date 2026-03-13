@@ -1,0 +1,100 @@
+{
+  "project": "SessionForge Agent — Session Output Debug Loop",
+  "branchName": "ralph/session-output-fix",
+  "description": "Fix zero session output: replace non-overlapped CreatePipe with exec.Cmd/os.Pipe (overlapped handles required by libuv/node.js), validate output flows end-to-end, add automated regression guard.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Verify spawnWithPipes uses exec.Cmd (overlapped pipes)",
+      "description": "As a developer, I need to confirm the current spawnWithPipes implementation uses exec.Cmd + os.Pipe instead of windows.CreatePipe, so libuv/node.js can write to stdout.",
+      "acceptanceCriteria": [
+        "agent/internal/session/pty_windows.go spawnWithPipes uses exec.Cmd, not windows.CreatePipe",
+        "buildEnvSlice function exists and returns []string",
+        "cmd.SysProcAttr sets HideWindow: true",
+        "go build ./... passes with no errors",
+        "go vet ./... passes with no errors",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "exec.Cmd/os.Pipe creates FILE_FLAG_OVERLAPPED handles. windows.CreatePipe creates non-overlapped handles that libuv silently fails to write to. Root cause confirmed by spawn-diag.exe (0 bytes) vs pipedump.exe (output flows)."
+    },
+    {
+      "id": "US-002",
+      "title": "Build sessionforge.exe and confirm binary is newer than service binary",
+      "description": "As a developer, I need a fresh sessionforge.exe built from the fixed source so the service can be updated.",
+      "acceptanceCriteria": [
+        "go build -o sessionforge-new.exe ./cmd/sessionforge/ completes with exit code 0",
+        "sessionforge-new.exe exists in agent/ directory",
+        "sessionforge-new.exe file timestamp is newer than C:\\Users\\Jakeb\\AppData\\Local\\Programs\\sessionforge\\sessionforge.exe",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Build must succeed before service swap. Check timestamp to confirm we are not running a stale binary."
+    },
+    {
+      "id": "US-003",
+      "title": "Create spawn smoke test: node.exe produces output via exec.Cmd",
+      "description": "As a developer, I need an automated test that spawns node.exe via exec.Cmd and asserts stdout bytes arrive, so we can catch pipe regressions before deploying.",
+      "acceptanceCriteria": [
+        "File agent/internal/session/smoke_pipes_windows_test.go exists",
+        "Test TestSpawnWithPipes_NodeOutputFlows spawns node.exe -e 'process.stdout.write(\"PING\")'",
+        "Test asserts output contains PING within 10 seconds",
+        "Test has build tag: //go:build windows && integration",
+        "go test -tags=integration -run TestSpawnWithPipes_NodeOutputFlows ./internal/session/ -v passes",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "This is the regression guard. If someone reverts to windows.CreatePipe, this test fails immediately."
+    },
+    {
+      "id": "US-004",
+      "title": "Create diagnostic script: scripts/check-session-output.ps1",
+      "description": "As a developer, I need a PowerShell script that checks whether the service is producing session output, reports the spawn tier selected, and prints a pass/fail verdict.",
+      "acceptanceCriteria": [
+        "File scripts/check-session-output.ps1 exists",
+        "Script reads last 100 lines of C:\\Users\\Jakeb\\.sessionforge\\agent.log",
+        "Script reports: service account (LocalSystem or user), spawn tier selected (wsl/gitbash/conpty/pipes), whether session_output chunks appear in log",
+        "Script prints PASS if session_output chunks found, FAIL with diagnosis if not",
+        "Script can be run as: powershell scripts/check-session-output.ps1",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Quick human-runnable check after service restart. Replaces manual log grepping."
+    },
+    {
+      "id": "US-005",
+      "title": "Auto-populate claude_config_dir in config.toml at service install",
+      "description": "As a developer, I need service install to automatically detect and write claude_config_dir to config.toml so CLAUDE_CONFIG_DIR is always injected into spawned sessions without manual editing.",
+      "acceptanceCriteria": [
+        "agent/internal/cli/service_windows.go runServiceInstall detects os.UserHomeDir()/.claude",
+        "If ~/.claude exists, cfg.ClaudeConfigDir is set before saving config",
+        "If config already has a non-empty ClaudeConfigDir, it is not overwritten",
+        "go build ./... passes",
+        "go vet ./... passes",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Currently requires manual config.toml edit. Without CLAUDE_CONFIG_DIR, Claude returns 'Not logged in' when service runs as LocalSystem."
+    },
+    {
+      "id": "US-006",
+      "title": "Update tasks/lessons.md with exec.Cmd fix (L008)",
+      "description": "As a developer, I need the lessons file updated with the confirmed fix so future engineers know why exec.Cmd is used instead of CreateProcess.",
+      "acceptanceCriteria": [
+        "tasks/lessons.md contains entry L008",
+        "L008 documents: spawnWithPipes rewritten to use exec.Cmd + os.Pipe",
+        "L008 references L001 (overlapped pipe root cause)",
+        "L008 states the acceptance test: TestSpawnWithPipes_NodeOutputFlows",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Self-improvement loop: every fix gets documented so it cannot regress silently."
+    }
+  ]
+}

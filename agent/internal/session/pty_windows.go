@@ -513,15 +513,6 @@ func spawnPTY(
 ) (*ptyHandle, int, error) {
 	ensureTierDetected()
 
-	// Claude Code requires --dangerously-skip-permissions when running
-	// non-interactively (no real TTY) to bypass the "trust this directory?"
-	// prompt. Without this flag Claude hangs waiting for keyboard input.
-	// Append the flag if the command starts with "claude" and doesn't already
-	// include it.
-	if strings.HasPrefix(command, "claude") && !strings.Contains(command, "--dangerously-skip-permissions") {
-		command = command + " --dangerously-skip-permissions"
-	}
-
 	if conPTYWorkingLogger != nil {
 		conPTYWorkingLogger.Info("spawnPTY: routing session",
 			"tier", spawnTier, "command", command, "sessionId", sessionID,
@@ -530,13 +521,30 @@ func spawnPTY(
 
 	switch spawnTier {
 	case "wsl":
+		// WSL tier: --dangerously-skip-permissions is appended by spawnWithWSL
+		// via the shell command string after script -qfc wrapping.
+		if strings.HasPrefix(command, "claude") && !strings.Contains(command, "--dangerously-skip-permissions") {
+			command = command + " --dangerously-skip-permissions"
+		}
 		return spawnWithWSL(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn)
 	case "gitbash":
+		if strings.HasPrefix(command, "claude") && !strings.Contains(command, "--dangerously-skip-permissions") {
+			command = command + " --dangerously-skip-permissions"
+		}
 		return spawnWithGitBash(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn)
 	default:
 		binary, args, err := resolveCommand(command)
 		if err != nil {
 			return nil, 0, fmt.Errorf("resolve command: %w", err)
+		}
+		// Inject --dangerously-skip-permissions into args AFTER resolveCommand
+		// strips the command string. resolveCommand drops all args for security
+		// (prevents arg injection from client), so this is the only safe place
+		// to add required flags.
+		baseLower := strings.ToLower(strings.TrimSuffix(filepath.Base(binary), ".exe"))
+		if baseLower == "node" {
+			// node.exe: args[0] is cli.js, append flag after it
+			args = append(args, "--dangerously-skip-permissions")
 		}
 		if conPTYWorkingLogger != nil {
 			conPTYWorkingLogger.Info("spawnPTY: resolved command",

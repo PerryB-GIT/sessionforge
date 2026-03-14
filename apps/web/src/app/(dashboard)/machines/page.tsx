@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useCallback } from 'react'
+import { toast } from 'sonner'
 import { Plus, RefreshCw, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MachineGrid, type MachineSortKey, type SortDir } from '@/components/machines/MachineGrid'
@@ -94,16 +95,25 @@ export default function MachinesPage() {
   const handleBulkDelete = async () => {
     setIsDeleting(true)
     const ids = Array.from(selectedIds)
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       ids.map((id) =>
         fetch(`/api/machines/${id}`, { method: 'DELETE' }).then((res) => {
-          if (res.ok) removeMachine(id)
+          if (!res.ok) throw new Error(`Failed to delete ${id}`)
+          removeMachine(id)
         })
       )
     )
     setIsDeleting(false)
     setDeleteConfirmOpen(false)
     clearSelection()
+
+    const failed = results.filter((r) => r.status === 'rejected').length
+    const total = ids.length
+    if (failed === total) {
+      toast.error('Could not delete machines')
+    } else if (failed > 0) {
+      toast.warning(`${failed} of ${total} machines could not be deleted`)
+    }
   }
 
   const selectedCount = selectedIds.size

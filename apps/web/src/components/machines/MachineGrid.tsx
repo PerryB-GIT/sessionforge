@@ -3,9 +3,14 @@
 import { MachineCard } from './MachineCard'
 import type { Machine } from '@/store'
 
+export type MachineSortKey = 'name' | 'status' | 'lastSeen' | 'os'
+export type SortDir = 'asc' | 'desc'
+
 interface MachineGridProps {
   machines: Machine[]
   isLoading?: boolean
+  selectedIds?: Set<string>
+  onToggle?: (id: string) => void
 }
 
 function MachineCardSkeleton() {
@@ -40,7 +45,7 @@ function MachineCardSkeleton() {
   )
 }
 
-export function MachineGrid({ machines, isLoading }: MachineGridProps) {
+export function MachineGrid({ machines, isLoading, selectedIds, onToggle }: MachineGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -55,8 +60,18 @@ export function MachineGrid({ machines, isLoading }: MachineGridProps) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[#1e1e2e] py-20">
         <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#1e1e2e] mb-4">
-          <svg className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          <svg
+            className="h-6 w-6 text-gray-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            />
           </svg>
         </div>
         <h3 className="text-sm font-medium text-white mb-1">No machines found</h3>
@@ -68,7 +83,12 @@ export function MachineGrid({ machines, isLoading }: MachineGridProps) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {machines.map((machine) => (
-        <MachineCard key={machine.id} machine={machine} />
+        <MachineCard
+          key={machine.id}
+          machine={machine}
+          selected={selectedIds?.has(machine.id) ?? false}
+          onToggle={onToggle}
+        />
       ))}
     </div>
   )

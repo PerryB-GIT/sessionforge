@@ -6,7 +6,7 @@ import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { Plus, RefreshCw, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { MachineGrid, type MachineSortKey, type SortDir } from '@/components/machines/MachineGrid'
+import { MachineGrid, type MachineSortKey } from '@/components/machines/MachineGrid'
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { MachineSetupWizard } from '@/components/machines/MachineSetupWizard'
 import { useMachines } from '@/hooks/useMachines'
-import { useStore } from '@/store'
+import { useStore, type SortDir } from '@/store'
 import type { MachineStatus } from '@/store'
 
 type FilterType = 'all' | MachineStatus

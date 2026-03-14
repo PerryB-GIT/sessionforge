@@ -12,6 +12,7 @@ export type MachineStatus = 'online' | 'offline' | 'error'
 export type SessionStatus = 'running' | 'stopped' | 'crashed' | 'paused'
 export type PlanTier = 'free' | 'pro' | 'team' | 'enterprise'
 export type WsStatus = 'connecting' | 'connected' | 'disconnected'
+export type SortDir = 'asc' | 'desc'
 
 export interface Machine {
   id: string

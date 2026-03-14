@@ -3,9 +3,10 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useCallback } from 'react'
+import { toast } from 'sonner'
 import { Plus, Radar, ChevronDown, ChevronUp, Terminal, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SessionList, type SessionSortKey, type SortDir } from '@/components/sessions/SessionList'
+import { SessionList, type SessionSortKey } from '@/components/sessions/SessionList'
 import { StartSessionDialog } from '@/components/sessions/StartSessionDialog'
 import { useSessions } from '@/hooks/useSessions'
 import { useMachines } from '@/hooks/useMachines'
@@ -16,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useStore, type DiscoveredProcess } from '@/store'
+import { useStore, type SortDir, type DiscoveredProcess } from '@/store'
 import type { SessionStatus } from '@/store'
 
 type FilterStatus = 'all' | SessionStatus
@@ -209,15 +210,23 @@ export default function SessionsPage() {
     if (toStop.length === 0) return
 
     setIsStopping(true)
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       toStop.map((s) =>
         fetch(`/api/sessions/${s.id}`, { method: 'DELETE' }).then((res) => {
-          if (res.ok) updateSession(s.id, { status: 'stopped', stoppedAt: new Date() })
+          if (!res.ok) throw new Error(`Failed to stop session ${s.id}`)
+          updateSession(s.id, { status: 'stopped', stoppedAt: new Date() })
         })
       )
     )
     setIsStopping(false)
     clearSelection()
+
+    const failed = results.filter((r) => r.status === 'rejected').length
+    if (failed === toStop.length) {
+      toast.error('Could not stop sessions')
+    } else if (failed > 0) {
+      toast.warning(`${failed} of ${toStop.length} sessions could not be stopped`)
+    }
   }
 
   const selectedCount = selectedIds.size

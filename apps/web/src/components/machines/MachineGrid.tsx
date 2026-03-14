@@ -1,10 +1,9 @@
 'use client'
 
 import { MachineCard } from './MachineCard'
-import type { Machine } from '@/store'
+import type { Machine, SortDir } from '@/store'
 
 export type MachineSortKey = 'name' | 'status' | 'lastSeen' | 'os'
-export type SortDir = 'asc' | 'desc'
 
 interface MachineGridProps {
   machines: Machine[]

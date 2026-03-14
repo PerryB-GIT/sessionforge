@@ -13,10 +13,9 @@ import {
 import { SessionStatusBadge } from '@/components/ui/badge'
 import { formatDuration, formatRelativeTime, truncate } from '@/lib/utils'
 import type { Session } from '@/store'
-import { useStore } from '@/store'
+import { useStore, type SortDir } from '@/store'
 
 export type SessionSortKey = 'processName' | 'machine' | 'status' | 'startedAt' | 'duration'
-export type SortDir = 'asc' | 'desc'
 
 interface SessionListProps {
   sessions: Session[]

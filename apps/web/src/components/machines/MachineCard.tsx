@@ -5,9 +5,8 @@ import { Monitor, Apple, Terminal, Clock, Check } from 'lucide-react'
 import { MachineStatusBadge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { formatRelativeTime } from '@/lib/utils'
+import { cn, formatRelativeTime } from '@/lib/utils'
 import type { Machine } from '@/store'
-import { cn } from '@/lib/utils'
 
 function OsIcon({ os, className }: { os: Machine['os']; className?: string }) {
   const icons = { macos: Apple, linux: Terminal, windows: Monitor }
@@ -34,9 +33,9 @@ function MetricBar({
       <Progress
         value={value}
         className="h-1"
-        indicatorClassName={cn(
+        indicatorClassName={
           value > 80 ? 'bg-red-400' : value > 60 ? 'bg-yellow-400' : 'bg-purple-500'
-        )}
+        }
       />
     </div>
   )
@@ -58,7 +57,6 @@ export function MachineCard({ machine, selected = false, onToggle }: MachineCard
       {selectable && (
         <button
           onClick={(e) => {
-            e.preventDefault()
             e.stopPropagation()
             onToggle(machine.id)
           }}
@@ -68,7 +66,7 @@ export function MachineCard({ machine, selected = false, onToggle }: MachineCard
               ? 'bg-purple-500 border-purple-500'
               : 'bg-[#111118] border-gray-600 hover:border-purple-500'
           )}
-          aria-label={selected ? 'Deselect' : 'Select'}
+          aria-label={selected ? `Deselect ${machine.name}` : `Select ${machine.name}`}
         >
           {selected && <Check className="h-3 w-3 text-white" />}
         </button>

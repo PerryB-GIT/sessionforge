@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
         avgCpuPercent: sessions.avgCpuPercent,
         startedAt: sessions.startedAt,
         stoppedAt: sessions.stoppedAt,
+        claudeConversationId: sessions.claudeConversationId,
         createdAt: sessions.createdAt,
       })
       .from(sessions)

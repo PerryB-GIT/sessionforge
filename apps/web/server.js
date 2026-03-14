@@ -922,11 +922,11 @@ async function handleAgentMessage(msg, userId, remoteAddress, onMachineId, getMa
     }
 
     case 'session_stopped': {
-      const { sessionId, exitCode } = msg
+      const { sessionId, exitCode, claudeConversationId } = msg
       await flushSessionStats(sessionId)
       await query(
-        `UPDATE sessions SET status = 'stopped', exit_code = $1, stopped_at = NOW() WHERE id = $2`,
-        [exitCode, sessionId]
+        `UPDATE sessions SET status = 'stopped', exit_code = $1, stopped_at = NOW(), claude_conversation_id = $3 WHERE id = $2`,
+        [exitCode, sessionId, claudeConversationId ?? null]
       )
       const rows = await query(`SELECT machine_id, user_id FROM sessions WHERE id = $1 LIMIT 1`, [
         sessionId,
@@ -974,11 +974,12 @@ async function handleAgentMessage(msg, userId, remoteAddress, onMachineId, getMa
     }
 
     case 'session_crashed': {
-      const { sessionId, error } = msg
+      const { sessionId, error, claudeConversationId } = msg
       await flushSessionStats(sessionId)
-      await query(`UPDATE sessions SET status = 'crashed', stopped_at = NOW() WHERE id = $1`, [
-        sessionId,
-      ])
+      await query(
+        `UPDATE sessions SET status = 'crashed', stopped_at = NOW(), claude_conversation_id = $2 WHERE id = $1`,
+        [sessionId, claudeConversationId ?? null]
+      )
       const rows = await query(`SELECT machine_id FROM sessions WHERE id = $1 LIMIT 1`, [sessionId])
       if (rows[0]) {
         await publishToDashboard(userId, {

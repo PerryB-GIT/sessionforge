@@ -44,6 +44,7 @@ export interface Session {
   status: SessionStatus
   peakMemoryMb: number | null
   avgCpuPercent: number | null
+  claudeConversationId: string | null
 }
 
 export interface User {

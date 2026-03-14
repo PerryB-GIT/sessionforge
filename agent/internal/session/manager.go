@@ -35,15 +35,17 @@ type sessionInfoJSON struct {
 }
 
 type sessionStoppedMsg struct {
-	Type      string  `json:"type"`
-	SessionID string  `json:"sessionId"`
-	ExitCode  *int    `json:"exitCode"`
+	Type                 string `json:"type"`
+	SessionID            string `json:"sessionId"`
+	ExitCode             *int   `json:"exitCode"`
+	ClaudeConversationID string `json:"claudeConversationId,omitempty"`
 }
 
 type sessionCrashedMsg struct {
-	Type      string `json:"type"`
-	SessionID string `json:"sessionId"`
-	Error     string `json:"error"`
+	Type                 string `json:"type"`
+	SessionID            string `json:"sessionId"`
+	Error                string `json:"error"`
+	ClaudeConversationID string `json:"claudeConversationId,omitempty"`
 }
 
 type sessionOutputMsg struct {
@@ -162,11 +164,17 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 		m.logger.Info("session exited", "sessionId", sid, "exitCode", exitCode, "err", exitErr)
 		m.registry.Remove(sid)
 
+		convID := findClaudeConversationID(m.claudeConfigDir, workdir)
+		if convID != "" {
+			m.logger.Info("resolved claude conversation ID", "sessionId", sid, "conversationId", convID)
+		}
+
 		if exitErr != nil {
 			msg := sessionCrashedMsg{
-				Type:      "session_crashed",
-				SessionID: sid,
-				Error:     exitErr.Error(),
+				Type:                 "session_crashed",
+				SessionID:            sid,
+				Error:                exitErr.Error(),
+				ClaudeConversationID: convID,
 			}
 			if err := m.messenger.SendJSON(msg); err != nil {
 				m.logger.Warn("failed to send session_crashed", "err", err)
@@ -176,9 +184,10 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 
 		code := exitCode
 		msg := sessionStoppedMsg{
-			Type:      "session_stopped",
-			SessionID: sid,
-			ExitCode:  &code,
+			Type:                 "session_stopped",
+			SessionID:            sid,
+			ExitCode:             &code,
+			ClaudeConversationID: convID,
 		}
 		if err := m.messenger.SendJSON(msg); err != nil {
 			m.logger.Warn("failed to send session_stopped", "err", err)

@@ -10,3 +10,6 @@ func WarmUpSpawnTier() {}
 // WarmUpConPTY is a no-op on non-Windows platforms.
 // ConPTY is a Windows-only API; Unix sessions use creack/pty directly.
 func WarmUpConPTY() {}
+
+// findClaudeConversationID is a no-op on non-Windows platforms.
+func findClaudeConversationID(claudeConfigDir, windowsWorkdir string) string { return "" }

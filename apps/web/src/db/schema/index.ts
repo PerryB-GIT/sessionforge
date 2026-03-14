@@ -182,6 +182,7 @@ export const sessions = pgTable(
     avgCpuPercent: real('avg_cpu_percent'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     stoppedAt: timestamp('stopped_at', { withTimezone: true }),
+    claudeConversationId: text('claude_conversation_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

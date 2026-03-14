@@ -3,9 +3,19 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Square, Monitor, Clock, Cpu, MemoryStick, Film, WifiOff } from 'lucide-react'
+import {
+  ArrowLeft,
+  Square,
+  RotateCcw,
+  Monitor,
+  Clock,
+  Cpu,
+  MemoryStick,
+  Film,
+  WifiOff,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { SessionStatusBadge } from '@/components/ui/badge'
@@ -21,11 +31,13 @@ import { toast } from 'sonner'
 
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const router = useRouter()
   const { session, isLoading } = useSession(id)
   const updateSession = useStore((s) => s.updateSession)
   const { sendMessage, wsStatus } = useWs()
 
   const [isStopping, setIsStopping] = useState(false)
+  const [isResuming, setIsResuming] = useState(false)
   const [activeTab, setActiveTab] = useState('terminal')
 
   // Historical log state (stopped sessions)
@@ -107,6 +119,33 @@ export default function SessionDetailPage() {
     })
   }
 
+  async function resumeSession() {
+    if (!session?.claudeConversationId || !session.machineId) return
+    setIsResuming(true)
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          machineId: session.machineId,
+          command: `claude --resume ${session.claudeConversationId} --dangerously-skip-permissions`,
+          workdir: session.workdir ?? undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to resume session')
+        return
+      }
+      router.push(`/sessions/${json.data.id}`)
+      toast.success('Session resumed')
+    } catch {
+      toast.error('Failed to resume session')
+    } finally {
+      setIsResuming(false)
+    }
+  }
+
   async function stopSession() {
     if (!session) return
     setIsStopping(true)
@@ -166,6 +205,12 @@ export default function SessionDetailPage() {
           <SessionStatusBadge status={session.status} />
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {!isRunning && session.claudeConversationId && machine?.status === 'online' && (
+            <Button variant="outline" size="sm" onClick={resumeSession} isLoading={isResuming}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Resume
+            </Button>
+          )}
           {isRunning && (
             <Button variant="destructive" size="sm" onClick={stopSession} isLoading={isStopping}>
               <Square className="h-3.5 w-3.5" />

@@ -93,7 +93,9 @@ export default function UsagePage() {
         </div>
         <Card>
           <CardContent className="p-5">
-            <p className="text-sm text-red-400">{error ?? 'No data available'}</p>
+            <p className="text-sm text-red-400">
+              Unable to load usage data. Please try again later.
+            </p>
           </CardContent>
         </Card>
       </div>

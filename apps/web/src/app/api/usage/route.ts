@@ -60,7 +60,12 @@ export async function GET() {
           .where(and(eq(sessions.userId, userId), eq(sessions.status, 'running'))),
         db.select({ count: count() }).from(apiKeys).where(eq(apiKeys.userId, userId)),
         db
-          .select()
+          .select({
+            machineId: sessions.machineId,
+            status: sessions.status,
+            startedAt: sessions.startedAt,
+            stoppedAt: sessions.stoppedAt,
+          })
           .from(sessions)
           .where(and(eq(sessions.userId, userId), gte(sessions.startedAt, monthStart))),
         db

@@ -522,15 +522,28 @@ func spawnPTY(
 
 	switch spawnTier {
 	case "wsl":
-		// WSL tier: --dangerously-skip-permissions is appended by spawnWithWSL
-		// via the shell command string after script -qfc wrapping.
-		if strings.HasPrefix(command, "claude") && !strings.Contains(command, "--dangerously-skip-permissions") {
-			command = command + " --dangerously-skip-permissions"
+		if strings.HasPrefix(command, "claude") {
+			if !strings.Contains(command, "--dangerously-skip-permissions") {
+				command = command + " --dangerously-skip-permissions"
+			}
+			// Use native Linux claude — no path substitution needed.
+			// The WSL distro was selected because it has a native (non-interop) claude.
 		}
 		return spawnWithWSL(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn)
 	case "gitbash":
-		if strings.HasPrefix(command, "claude") && !strings.Contains(command, "--dangerously-skip-permissions") {
-			command = command + " --dangerously-skip-permissions"
+		if strings.HasPrefix(command, "claude") {
+			// claude is a Windows .cmd batch file — spawn node + cli.js directly
+			// using spawnWithPipes (overlapped pipes work with Node.js/libuv).
+			// Git Bash is only needed for shell commands, not for node itself.
+			cliJS := resolveClaudeCliJS()
+			nodeBin := resolveNodePath()
+			if cliJS != "" && nodeBin != "" {
+				nodeArgs := []string{cliJS, "--dangerously-skip-permissions"}
+				slog.Default().Info("spawnPTY: spawning node directly for claude",
+					"node", nodeBin, "cli", cliJS, "sessionId", sessionID,
+				)
+				return spawnWithPipes(ctx, sessionID, nodeBin, nodeArgs, workdir, env, outputFn, localOutputFn, exitFn)
+			}
 		}
 		return spawnWithGitBash(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn)
 	default:
@@ -558,17 +571,8 @@ func spawnPTY(
 		if conPTYWorking {
 			return spawnWithConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 		}
-		// LocalSystem: attempt user-session ConPTY so Claude Code gets a TTY.
-		// Falls back to pipes if no active console session.
-		if isLocalSystem() {
-			h, pid, err := spawnWithUserConPTY(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
-			if err == nil {
-				return h, pid, nil
-			}
-			slog.Default().Warn("spawnWithUserConPTY failed, falling back to pipes",
-				"sessionId", sessionID, "err", err,
-			)
-		}
+		// LocalSystem (Session 0): CreatePseudoConsole is unavailable and
+		// spawnWithUserConPTY deadlocks the Go runtime. Go straight to pipes.
 		return spawnWithPipes(ctx, sessionID, binary, args, workdir, env, outputFn, localOutputFn, exitFn)
 	}
 }
@@ -654,12 +658,34 @@ func spawnWithUserConPTY(
 
 	coord := windows.Coord{X: 220, Y: 50}
 	var hPC windows.Handle
-	if err := windows.CreatePseudoConsole(coord, inputRead, outputWrite, 0, &hPC); err != nil {
-		windows.CloseHandle(inputRead)
-		windows.CloseHandle(inputWrite)
-		windows.CloseHandle(outputRead)
-		windows.CloseHandle(outputWrite)
-		return nil, 0, fmt.Errorf("CreatePseudoConsole: %w", err)
+	// CreatePseudoConsole hangs indefinitely in Session 0 even when called via
+	// user-token impersonation. Run it in a goroutine with a 5s timeout so we
+	// fail fast and fall back to pipes rather than stalling the session forever.
+	type cpcResult struct {
+		hPC windows.Handle
+		err error
+	}
+	cpcCh := make(chan cpcResult, 1)
+	go func() {
+		var h windows.Handle
+		err := windows.CreatePseudoConsole(coord, inputRead, outputWrite, 0, &h)
+		cpcCh <- cpcResult{h, err}
+	}()
+	select {
+	case res := <-cpcCh:
+		if res.err != nil {
+			windows.CloseHandle(inputRead)
+			windows.CloseHandle(inputWrite)
+			windows.CloseHandle(outputRead)
+			windows.CloseHandle(outputWrite)
+			return nil, 0, fmt.Errorf("CreatePseudoConsole: %w", res.err)
+		}
+		hPC = res.hPC
+	case <-time.After(5 * time.Second):
+		// Don't close handles — the goroutine may still be using them.
+		// Accept the leak; the process will exit and handles will be freed.
+		slog.Default().Warn("spawnWithUserConPTY: CreatePseudoConsole timed out after 5s, falling back to pipes")
+		return nil, 0, fmt.Errorf("CreatePseudoConsole: timed out")
 	}
 	windows.CloseHandle(inputRead)
 	windows.CloseHandle(outputWrite)

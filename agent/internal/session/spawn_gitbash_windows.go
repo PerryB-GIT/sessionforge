@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -35,7 +36,9 @@ func spawnWithGitBash(
 
 	shellCmd := command
 	binary := bashPath
-	args := []string{"-l", "-c", shellCmd}
+	// Do NOT use -l (login shell) — sourcing .bash_profile hangs when HOME
+	// is misconfigured (e.g. running as LocalSystem with no real user profile).
+	args := []string{"-c", shellCmd}
 
 	mergedEnv := make(map[string]string)
 	for k, v := range env {
@@ -43,8 +46,27 @@ func spawnWithGitBash(
 	}
 	mergedEnv["FORCE_COLOR"] = "1"
 	mergedEnv["TERM"] = "xterm-256color"
-	if up := os.Getenv("USERPROFILE"); up != "" {
-		mergedEnv["HOME"] = up
+
+	// When running as LocalSystem, USERPROFILE points to the system profile.
+	// Override HOME and PATH so bash -l finds npm-installed claude.
+	userProfile := os.Getenv("USERPROFILE")
+	if userProfile == "" || strings.Contains(strings.ToLower(userProfile), "systemprofile") {
+		// Find the first real user profile that has npm/claude installed.
+		for _, candidate := range []string{
+			`C:\Users\Jakeb`,
+			`C:\Users\Perry`,
+		} {
+			if _, err := os.Stat(candidate + `\AppData\Roaming\npm\claude.cmd`); err == nil {
+				userProfile = candidate
+				break
+			}
+		}
+	}
+	if userProfile != "" {
+		mergedEnv["HOME"] = strings.ReplaceAll(userProfile, `\`, "/")
+		npmPath := userProfile + `\AppData\Roaming\npm`
+		existing := os.Getenv("PATH")
+		mergedEnv["PATH"] = npmPath + string(os.PathListSeparator) + existing
 	}
 
 	_, cancel := context.WithCancel(ctx)
@@ -100,11 +122,16 @@ func spawnWithGitBash(
 		workdirPtr, _ = windows.UTF16PtrFromString(workdir)
 	}
 
-	envBlock := buildEnvBlock(mergedEnv)
+	// Pass nil env block so bash inherits the service's environment including PATH.
+	// We call node with an absolute path so PATH doesn't need npm in it.
+	// buildEnvBlock strips PATH which prevents bash from running at all.
+	_ = mergedEnv
+	var envBlock *uint16 = nil
 
 	const createNoWindow uint32 = 0x08000000
-	const detachedProcess uint32 = 0x00000008
-	creationFlags := createNoWindow | detachedProcess | createUnicodeEnvironment
+	// Do NOT use DETACHED_PROCESS — it disconnects the process from any console
+	// and causes Node.js/libuv to fail initializing stdio, producing no output.
+	creationFlags := createNoWindow | createUnicodeEnvironment
 
 	var procInfo windows.ProcessInformation
 	if err := windows.CreateProcess(

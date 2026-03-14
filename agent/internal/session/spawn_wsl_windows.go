@@ -47,13 +47,18 @@ func spawnWithWSL(
 	}
 
 	pidFile := fmt.Sprintf("/tmp/sf-%s.pid", sessionID)
-	// Wrap with `script -qfc` to force a PTY for the child process.
-	// Without this, Claude detects no TTY and redirects its own I/O through
-	// an internally-created PTY (fd /dev/ptmx), breaking our stdout pipe.
-	// script creates a real PTY and bridges it to our pipe so output flows through.
-	// Single-quote escape: replace ' with '\'' for safe POSIX sh embedding.
+	// `script -qfc` forces a PTY so Claude Code thinks it has a TTY and renders
+	// its interactive UI. However, Windows binaries running via WSL interop
+	// (paths like /mnt/host/c/...) don't work with Linux PTYs — script hangs.
+	// For those, skip script and run directly (no TTY, pipes only).
 	escapedCmd := strings.ReplaceAll(command, "'", `'\''`)
-	shellCmd := fmt.Sprintf("echo $$ > %s && cd '%s' && script -qfc '%s' /dev/null", pidFile, wslWorkdir, escapedCmd)
+	isWindowsInterop := strings.Contains(command, "/mnt/host/") || strings.Contains(command, "/mnt/c/")
+	var shellCmd string
+	if isWindowsInterop {
+		shellCmd = fmt.Sprintf("echo $$ > %s && cd '%s' && %s", pidFile, wslWorkdir, escapedCmd)
+	} else {
+		shellCmd = fmt.Sprintf("echo $$ > %s && cd '%s' && script -qfc '%s' /dev/null", pidFile, wslWorkdir, escapedCmd)
+	}
 
 	binary := wslBin
 	args := []string{"-d", distro, "--", "sh", "-c", shellCmd}

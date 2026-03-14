@@ -2,10 +2,10 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
-import { Plus, Radar, ChevronDown, ChevronUp, Terminal } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { Plus, Radar, ChevronDown, ChevronUp, Terminal, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SessionList } from '@/components/sessions/SessionList'
+import { SessionList, type SessionSortKey, type SortDir } from '@/components/sessions/SessionList'
 import { StartSessionDialog } from '@/components/sessions/StartSessionDialog'
 import { useSessions } from '@/hooks/useSessions'
 import { useMachines } from '@/hooks/useMachines'
@@ -33,7 +33,6 @@ function DiscoveredProcessesBanner() {
   const machines = useStore((s) => s.machines)
   const [expanded, setExpanded] = useState(true)
 
-  // Collect all unmanaged processes across all online machines
   const rows: Array<{ machineId: string; machineName: string; process: DiscoveredProcess }> = []
   for (const m of machines) {
     if (m.status !== 'online') continue
@@ -46,7 +45,6 @@ function DiscoveredProcessesBanner() {
 
   return (
     <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 overflow-hidden">
-      {/* Header */}
       <button
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-purple-500/10 transition-colors"
         onClick={() => setExpanded((v) => !v)}
@@ -62,8 +60,6 @@ function DiscoveredProcessesBanner() {
           <ChevronDown className="h-4 w-4 text-gray-500" />
         )}
       </button>
-
-      {/* Table */}
       {expanded && (
         <div className="border-t border-purple-500/20 overflow-x-auto">
           <table className="w-full text-xs">
@@ -122,10 +118,20 @@ function DiscoveredProcessesBanner() {
 export default function SessionsPage() {
   const { sessions, isLoading } = useSessions()
   const { machines } = useMachines()
+  const updateSession = useStore((s) => s.updateSession)
   const [startOpen, setStartOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all')
   const [machineFilter, setMachineFilter] = useState<string>('all')
 
+  // Sorting
+  const [sortKey, setSortKey] = useState<SessionSortKey>('startedAt')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  // Selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isStopping, setIsStopping] = useState(false)
+
+  // Filtering
   const filtered = sessions
     .filter((s) => statusFilter === 'all' || s.status === statusFilter)
     .filter((s) => machineFilter === 'all' || s.machineId === machineFilter)
@@ -137,6 +143,86 @@ export default function SessionsPage() {
     crashed: sessions.filter((s) => s.status === 'crashed').length,
     paused: sessions.filter((s) => s.status === 'paused').length,
   }
+
+  // Sorting
+  const getMachineNameForSession = (machineId: string) =>
+    machines.find((m) => m.id === machineId)?.name ?? ''
+
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0
+    if (sortKey === 'processName') {
+      cmp = a.processName.localeCompare(b.processName)
+    } else if (sortKey === 'machine') {
+      cmp = getMachineNameForSession(a.machineId).localeCompare(
+        getMachineNameForSession(b.machineId)
+      )
+    } else if (sortKey === 'status') {
+      cmp = a.status.localeCompare(b.status)
+    } else if (sortKey === 'startedAt') {
+      cmp = new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
+    } else if (sortKey === 'duration') {
+      const durA =
+        (a.stoppedAt ? new Date(a.stoppedAt).getTime() : Date.now()) -
+        new Date(a.startedAt).getTime()
+      const durB =
+        (b.stoppedAt ? new Date(b.stoppedAt).getTime() : Date.now()) -
+        new Date(b.startedAt).getTime()
+      cmp = durA - durB
+    }
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  const handleSort = useCallback(
+    (key: SessionSortKey) => {
+      setSortDir((prev) => (sortKey === key && prev === 'asc' ? 'desc' : 'asc'))
+      setSortKey(key)
+    },
+    [sortKey]
+  )
+
+  // Selection handlers
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const handleToggleAll = useCallback((allIds: string[]) => {
+    setSelectedIds((prev) => {
+      const allSelected = allIds.every((id) => prev.has(id))
+      if (allSelected) return new Set()
+      return new Set(allIds)
+    })
+  }, [])
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  // Bulk stop — only stops running/paused sessions; skips already-stopped/crashed
+  const handleBulkStop = async () => {
+    const toStop = sorted.filter(
+      (s) => selectedIds.has(s.id) && (s.status === 'running' || s.status === 'paused')
+    )
+    if (toStop.length === 0) return
+
+    setIsStopping(true)
+    await Promise.allSettled(
+      toStop.map((s) =>
+        fetch(`/api/sessions/${s.id}`, { method: 'DELETE' }).then((res) => {
+          if (res.ok) updateSession(s.id, { status: 'stopped', stoppedAt: new Date() })
+        })
+      )
+    )
+    setIsStopping(false)
+    clearSelection()
+  }
+
+  const selectedCount = selectedIds.size
+  const stoppableCount = sorted.filter(
+    (s) => selectedIds.has(s.id) && (s.status === 'running' || s.status === 'paused')
+  ).length
 
   return (
     <div className="space-y-6 max-w-7xl">
@@ -159,7 +245,6 @@ export default function SessionsPage() {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        {/* Status filter tabs */}
         <div className="flex items-center gap-1 border-b border-[#1e1e2e] w-full sm:w-auto">
           {statusFilters.map(({ label, value }) => (
             <button
@@ -185,7 +270,6 @@ export default function SessionsPage() {
           ))}
         </div>
 
-        {/* Machine filter */}
         {machines.length > 0 && (
           <div className="sm:ml-auto w-full sm:w-48">
             <Select value={machineFilter} onValueChange={setMachineFilter}>
@@ -205,10 +289,50 @@ export default function SessionsPage() {
         )}
       </div>
 
-      {/* Session list */}
-      <SessionList sessions={filtered} isLoading={isLoading} />
+      {/* Bulk action bar */}
+      {selectedCount > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-purple-500/30 bg-purple-500/5 px-4 py-2.5">
+          <span className="text-sm text-purple-300">
+            {selectedCount} selected
+            {stoppableCount < selectedCount && stoppableCount > 0 && (
+              <span className="text-gray-500 ml-1">({stoppableCount} running)</span>
+            )}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSelection}
+              className="text-gray-400 hover:text-white"
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkStop}
+              disabled={isStopping || stoppableCount === 0}
+              className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+            >
+              <Square className="h-3.5 w-3.5 mr-1.5" />
+              {isStopping ? 'Stopping…' : `Stop${stoppableCount > 0 ? ` ${stoppableCount}` : ''}`}
+            </Button>
+          </div>
+        </div>
+      )}
 
-      {/* Start session dialog */}
+      {/* Session list */}
+      <SessionList
+        sessions={sorted}
+        isLoading={isLoading}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSort={handleSort}
+        selectedIds={selectedIds}
+        onToggleSelect={handleToggleSelect}
+        onToggleAll={handleToggleAll}
+      />
+
       <StartSessionDialog open={startOpen} onOpenChange={setStartOpen} />
     </div>
   )

@@ -37,10 +37,11 @@ export function useWebSocket() {
 
   const subscribeSession = useCallback(
     (sessionId: string) => {
-      if (subscribedSessionsRef.current.has(sessionId)) return
+      // Always send subscribe_session — the server's ring buffer replay is idempotent.
+      // Do NOT skip if already in the set: navigating away and back remounts the Terminal
+      // which needs a fresh replay even though the WS connection is still alive.
       subscribedSessionsRef.current.add(sessionId)
       sendRaw({ type: 'subscribe_session', sessionId })
-      // Also send current terminal size if available
     },
     [sendRaw]
   )

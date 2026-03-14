@@ -214,6 +214,24 @@ export function useWebSocket() {
           updateSession(s.id, {
             status: s.status as 'running' | 'stopped' | 'crashed' | 'paused',
           })
+          // Re-fetch stopped/crashed sessions to pick up claudeConversationId
+          // (the WS message only carries status, not the full record).
+          if (s.status === 'stopped' || s.status === 'crashed') {
+            fetch(`/api/sessions/${s.id}`)
+              .then((r) => r.json())
+              .then((json) => {
+                if (json.data) {
+                  const x = json.data
+                  updateSession(s.id, {
+                    claudeConversationId: x.claudeConversationId ?? null,
+                    stoppedAt: x.stoppedAt ? new Date(x.stoppedAt) : null,
+                    peakMemoryMb: x.peakMemoryMb ?? null,
+                    avgCpuPercent: x.avgCpuPercent ?? null,
+                  })
+                }
+              })
+              .catch(() => {})
+          }
         }
         break
       }

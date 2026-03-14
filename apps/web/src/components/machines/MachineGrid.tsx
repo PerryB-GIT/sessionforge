@@ -61,6 +61,7 @@ export function MachineGrid({ machines, isLoading, selectedIds, onToggle }: Mach
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[#1e1e2e] py-20">
         <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#1e1e2e] mb-4">
           <svg
+            aria-hidden="true"
             className="h-6 w-6 text-gray-600"
             fill="none"
             viewBox="0 0 24 24"

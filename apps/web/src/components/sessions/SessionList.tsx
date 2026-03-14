@@ -145,6 +145,7 @@ export function SessionList({
           {selectable && (
             <input
               type="checkbox"
+              aria-label="Select all sessions"
               className="h-4 w-4 rounded border-gray-600 bg-[#1e1e2e] accent-purple-500 cursor-pointer"
               checked={allSelected}
               ref={(el) => {
@@ -160,15 +161,13 @@ export function SessionList({
             sortDir={sortDir}
             onSort={onSort}
           />
-          {!compact && (
-            <SortableHeader
-              col="machine"
-              label="Machine"
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={onSort}
-            />
-          )}
+          <SortableHeader
+            col="machine"
+            label="Machine"
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
           <SortableHeader
             col="status"
             label="Status"
@@ -176,24 +175,20 @@ export function SessionList({
             sortDir={sortDir}
             onSort={onSort}
           />
-          {!compact && (
-            <SortableHeader
-              col="startedAt"
-              label="Started"
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={onSort}
-            />
-          )}
-          {!compact && (
-            <SortableHeader
-              col="duration"
-              label="Duration"
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={onSort}
-            />
-          )}
+          <SortableHeader
+            col="startedAt"
+            label="Started"
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <SortableHeader
+            col="duration"
+            label="Duration"
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
           <span />
         </div>
       )}
@@ -214,13 +209,7 @@ export function SessionList({
             >
               {/* Checkbox */}
               {selectable && !compact && (
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onToggleSelect?.(session.id)
-                  }}
-                  className="flex items-center"
-                >
+                <div className="flex items-center">
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border-gray-600 bg-[#1e1e2e] accent-purple-500 cursor-pointer"

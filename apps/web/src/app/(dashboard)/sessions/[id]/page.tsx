@@ -15,6 +15,8 @@ import {
   MemoryStick,
   Film,
   WifiOff,
+  Share2,
+  Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -34,10 +36,12 @@ export default function SessionDetailPage() {
   const router = useRouter()
   const { session, isLoading } = useSession(id)
   const updateSession = useStore((s) => s.updateSession)
+  const user = useStore((s) => s.user)
   const { sendMessage, wsStatus } = useWs()
 
   const [isStopping, setIsStopping] = useState(false)
   const [isResuming, setIsResuming] = useState(false)
+  const [isSharing, setIsSharing] = useState(false)
   const [activeTab, setActiveTab] = useState('terminal')
 
   // Historical log state (stopped sessions)
@@ -110,6 +114,28 @@ export default function SessionDetailPage() {
       .catch(() => setRecordingError('Failed to load recording'))
       .finally(() => setRecordingLoading(false))
   }, [activeTab, id, session?.status, recordingUrl, recordingError, recordingLoading])
+
+  async function toggleShare() {
+    if (!session) return
+    setIsSharing(true)
+    try {
+      const method = session.adoptable ? 'DELETE' : 'POST'
+      const res = await fetch(`/api/sessions/${id}/adopt`, { method })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to update share status')
+        return
+      }
+      updateSession(id, { adoptable: json.data.adoptable })
+      toast.success(
+        json.data.adoptable ? 'Session is now shared with your org' : 'Session sharing revoked'
+      )
+    } catch {
+      toast.error('Failed to update share status')
+    } finally {
+      setIsSharing(false)
+    }
+  }
 
   function handleSendInput(data: string) {
     sendMessage({
@@ -211,6 +237,20 @@ export default function SessionDetailPage() {
               Resume
             </Button>
           )}
+          {isRunning && user?.id === session.userId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleShare}
+              isLoading={isSharing}
+              className={
+                session.adoptable ? 'border-green-500/40 text-green-400 hover:bg-green-500/10' : ''
+              }
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              {session.adoptable ? 'Shared' : 'Share'}
+            </Button>
+          )}
           {isRunning && (
             <Button variant="destructive" size="sm" onClick={stopSession} isLoading={isStopping}>
               <Square className="h-3.5 w-3.5" />
@@ -277,6 +317,16 @@ export default function SessionDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Shared session banner (viewer) */}
+      {session.adoptable && user?.id !== session.userId && (
+        <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm shrink-0">
+          <Users className="h-4 w-4 text-green-400 shrink-0" />
+          <span className="font-medium text-green-300">
+            You are viewing a shared session — you have full control
+          </span>
+        </div>
+      )}
 
       {/* Agent disconnected warning */}
       {agentDisconnected && (

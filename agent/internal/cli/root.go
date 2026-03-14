@@ -8,11 +8,13 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/sessionforge/agent/internal/config"
 	"github.com/sessionforge/agent/internal/connection"
+	"github.com/sessionforge/agent/internal/debuglog"
 	"github.com/sessionforge/agent/internal/session"
 	"github.com/sessionforge/agent/internal/system"
 )
@@ -138,6 +140,20 @@ func runDaemonWithContext(ctx context.Context) error {
 
 	client := connection.NewClient(cfg, version, dispatchWrapper, logger)
 	mgr := session.NewManager(ctx, client, logger)
+
+	// Wire up the debug log client if the agent is fully configured.
+	if cfg.APIKey != "" && cfg.MachineID != "" {
+		dl := debuglog.New(cfg.MachineID, cfg.APIKey, cfg.ServerURL, version)
+		dl.Start()
+		mgr.SetDebugLogger(dl)
+		client.SetDebugLogger(dl)
+		dl.Info("startup", "Agent started", map[string]any{
+			"version":   version,
+			"machineId": cfg.MachineID,
+			"os":        runtime.GOOS,
+		})
+		defer dl.Stop()
+	}
 
 	// Run the ConPTY probe eagerly at startup so it completes before the first
 	// session request arrives. Without this the probe blocks the session goroutine

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sessionforge/agent/internal/debuglog"
 )
 
 // AgentMessenger is the interface the Manager uses to send messages back to the cloud.
@@ -54,6 +55,14 @@ type sessionOutputMsg struct {
 	Data      string `json:"data"` // base64 encoded
 }
 
+// managerDebugLog is the package-level debug log client, accessible from tier_windows.go.
+var managerDebugLog *debuglog.Client
+
+// SetManagerDebugLog sets the package-level debug log client.
+func SetManagerDebugLog(dl *debuglog.Client) {
+	managerDebugLog = dl
+}
+
 // Manager handles the lifecycle of all terminal sessions.
 type Manager struct {
 	registry        *Registry
@@ -61,6 +70,7 @@ type Manager struct {
 	ctx             context.Context
 	logger          *slog.Logger
 	claudeConfigDir string // injected as CLAUDE_CONFIG_DIR into every PTY session
+	debugLog        *debuglog.Client
 }
 
 // NewManager creates a new Manager.
@@ -78,6 +88,13 @@ func NewManager(ctx context.Context, messenger AgentMessenger, logger *slog.Logg
 // spawned session. Call this after loading config if cfg.ClaudeConfigDir is set.
 func (m *Manager) SetClaudeConfigDir(dir string) {
 	m.claudeConfigDir = dir
+}
+
+// SetDebugLogger wires a debug log client into the manager and the package-level
+// variable used by tier_windows.go. Safe to call before or after Start().
+func (m *Manager) SetDebugLogger(dl *debuglog.Client) {
+	m.debugLog = dl
+	SetManagerDebugLog(dl)
 }
 
 // mergeEnv returns a copy of env with CLAUDE_CONFIG_DIR injected if configured.
@@ -147,6 +164,13 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 		"command", command,
 		"workdir", workdir,
 	)
+	if m.debugLog != nil {
+		m.debugLog.Info("session_start", "Session starting", map[string]any{
+			"sessionId": sessionID,
+			"command":   command,
+			"workdir":   workdir,
+		})
+	}
 
 	outputFn := func(sid, data string) {
 		m.logger.Debug("session_output chunk", "sessionId", sid, "bytes", len(data))
@@ -162,6 +186,12 @@ func (m *Manager) Start(requestID, sessionID, command, workdir string, env map[s
 
 	exitFn := func(sid string, exitCode int, exitErr error) {
 		m.logger.Info("session exited", "sessionId", sid, "exitCode", exitCode, "err", exitErr)
+		if m.debugLog != nil {
+			m.debugLog.Info("session_exit", "Session exited", map[string]any{
+				"sessionId": sid,
+				"exitCode":  exitCode,
+			})
+		}
 		m.registry.Remove(sid)
 
 		convID := findClaudeConversationID(m.claudeConfigDir, workdir)

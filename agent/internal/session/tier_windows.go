@@ -63,6 +63,12 @@ func runTierDetection() {
 				"conpty", "skipped",
 			)
 		}
+		if managerDebugLog != nil {
+			managerDebugLog.Info("tier_detection", "Tier selected: wsl", map[string]any{
+				"tier":   "wsl",
+				"distro": distro,
+			})
+		}
 		return
 	}
 
@@ -77,6 +83,12 @@ func runTierDetection() {
 				"gitbash", "ready",
 				"conpty", "skipped",
 			)
+		}
+		if managerDebugLog != nil {
+			managerDebugLog.Info("tier_detection", "Tier selected: gitbash", map[string]any{
+				"tier":     "gitbash",
+				"bashPath": bashPath,
+			})
 		}
 		return
 	}
@@ -95,6 +107,12 @@ func runTierDetection() {
 				"gitbash", "unavailable",
 				"conpty", "skipped",
 			)
+		}
+		if managerDebugLog != nil {
+			managerDebugLog.Info("tier_detection", "Tier selected: pipes (LocalSystem)", map[string]any{
+				"tier":   "pipes",
+				"reason": "LocalSystem: ConPTY unavailable in Session 0",
+			})
 		}
 		return
 	}
@@ -117,6 +135,12 @@ func runTierDetection() {
 			"gitbash", "unavailable",
 			"conpty", fmt.Sprintf("%v", conPTYWorking),
 		)
+	}
+	if managerDebugLog != nil {
+		managerDebugLog.Info("tier_detection", "Tier selected: "+spawnTier, map[string]any{
+			"tier":          spawnTier,
+			"conPTYWorking": conPTYWorking,
+		})
 	}
 }
 
@@ -155,7 +179,16 @@ func detectWSL() (string, bool) {
 		if logger != nil {
 			logger.Info("WSL detection: claude found", "distro", distro, "claudePath", claudePath)
 		}
+		if managerDebugLog != nil {
+			managerDebugLog.Info("tier_detection", "WSL: claude found", map[string]any{
+				"distro":     distro,
+				"claudePath": claudePath,
+			})
+		}
 		return distro, true
+	}
+	if managerDebugLog != nil {
+		managerDebugLog.Debug("tier_detection", "WSL: claude not found in any distro", nil)
 	}
 	return "", false
 }
@@ -213,6 +246,11 @@ func detectGitBash() (string, bool) {
 		if logger != nil {
 			logger.Debug("Git Bash detection: bash.exe not found", "path", bashPath, "err", err)
 		}
+		if managerDebugLog != nil {
+			managerDebugLog.Debug("tier_detection", "Git Bash: bash.exe not found", map[string]any{
+				"path": bashPath,
+			})
+		}
 		return "", false
 	}
 
@@ -248,6 +286,12 @@ func detectGitBash() (string, bool) {
 		}
 		if logger != nil {
 			logger.Info("Git Bash detection: claude found via PATH", "bashPath", bashPath, "claudePath", strings.TrimSpace(string(out)))
+		}
+		if managerDebugLog != nil {
+			managerDebugLog.Info("tier_detection", "Git Bash: claude found via PATH", map[string]any{
+				"bashPath":   bashPath,
+				"claudePath": strings.TrimSpace(string(out)),
+			})
 		}
 	}
 

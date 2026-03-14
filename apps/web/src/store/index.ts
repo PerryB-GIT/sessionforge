@@ -37,6 +37,7 @@ export interface Machine {
 export interface Session {
   id: string
   machineId: string
+  userId: string
   pid: number | null
   processName: string
   workdir: string | null
@@ -46,6 +47,7 @@ export interface Session {
   peakMemoryMb: number | null
   avgCpuPercent: number | null
   claudeConversationId: string | null
+  adoptable: boolean
 }
 
 export interface User {

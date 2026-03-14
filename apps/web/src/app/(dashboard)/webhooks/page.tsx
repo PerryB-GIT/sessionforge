@@ -17,6 +17,21 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { UpgradePrompt } from '@/components/billing/UpgradePrompt'
 
+function getWebhookType(url: string): 'slack' | 'discord' | 'custom' {
+  if (url.includes('hooks.slack.com')) return 'slack'
+  if (url.includes('discord.com/api/webhooks')) return 'discord'
+  return 'custom'
+}
+
+const WEBHOOK_TYPE_BADGE: Record<
+  'slack' | 'discord' | 'custom',
+  { label: string; className: string }
+> = {
+  slack: { label: 'Slack', className: 'bg-green-900/40 text-green-400 border-green-800' },
+  discord: { label: 'Discord', className: 'bg-indigo-900/40 text-indigo-400 border-indigo-800' },
+  custom: { label: 'Custom', className: 'bg-gray-800 text-gray-400 border-gray-700' },
+}
+
 const VALID_EVENTS = [
   { value: 'session.started', label: 'Session started' },
   { value: 'session.stopped', label: 'Session stopped' },
@@ -139,6 +154,9 @@ export default function WebhooksPage() {
                     onChange={(e) => setNewUrl(e.target.value)}
                     placeholder="https://your-app.com/webhooks"
                   />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Paste a Slack or Discord webhook URL for automatic formatting.
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm text-gray-400 mb-2 block">Events</label>
@@ -189,9 +207,22 @@ export default function WebhooksPage() {
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <CardTitle className="text-sm font-mono text-gray-200 truncate">
-                    {w.url}
-                  </CardTitle>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CardTitle className="text-sm font-mono text-gray-200 truncate">
+                      {w.url}
+                    </CardTitle>
+                    {(() => {
+                      const t = getWebhookType(w.url)
+                      const b = WEBHOOK_TYPE_BADGE[t]
+                      return (
+                        <span
+                          className={`shrink-0 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${b.className}`}
+                        >
+                          {b.label}
+                        </span>
+                      )
+                    })()}
+                  </div>
                   <CardDescription className="mt-1 flex flex-wrap gap-1">
                     {(w.events as string[]).map((e) => (
                       <Badge key={e} variant="secondary" className="text-[10px]">

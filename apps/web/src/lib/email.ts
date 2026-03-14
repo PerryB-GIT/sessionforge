@@ -120,19 +120,32 @@ export async function sendPasswordResetEmail(to: string, name: string | null, to
 }
 
 export async function sendSupportReviewEmail(
-  ticket: { id: string; subject: string; message: string; agentLogs: string | null; browserLogs: string | null; aiDraft: string | null; approvalToken: string | null },
+  ticket: {
+    id: string
+    subject: string
+    message: string
+    agentLogs: string | null
+    browserLogs: string | null
+    aiDraft: string | null
+    approvalToken: string | null
+  },
   userName: string | null,
-  userEmail: string,
+  userEmail: string
 ) {
   const resend = new Resend(process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY)
   const approveUrl = `${APP_URL}/api/support/approve/${ticket.approvalToken}`
   const editUrl = `${APP_URL}/dashboard/support/${ticket.id}`
   const displayName = userName ?? userEmail
 
-  const logSummary = [
-    ticket.agentLogs ? `**Agent Logs:**\n\`\`\`\n${ticket.agentLogs.slice(0, 2000)}\n\`\`\`` : '',
-    ticket.browserLogs ? `**Browser Errors:**\n\`\`\`\n${ticket.browserLogs.slice(0, 1000)}\n\`\`\`` : '',
-  ].filter(Boolean).join('\n\n') || 'No logs attached.'
+  const logSummary =
+    [
+      ticket.agentLogs ? `**Agent Logs:**\n\`\`\`\n${ticket.agentLogs.slice(0, 2000)}\n\`\`\`` : '',
+      ticket.browserLogs
+        ? `**Browser Errors:**\n\`\`\`\n${ticket.browserLogs.slice(0, 1000)}\n\`\`\``
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n') || 'No logs attached.'
 
   await resend.emails.send({
     from: FROM,
@@ -166,11 +179,15 @@ export async function sendSupportReviewEmail(
               <p style="margin:0;font-size:14px;color:#d1d5db;line-height:1.6;white-space:pre-wrap">${ticket.aiDraft ?? 'No draft generated.'}</p>
             </div>
 
-            ${logSummary !== 'No logs attached.' ? `
+            ${
+              logSummary !== 'No logs attached.'
+                ? `
             <div style="background:#0a0a0f;border:1px solid #1e1e2e;border-radius:8px;padding:16px;margin-bottom:20px">
               <p style="margin:0 0 8px;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Debug Logs</p>
               <pre style="margin:0;font-size:11px;color:#9ca3af;overflow-x:auto;white-space:pre-wrap">${(ticket.agentLogs ?? '').slice(0, 2000)}${ticket.browserLogs ? '\n\n[Browser]\n' + ticket.browserLogs.slice(0, 800) : ''}</pre>
-            </div>` : ''}
+            </div>`
+                : ''
+            }
 
             <table cellpadding="0" cellspacing="0" style="margin-top:8px">
               <tr>
@@ -201,11 +218,7 @@ export async function sendSupportReviewEmail(
   })
 }
 
-export async function sendSupportResponseEmail(
-  to: string,
-  name: string | null,
-  draftBody: string,
-) {
+export async function sendSupportResponseEmail(to: string, name: string | null, draftBody: string) {
   const resend = new Resend(process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY)
   const displayName = name ?? to
 
@@ -247,11 +260,99 @@ export async function sendSupportResponseEmail(
   })
 }
 
+export async function sendSessionIdleEmail(to: string, machineName: string) {
+  const resend = new Resend(process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY)
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: 'Your Claude Code session may be stuck',
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 0">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#0f0f14;border:1px solid #1e1e2e;border-radius:12px;overflow:hidden">
+        <tr>
+          <td style="padding:32px 40px 24px;border-bottom:1px solid #1e1e2e">
+            <span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px">Session<span style="color:#8b5cf6">Forge</span></span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 40px">
+            <p style="margin:0 0 8px;font-size:22px;font-weight:600;color:#ffffff">Session may be stuck</p>
+            <p style="margin:0 0 24px;font-size:14px;color:#9ca3af;line-height:1.6">
+              Your session on <strong style="color:#ffffff">${machineName}</strong> hasn't produced output in 10 minutes. It may need your attention.
+            </p>
+            <a href="${APP_URL}/dashboard/sessions"
+               style="display:inline-block;padding:12px 28px;background:#7c3aed;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px">
+              View Sessions
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px;border-top:1px solid #1e1e2e">
+            <p style="margin:0;font-size:12px;color:#4b5563">SessionForge LLC · You're receiving this because your session appears idle.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  })
+}
+
+export async function sendSessionCompletedEmail(to: string, machineName: string) {
+  const resend = new Resend(process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY)
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: 'Claude Code session finished',
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 0">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#0f0f14;border:1px solid #1e1e2e;border-radius:12px;overflow:hidden">
+        <tr>
+          <td style="padding:32px 40px 24px;border-bottom:1px solid #1e1e2e">
+            <span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px">Session<span style="color:#8b5cf6">Forge</span></span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 40px">
+            <p style="margin:0 0 8px;font-size:22px;font-weight:600;color:#ffffff">Session completed</p>
+            <p style="margin:0 0 24px;font-size:14px;color:#9ca3af;line-height:1.6">
+              Your session on <strong style="color:#ffffff">${machineName}</strong> completed successfully.
+            </p>
+            <a href="${APP_URL}/dashboard/sessions"
+               style="display:inline-block;padding:12px 28px;background:#7c3aed;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px">
+              View Sessions
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px;border-top:1px solid #1e1e2e">
+            <p style="margin:0;font-size:12px;color:#4b5563">SessionForge LLC · You're receiving this because your session finished.</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  })
+}
+
 export async function sendInviteEmail(
   to: string,
   inviterName: string | null,
   orgName: string,
-  acceptUrl: string,
+  acceptUrl: string
 ) {
   const resend = new Resend(process.env.AUTH_RESEND_KEY ?? process.env.RESEND_API_KEY)
   const displayInviter = inviterName ?? 'Someone'

@@ -199,6 +199,20 @@ test.describe('Sessions page', () => {
     await page.getByRole('button', { name: /Start Session/i }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
   })
+
+  test('terminal container renders for active session', async ({ page }) => {
+    await page.goto('/sessions')
+    const activeSession = page.locator('[data-status="running"], [data-status="active"]').first()
+    const count = await activeSession.count()
+    if (count === 0) {
+      test.skip()
+      return
+    }
+    await activeSession.click()
+    await expect(
+      page.locator('[data-testid="terminal-container"], .xterm, .xterm-screen')
+    ).toBeVisible({ timeout: 10000 })
+  })
 })
 
 // ─── Session detail page ──────────────────────────────────────────────────────

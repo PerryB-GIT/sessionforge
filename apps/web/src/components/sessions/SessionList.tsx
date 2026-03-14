@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import {
   Terminal,
   Clock,
@@ -9,11 +10,15 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Share2,
+  LogIn,
 } from 'lucide-react'
 import { SessionStatusBadge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { formatDuration, formatRelativeTime, truncate } from '@/lib/utils'
 import type { Session } from '@/store'
 import { useStore, type SortDir } from '@/store'
+import { toast } from 'sonner'
 
 export type SessionSortKey = 'processName' | 'machine' | 'status' | 'startedAt' | 'duration'
 
@@ -72,6 +77,38 @@ function SortableHeader({
   )
 }
 
+function SessionSummary({ sessionId }: { sessionId: string }) {
+  const [summary, setSummary] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchSummary() {
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/summary`)
+        if (!res.ok) return
+        const json = await res.json()
+        if (!cancelled && json.data?.summary) {
+          setSummary(json.data.summary)
+        }
+      } catch {
+        // silently ignore — summary is best-effort
+      }
+    }
+
+    fetchSummary()
+    const interval = setInterval(fetchSummary, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [sessionId])
+
+  if (!summary) return null
+
+  return <p className="text-xs text-muted-foreground italic mt-1 line-clamp-2">{summary}</p>
+}
+
 function SessionRowSkeleton() {
   return (
     <div className="flex items-center gap-4 p-4 border-b border-[#1e1e2e] animate-pulse">
@@ -98,19 +135,38 @@ export function SessionList({
   onToggleAll,
 }: SessionListProps) {
   const machines = useStore((s) => s.machines)
+  const user = useStore((s) => s.user)
+  const updateSession = useStore((s) => s.updateSession)
   const router = useRouter()
+
+  async function handleToggleShare(e: React.MouseEvent, session: Session) {
+    e.stopPropagation()
+    const method = session.adoptable ? 'DELETE' : 'POST'
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/adopt`, { method })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error?.message ?? 'Failed to update share status')
+        return
+      }
+      updateSession(session.id, { adoptable: json.data.adoptable })
+      toast.success(json.data.adoptable ? 'Session is now shared' : 'Session sharing revoked')
+    } catch {
+      toast.error('Failed to update share status')
+    }
+  }
 
   const selectable = !!onToggleSelect
   const allSelected =
     selectable && sessions.length > 0 && sessions.every((s) => selectedIds?.has(s.id))
   const someSelected = selectable && sessions.some((s) => selectedIds?.has(s.id))
 
-  // Grid: checkbox col | session | machine | status | started | duration | chevron
+  // Grid: checkbox col | session | machine | status | started | duration | action | chevron
   const gridCols = compact
     ? 'grid-cols-[1fr_100px_32px]'
     : selectable
-      ? 'grid-cols-[20px_1fr_140px_100px_120px_80px_32px]'
-      : 'grid-cols-[1fr_140px_100px_120px_80px_32px]'
+      ? 'grid-cols-[20px_1fr_140px_120px_120px_80px_32px_32px]'
+      : 'grid-cols-[1fr_140px_120px_120px_80px_32px_32px]'
 
   if (isLoading) {
     return (
@@ -189,6 +245,7 @@ export function SessionList({
             onSort={onSort}
           />
           <span />
+          <span />
         </div>
       )}
 
@@ -249,6 +306,7 @@ export function SessionList({
                       {truncate(session.workdir, 40)}
                     </div>
                   )}
+                  {session.status === 'running' && <SessionSummary sessionId={session.id} />}
                 </div>
               </div>
 
@@ -260,9 +318,14 @@ export function SessionList({
                 </div>
               )}
 
-              {/* Status */}
-              <div>
+              {/* Status + adoptable badge */}
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <SessionStatusBadge status={session.status} />
+                {session.adoptable && (
+                  <span className="inline-flex items-center rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-400 ring-1 ring-inset ring-green-500/30">
+                    Shared
+                  </span>
+                )}
               </div>
 
               {/* Started */}
@@ -279,6 +342,46 @@ export function SessionList({
                   {formatDuration(session.startedAt, session.stoppedAt)}
                 </div>
               )}
+
+              {/* Share / Adopt actions */}
+              {!compact &&
+                (() => {
+                  const isOwner = user?.id === session.userId
+                  if (isOwner && session.status === 'running') {
+                    return (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title={session.adoptable ? 'Revoke sharing' : 'Share session'}
+                        onClick={(e) => handleToggleShare(e, session)}
+                        className={
+                          session.adoptable
+                            ? 'text-green-400 hover:text-green-300'
+                            : 'text-gray-500 hover:text-gray-300'
+                        }
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )
+                  }
+                  if (!isOwner && session.adoptable) {
+                    return (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Adopt session"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/sessions/${session.id}`)
+                        }}
+                        className="text-purple-400 hover:text-purple-300"
+                      >
+                        <LogIn className="h-3.5 w-3.5" />
+                      </Button>
+                    )
+                  }
+                  return null
+                })()}
 
               {/* Chevron */}
               <ChevronRight className="h-4 w-4 text-gray-600 group-hover:text-gray-400 transition-colors" />

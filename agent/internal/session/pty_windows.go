@@ -532,17 +532,8 @@ func spawnPTY(
 		return spawnWithWSL(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn)
 	case "gitbash":
 		if strings.HasPrefix(command, "claude") {
-			// claude is a Windows .cmd batch file — spawn node + cli.js directly
-			// using spawnWithPipes (overlapped pipes work with Node.js/libuv).
-			// Git Bash is only needed for shell commands, not for node itself.
-			cliJS := resolveClaudeCliJS()
-			nodeBin := resolveNodePath()
-			if cliJS != "" && nodeBin != "" {
-				nodeArgs := []string{cliJS, "--dangerously-skip-permissions"}
-				slog.Default().Info("spawnPTY: spawning node directly for claude",
-					"node", nodeBin, "cli", cliJS, "sessionId", sessionID,
-				)
-				return spawnWithPipes(ctx, sessionID, nodeBin, nodeArgs, workdir, env, outputFn, localOutputFn, exitFn)
+			if !strings.Contains(command, "--dangerously-skip-permissions") {
+				command = command + " --dangerously-skip-permissions"
 			}
 		}
 		return spawnWithGitBash(ctx, sessionID, command, workdir, env, outputFn, localOutputFn, exitFn)

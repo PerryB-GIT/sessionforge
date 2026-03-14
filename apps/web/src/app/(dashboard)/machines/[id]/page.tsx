@@ -34,6 +34,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { MachineSetupWizard } from '@/components/machines/MachineSetupWizard'
 import { SessionList } from '@/components/sessions/SessionList'
+import { DebugLogViewer } from '@/components/DebugLogViewer'
 import { useMachine } from '@/hooks/useMachines'
 import { useSessions } from '@/hooks/useSessions'
 import { useStore } from '@/store'
@@ -280,6 +281,7 @@ export default function MachineDetailPage() {
         <TabsList>
           <TabsTrigger value="sessions">Sessions ({sessions.length})</TabsTrigger>
           <TabsTrigger value="setup">Setup</TabsTrigger>
+          <TabsTrigger value="debug-logs">Debug Logs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sessions">
@@ -295,6 +297,10 @@ export default function MachineDetailPage() {
               <MachineSetupWizard onComplete={() => window.location.reload()} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="debug-logs">
+          <DebugLogViewer machineId={id} />
         </TabsContent>
       </Tabs>
 

@@ -15,18 +15,13 @@ import (
 //
 // Claude Code stores conversations at:
 //
-//	<claudeConfigDir>/projects/<encoded-workdir>/<uuid>.jsonl
+//	<configDir>/projects/<encoded-workdir>/<uuid>.jsonl
 //
-// The encoded key replaces path separators with "-". For a WSL path like
-// /mnt/c/Users/Jakeb/foo the key is -mnt-c-Users-Jakeb-foo.
-// For a Windows path C:\Users\Jakeb\foo converted to WSL it is the same.
+// WSL sessions write to the WSL user's home (~/.claude) while Windows-native
+// sessions write to the Windows config dir (C:\Users\..\.claude).
+// We search both locations and return the newest match.
 func findClaudeConversationID(claudeConfigDir, windowsWorkdir string) string {
-	if claudeConfigDir == "" || windowsWorkdir == "" || detectedWSLDistro == "" {
-		return ""
-	}
-
-	wslConfigDir, ok := windowsToWSLPath(claudeConfigDir)
-	if !ok {
+	if windowsWorkdir == "" || detectedWSLDistro == "" {
 		return ""
 	}
 
@@ -35,24 +30,30 @@ func findClaudeConversationID(claudeConfigDir, windowsWorkdir string) string {
 		return ""
 	}
 
-	// Claude encodes the workdir by replacing '/' with '-'.
-	// Leading '/' becomes a leading '-', so strip it for the glob.
-	encodedKey := strings.ReplaceAll(wslWorkdir, "/", "-")
-
-	projectsDir := wslConfigDir + "/projects"
-
-	// Use a glob that matches both with and without the leading '-'
-	// e.g. -mnt-c-Users-Jakeb-foo OR C--Users-Jakeb-foo (Windows-style encoding)
-	// We find the newest .jsonl across any subdirectory whose name ends with
-	// the last two components of the workdir (robust against prefix differences).
+	// Build the suffix anchor: last 2 path components of the workdir.
+	// Matches both WSL encoding (-mnt-c-Users-Jakeb-foo) and
+	// Windows encoding (C--Users-Jakeb-foo).
 	parts := strings.Split(strings.Trim(wslWorkdir, "/"), "/")
-	suffix := encodedKey
+	suffix := strings.ReplaceAll(wslWorkdir, "/", "-")
 	if len(parts) >= 2 {
-		// Use last 2 path components as a suffix anchor for the glob
 		suffix = "-" + strings.Join(parts[len(parts)-2:], "-")
 	}
 
-	shellCmd := "find " + projectsDir + " -maxdepth 2 -name '*.jsonl'" +
+	// Search both the Windows-side config dir (for native sessions) and the
+	// WSL home dir (for WSL sessions). Combine with a semicolon so find
+	// searches both trees in a single shell invocation.
+	var projectsDirs []string
+	if claudeConfigDir != "" {
+		if wslConfigDir, ok := windowsToWSLPath(claudeConfigDir); ok {
+			projectsDirs = append(projectsDirs, wslConfigDir+"/projects")
+		}
+	}
+	// WSL home .claude — always search regardless of claudeConfigDir
+	projectsDirs = append(projectsDirs, "~/.claude/projects")
+
+	dirsArg := strings.Join(projectsDirs, " ")
+
+	shellCmd := "find " + dirsArg + " -maxdepth 2 -name '*.jsonl'" +
 		" ! -path '*/subagents/*'" +
 		" -path '*" + suffix + "*'" +
 		" -printf '%T@ %p\\n' 2>/dev/null" +

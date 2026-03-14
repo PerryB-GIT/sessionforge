@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/sessionforge/agent/internal/config"
+	"github.com/sessionforge/agent/internal/debuglog"
 	"github.com/sessionforge/agent/internal/system"
 )
 
@@ -61,11 +62,18 @@ type Client struct {
 	mu   sync.Mutex
 	conn *websocket.Conn
 
-	sendCh      chan []byte
-	stopCh      chan struct{}
-	doneCh      chan struct{}
-	connectedCh chan struct{} // closed once on first successful connection
+	sendCh        chan []byte
+	stopCh        chan struct{}
+	doneCh        chan struct{}
+	connectedCh   chan struct{} // closed once on first successful connection
 	connectedOnce sync.Once
+
+	debugLog *debuglog.Client
+}
+
+// SetDebugLogger wires a debug log client into the connection client.
+func (c *Client) SetDebugLogger(dl *debuglog.Client) {
+	c.debugLog = dl
 }
 
 // NewClient creates a Client. Call Run() to connect.
@@ -109,6 +117,12 @@ func (c *Client) Run(ctx context.Context) {
 		delay := backoffDelay(attempt)
 		if attempt > 0 {
 			c.logger.Info("connection: reconnecting", "attempt", attempt, "delay", delay)
+			if c.debugLog != nil {
+				c.debugLog.Info("ws_connection", "Reconnecting", map[string]any{
+					"attempt": attempt,
+					"delay":   delay.String(),
+				})
+			}
 			select {
 			case <-time.After(delay):
 			case <-ctx.Done():
@@ -118,6 +132,12 @@ func (c *Client) Run(ctx context.Context) {
 
 		if err := c.connect(ctx); err != nil {
 			c.logger.Warn("connection: failed", "err", err, "attempt", attempt)
+			if c.debugLog != nil {
+				c.debugLog.Warn("ws_connection", "Connection lost", map[string]any{
+					"attempt": attempt,
+					"error":   err.Error(),
+				})
+			}
 			attempt++
 			continue
 		}
@@ -150,6 +170,11 @@ func (c *Client) connect(ctx context.Context) error {
 	c.mu.Unlock()
 
 	c.logger.Info("connection: connected")
+	if c.debugLog != nil {
+		c.debugLog.Info("ws_connection", "Connected to server", map[string]any{
+			"url": wsURL,
+		})
+	}
 
 	// Send registration message immediately.
 	if err := c.sendRegister(); err != nil {

@@ -21,6 +21,7 @@ export function useSessions(machineId?: string) {
             (s: {
               id: string
               machineId: string
+              userId: string
               pid: number | null
               processName: string | null
               workdir: string | null
@@ -32,9 +33,11 @@ export function useSessions(machineId?: string) {
               startedAt: string | null
               stoppedAt: string | null
               createdAt: string
+              adoptable: boolean | null
             }) => ({
               id: s.id,
               machineId: s.machineId,
+              userId: s.userId,
               pid: s.pid,
               processName: s.processName ?? 'unknown',
               workdir: s.workdir,
@@ -44,6 +47,7 @@ export function useSessions(machineId?: string) {
               claudeConversationId: s.claudeConversationId ?? null,
               startedAt: s.startedAt ? new Date(s.startedAt) : new Date(s.createdAt),
               stoppedAt: s.stoppedAt ? new Date(s.stoppedAt) : null,
+              adoptable: s.adoptable ?? false,
             })
           )
           setSessions(sessions)
@@ -84,6 +88,7 @@ export function useSession(id: string) {
           addSession({
             id: s.id,
             machineId: s.machineId,
+            userId: s.userId,
             pid: s.pid,
             processName: s.processName ?? 'unknown',
             workdir: s.workdir,
@@ -93,6 +98,7 @@ export function useSession(id: string) {
             claudeConversationId: s.claudeConversationId ?? null,
             startedAt: s.startedAt ? new Date(s.startedAt) : new Date(s.createdAt),
             stoppedAt: s.stoppedAt ? new Date(s.stoppedAt) : null,
+            adoptable: s.adoptable ?? false,
           })
         }
       } finally {

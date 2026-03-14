@@ -15,6 +15,7 @@ import {
   CreditCard,
   Webhook,
   X,
+  BarChart2,
 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
@@ -28,6 +29,7 @@ const baseNavItems = [
   { href: '/machines', label: 'Machines', icon: Monitor },
   { href: '/sessions', label: 'Sessions', icon: Terminal },
   { href: '/keys', label: 'API Keys', icon: Key },
+  { href: '/usage', label: 'Usage', icon: BarChart2 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 

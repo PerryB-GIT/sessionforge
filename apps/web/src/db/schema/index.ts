@@ -183,6 +183,9 @@ export const sessions = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     stoppedAt: timestamp('stopped_at', { withTimezone: true }),
     claudeConversationId: text('claude_conversation_id'),
+    adoptable: boolean('adoptable').notNull().default(false),
+    adoptedBy: uuid('adopted_by').references(() => users.id),
+    adoptedAt: timestamp('adopted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -383,6 +386,30 @@ export const auditLogs = pgTable(
   })
 )
 
+// ─── Machine Debug Logs ────────────────────────────────────────────────────────
+
+export const machineDebugLogs = pgTable(
+  'machine_debug_logs',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    machineId: uuid('machine_id')
+      .notNull()
+      .references(() => machines.id, { onDelete: 'cascade' }),
+    level: text('level').notNull(),
+    component: text('component').notNull(),
+    message: text('message').notNull(),
+    metadata: jsonb('metadata'),
+    agentVersion: text('agent_version'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    machineIdIdx: index('machine_debug_logs_machine_id_idx').on(table.machineId),
+    createdAtIdx: index('machine_debug_logs_created_at_idx').on(table.createdAt),
+  })
+)
+
 // ─── IP Allowlists ─────────────────────────────────────────────────────────────
 
 export const ipAllowlists = pgTable(
@@ -408,6 +435,9 @@ export const ipAllowlists = pgTable(
 export const notificationTypeEnum = pgEnum('notification_type', [
   'session_crashed',
   'machine_offline',
+  'session_adopted',
+  'session_idle',
+  'session_completed',
 ])
 
 // ─── Notifications ─────────────────────────────────────────────────────────────
@@ -497,6 +527,30 @@ export const webhookDeliveries = pgTable(
   })
 )
 
+// ─── Session Templates ─────────────────────────────────────────────────────────
+
+export const sessionTemplates = pgTable(
+  'session_templates',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    machineId: uuid('machine_id').references(() => machines.id, { onDelete: 'set null' }),
+    command: text('command').notNull().default('claude'),
+    workdir: text('workdir'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('session_templates_user_id_idx').on(table.userId),
+  })
+)
+
 // ─── Relations ─────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -510,6 +564,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   auditLogs: many(auditLogs),
   notifications: many(notifications),
   webhooks: many(webhooks),
+  sessionTemplates: many(sessionTemplates),
 }))
 
 export const organizationsRelations = relations(organizations, ({ one, many }) => ({
@@ -533,6 +588,11 @@ export const machinesRelations = relations(machines, ({ one, many }) => ({
   user: one(users, { fields: [machines.userId], references: [users.id] }),
   org: one(organizations, { fields: [machines.orgId], references: [organizations.id] }),
   sessions: many(sessions),
+  debugLogs: many(machineDebugLogs),
+}))
+
+export const machineDebugLogsRelations = relations(machineDebugLogs, ({ one }) => ({
+  machine: one(machines, { fields: [machineDebugLogs.machineId], references: [machines.id] }),
 }))
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -588,4 +648,10 @@ export const webhooksRelations = relations(webhooks, ({ one, many }) => ({
 
 export const webhookDeliveriesRelations = relations(webhookDeliveries, ({ one }) => ({
   webhook: one(webhooks, { fields: [webhookDeliveries.webhookId], references: [webhooks.id] }),
+}))
+
+export const sessionTemplatesRelations = relations(sessionTemplates, ({ one }) => ({
+  user: one(users, { fields: [sessionTemplates.userId], references: [users.id] }),
+  org: one(organizations, { fields: [sessionTemplates.orgId], references: [organizations.id] }),
+  machine: one(machines, { fields: [sessionTemplates.machineId], references: [machines.id] }),
 }))

@@ -283,6 +283,94 @@ async function getMachineUserId(machineId) {
 // server.js is CJS and cannot import TypeScript modules at runtime, so the
 // delivery logic is inlined here using the existing query() helper.
 
+// Detect Slack/Discord webhook URLs and return a platform-formatted payload.
+// Returns { body: string, contentType: string } ready to pass to fetch().
+function formatWebhookPayload(url, event, data) {
+  if (url.includes('hooks.slack.com')) {
+    const emoji =
+      event === 'session.crashed'
+        ? '\u{1F534}'
+        : event === 'machine.offline'
+          ? '\u{1F50C}'
+          : event === 'session.stopped'
+            ? '\u2705'
+            : event === 'session.started'
+              ? '\u25B6\uFE0F'
+              : event === 'machine.online'
+                ? '\u{1F7E2}'
+                : '\u{1F4E1}'
+    const lines = [
+      data.machineName ? `*Machine:* ${data.machineName}` : null,
+      data.hostname ? `*Hostname:* ${data.hostname}` : null,
+      data.sessionId ? `*Session:* ${String(data.sessionId).slice(0, 8)}...` : null,
+      data.command ? `*Command:* \`${data.command}\`` : null,
+    ].filter(Boolean)
+    const payload = {
+      blocks: [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: `${emoji} SessionForge: ${event.replace(/[._]/g, ' ')}`,
+          },
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: lines.length ? lines.join('\n') : event },
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: 'Open SessionForge' },
+              url: `https://sessionforge.dev${data.sessionId ? `/sessions/${data.sessionId}` : '/machines'}`,
+            },
+          ],
+        },
+      ],
+    }
+    return { body: JSON.stringify(payload), contentType: 'application/json' }
+  }
+
+  if (url.includes('discord.com/api/webhooks')) {
+    const color =
+      event === 'session.crashed'
+        ? 0xff4444
+        : event === 'machine.offline'
+          ? 0xff8800
+          : event === 'session.stopped' || event === 'machine.online'
+            ? 0x00cc66
+            : 0x6366f1
+    const fields = [
+      data.machineName ? { name: 'Machine', value: data.machineName, inline: true } : null,
+      data.hostname ? { name: 'Hostname', value: data.hostname, inline: true } : null,
+      data.sessionId
+        ? { name: 'Session', value: String(data.sessionId).slice(0, 8) + '...', inline: true }
+        : null,
+      data.command ? { name: 'Command', value: `\`${data.command}\``, inline: true } : null,
+    ].filter(Boolean)
+    const payload = {
+      embeds: [
+        {
+          title: `SessionForge: ${event.replace(/[._]/g, ' ')}`,
+          color,
+          fields,
+          url: `https://sessionforge.dev${data.sessionId ? `/sessions/${data.sessionId}` : ''}`,
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    }
+    return { body: JSON.stringify(payload), contentType: 'application/json' }
+  }
+
+  // Default: existing JSON format
+  return {
+    body: JSON.stringify({ event, ...data, timestamp: new Date().toISOString() }),
+    contentType: 'application/json',
+  }
+}
+
 const WEBHOOK_MAX_ATTEMPTS = 3
 const WEBHOOK_RETRY_DELAYS_MS = [60_000, 300_000, 1_800_000]
 
@@ -307,7 +395,11 @@ async function deliverWebhook(event, payload, userId, orgId) {
 
 async function _attemptWebhookDelivery(webhook, event, body, payload) {
   const { createHmac } = require('crypto')
-  const sig = `sha256=${createHmac('sha256', webhook.secret).update(body).digest('hex')}`
+  // For Slack/Discord URLs, use platform-formatted payload; otherwise use the default body.
+  const formatted = formatWebhookPayload(webhook.url, event, payload)
+  const deliveryBody = formatted.body
+  const contentType = formatted.contentType
+  const sig = `sha256=${createHmac('sha256', webhook.secret).update(deliveryBody).digest('hex')}`
 
   const [delivery] = await query(
     `INSERT INTO webhook_deliveries (webhook_id, event, payload, status, attempts)
@@ -316,17 +408,25 @@ async function _attemptWebhookDelivery(webhook, event, body, payload) {
   ).catch(() => [null])
   if (!delivery) return
 
-  await _sendWebhookWithRetry(webhook.url, body, sig, delivery.id, 1, event)
+  await _sendWebhookWithRetry(webhook.url, deliveryBody, contentType, sig, delivery.id, 1, event)
 }
 
-async function _sendWebhookWithRetry(url, body, signature, deliveryId, attempt, event) {
+async function _sendWebhookWithRetry(
+  url,
+  body,
+  contentType,
+  signature,
+  deliveryId,
+  attempt,
+  event
+) {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 10_000)
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': contentType,
         'X-SessionForge-Signature': signature,
         'X-SessionForge-Event': event,
         'User-Agent': 'SessionForge-Webhooks/1.0',
@@ -348,7 +448,8 @@ async function _sendWebhookWithRetry(url, body, signature, deliveryId, attempt, 
     ).catch(() => {})
     if (!res.ok && attempt < WEBHOOK_MAX_ATTEMPTS) {
       setTimeout(
-        () => _sendWebhookWithRetry(url, body, signature, deliveryId, attempt + 1, event),
+        () =>
+          _sendWebhookWithRetry(url, body, contentType, signature, deliveryId, attempt + 1, event),
         WEBHOOK_RETRY_DELAYS_MS[attempt - 1]
       )
     }
@@ -359,7 +460,8 @@ async function _sendWebhookWithRetry(url, body, signature, deliveryId, attempt, 
     ).catch(() => {})
     if (attempt < WEBHOOK_MAX_ATTEMPTS) {
       setTimeout(
-        () => _sendWebhookWithRetry(url, body, signature, deliveryId, attempt + 1, event),
+        () =>
+          _sendWebhookWithRetry(url, body, contentType, signature, deliveryId, attempt + 1, event),
         WEBHOOK_RETRY_DELAYS_MS[attempt - 1]
       )
     }
@@ -687,6 +789,8 @@ function handleAgentWs(ws, userId, remoteAddress) {
           const ownerUserId = sessionUserIdCache.get(sessionId)
           if (ownerUserId)
             await publishToDashboard(ownerUserId, { type: 'session_output', sessionId, data })
+          // Track last output time for idle detection; TTL 24h matches session lifetime
+          await redis.set(`session:last_output:${sessionId}`, Date.now(), { ex: 86400 })
         } catch (err) {
           console.error('[ws/agent] session_output publish error:', err.message)
         }
@@ -970,6 +1074,18 @@ async function handleAgentMessage(msg, userId, remoteAddress, onMachineId, getMa
       } catch (err) {
         console.error('[gcs-logs] archive failed for session', sessionId, ':', err)
       }
+      // Notify user of clean session completion (exitCode === 0 only; crashes have their own notification)
+      if (exitCode === 0) {
+        try {
+          await query(
+            `INSERT INTO notifications (id, user_id, type, title, body, resource_id, created_at)
+             VALUES (gen_random_uuid(), $1, 'session_completed', 'Session completed', 'Your Claude Code session finished', $2, NOW())`,
+            [rows[0]?.user_id ?? userId, sessionId]
+          )
+        } catch (err) {
+          console.error('[notifications] failed to create completed notification:', err)
+        }
+      }
       break
     }
 
@@ -1214,6 +1330,38 @@ async function main() {
   server.listen(PORT, hostname, () => {
     console.log(`> SessionForge ready on http://${hostname}:${PORT}`)
   })
+
+  // ─── Idle session detection ───────────────────────────────────────────────
+  // Check every 60 seconds for running sessions with no output in 10 minutes.
+  const IDLE_THRESHOLD_MS = 10 * 60 * 1000
+  setInterval(async () => {
+    try {
+      const runningRows = await query(`SELECT id, user_id FROM sessions WHERE status = 'running'`)
+      const now = Date.now()
+      for (const row of runningRows) {
+        const lastOutput = await redis.get(`session:last_output:${row.id}`)
+        const idleNotified = await redis.get(`session:idle_notified:${row.id}`)
+        if (lastOutput && !idleNotified) {
+          const elapsed = now - parseInt(lastOutput, 10)
+          if (elapsed > IDLE_THRESHOLD_MS) {
+            try {
+              await query(
+                `INSERT INTO notifications (id, user_id, type, title, body, resource_id, created_at)
+                 VALUES (gen_random_uuid(), $1, 'session_idle', 'Session may be idle', 'Your Claude Code session hasn''t produced output in 10 minutes', $2, NOW())`,
+                [row.user_id, row.id]
+              )
+            } catch (err) {
+              console.error('[idle-check] failed to create idle notification:', err.message)
+            }
+            // Suppress repeat notifications for this session for 1 hour
+            await redis.set(`session:idle_notified:${row.id}`, '1', { ex: 3600 })
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[idle-check] error:', err.message)
+    }
+  }, 60_000)
 }
 
 main().catch((err) => {

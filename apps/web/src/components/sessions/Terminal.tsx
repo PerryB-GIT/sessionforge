@@ -95,6 +95,11 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     let mounted = true
     const container = containerRef.current
 
+    // Refs for mobile event handlers so cleanup can remove them
+    let touchStartHandler: ((e: TouchEvent) => void) | null = null
+    let touchMoveHandler: ((e: TouchEvent) => void) | null = null
+    let viewportResizeHandler: (() => void) | null = null
+
     loadXterm().then((mods) => {
       if (!mounted || !container) return
 
@@ -172,6 +177,47 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       observer.observe(container)
       observerRef.current = observer
 
+      // Pinch-to-zoom font size
+      let lastPinchDist = 0
+      touchStartHandler = (e: TouchEvent) => {
+        if (e.touches.length === 2) {
+          lastPinchDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          )
+        }
+      }
+      touchMoveHandler = (e: TouchEvent) => {
+        if (e.touches.length !== 2) return
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        )
+        const delta = dist - lastPinchDist
+        lastPinchDist = dist
+        if (Math.abs(delta) < 1) return
+        const currentSize = terminal.options.fontSize ?? 14
+        const newSize = Math.min(24, Math.max(8, currentSize + delta * 0.05))
+        terminal.options.fontSize = newSize
+        fitAddon?.fit()
+      }
+      container.addEventListener('touchstart', touchStartHandler)
+      container.addEventListener('touchmove', touchMoveHandler)
+
+      // Adjust terminal height when virtual keyboard appears
+      viewportResizeHandler = () => {
+        if (!container || !window.visualViewport) return
+        const topOffset = container.getBoundingClientRect().top
+        const availableHeight = window.visualViewport.height - topOffset - 8
+        if (availableHeight > 100) {
+          container.style.height = `${availableHeight}px`
+          fitAddon?.fit()
+        }
+      }
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', viewportResizeHandler)
+      }
+
       // Initial greeting
       terminal.write(`\x1b[90mSessionForge Terminal — Session ID: ${sessionId}\x1b[0m\r\n`)
       terminal.write(`\x1b[90m${'─'.repeat(60)}\x1b[0m\r\n`)
@@ -203,6 +249,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       mounted = false
       observerRef.current?.disconnect()
       terminalRef.current?.dispose()
+      if (container) {
+        if (touchStartHandler) container.removeEventListener('touchstart', touchStartHandler)
+        if (touchMoveHandler) container.removeEventListener('touchmove', touchMoveHandler)
+      }
+      if (window.visualViewport && viewportResizeHandler) {
+        window.visualViewport.removeEventListener('resize', viewportResizeHandler)
+      }
     }
   }, [sessionId, readOnly, initialLogs, sendMessage, subscribeSession])
 
@@ -252,7 +305,11 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           <StubTerminalContent sessionId={sessionId} />
         </div>
       ) : (
-        <div ref={containerRef} className="flex-1 min-h-0 w-full p-1" />
+        <div
+          ref={containerRef}
+          data-testid="terminal-container"
+          className="flex-1 min-h-0 w-full p-1"
+        />
       )}
     </div>
   )

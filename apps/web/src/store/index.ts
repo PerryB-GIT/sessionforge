@@ -86,6 +86,7 @@ interface SessionForgeStore {
   setSessions: (sessions: Session[]) => void
   updateSession: (id: string, patch: Partial<Session>) => void
   addSession: (session: Session) => void
+  removeSession: (id: string) => void
 
   // API Key actions
   setApiKeys: (keys: ApiKey[]) => void
@@ -123,6 +124,8 @@ export const useStore = create<SessionForgeStore>()(
           sessions: state.sessions.map((s) => (s.id === id ? { ...s, ...patch } : s)),
         })),
       addSession: (session) => set((state) => ({ sessions: [...state.sessions, session] })),
+      removeSession: (id) =>
+        set((state) => ({ sessions: state.sessions.filter((s) => s.id !== id) })),
 
       setApiKeys: (apiKeys) => set({ apiKeys }),
       addApiKey: (key) => set((state) => ({ apiKeys: [...state.apiKeys, key] })),

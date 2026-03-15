@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
-import { Plus, Radar, ChevronDown, ChevronUp, Terminal, Square } from 'lucide-react'
+import { Plus, Radar, ChevronDown, ChevronUp, Terminal, Square, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SessionList, type SessionSortKey } from '@/components/sessions/SessionList'
 import { StartSessionDialog } from '@/components/sessions/StartSessionDialog'
@@ -121,6 +121,7 @@ export default function SessionsPage() {
   const { sessions, isLoading } = useSessions()
   const { machines } = useMachines()
   const updateSession = useStore((s) => s.updateSession)
+  const removeSession = useStore((s) => s.removeSession)
   const [startOpen, setStartOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all')
   const [machineFilter, setMachineFilter] = useState<string>('all')
@@ -132,6 +133,7 @@ export default function SessionsPage() {
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isStopping, setIsStopping] = useState(false)
+  const [isDismissing, setIsDismissing] = useState(false)
 
   // Filtering
   const filtered = sessions
@@ -229,9 +231,39 @@ export default function SessionsPage() {
     }
   }
 
+  // Bulk dismiss — removes crashed/stopped sessions from the view (marks them stopped in DB)
+  const handleBulkDismiss = async () => {
+    const toDismiss = sorted.filter(
+      (s) => selectedIds.has(s.id) && (s.status === 'stopped' || s.status === 'crashed')
+    )
+    if (toDismiss.length === 0) return
+
+    setIsDismissing(true)
+    const results = await Promise.allSettled(
+      toDismiss.map((s) =>
+        fetch(`/api/sessions/${s.id}`, { method: 'DELETE' }).then((res) => {
+          if (!res.ok) throw new Error(`Failed to dismiss session ${s.id}`)
+          removeSession(s.id)
+        })
+      )
+    )
+    setIsDismissing(false)
+    clearSelection()
+
+    const failed = results.filter((r) => r.status === 'rejected').length
+    if (failed === toDismiss.length) {
+      toast.error('Could not dismiss sessions')
+    } else if (failed > 0) {
+      toast.warning(`${failed} of ${toDismiss.length} sessions could not be dismissed`)
+    }
+  }
+
   const selectedCount = selectedIds.size
   const stoppableCount = sorted.filter(
     (s) => selectedIds.has(s.id) && (s.status === 'running' || s.status === 'paused')
+  ).length
+  const dismissableCount = sorted.filter(
+    (s) => selectedIds.has(s.id) && (s.status === 'stopped' || s.status === 'crashed')
   ).length
 
   return (
@@ -302,12 +334,7 @@ export default function SessionsPage() {
       {/* Bulk action bar */}
       {selectedCount > 0 && (
         <div className="flex items-center justify-between rounded-lg border border-purple-500/30 bg-purple-500/5 px-4 py-2.5">
-          <span className="text-sm text-purple-300">
-            {selectedCount} selected
-            {stoppableCount < selectedCount && stoppableCount > 0 && (
-              <span className="text-gray-500 ml-1">({stoppableCount} running)</span>
-            )}
-          </span>
+          <span className="text-sm text-purple-300">{selectedCount} selected</span>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -317,16 +344,30 @@ export default function SessionsPage() {
             >
               Clear
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleBulkStop}
-              disabled={isStopping || stoppableCount === 0}
-              className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-            >
-              <Square className="h-3.5 w-3.5 mr-1.5" />
-              {isStopping ? 'Stopping…' : `Stop${stoppableCount > 0 ? ` ${stoppableCount}` : ''}`}
-            </Button>
+            {dismissableCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleBulkDismiss}
+                disabled={isDismissing}
+                className="border-gray-500/40 text-gray-400 hover:bg-gray-500/10 hover:text-gray-300"
+              >
+                <X className="h-3.5 w-3.5 mr-1.5" />
+                {isDismissing ? 'Dismissing…' : `Dismiss ${dismissableCount}`}
+              </Button>
+            )}
+            {stoppableCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleBulkStop}
+                disabled={isStopping}
+                className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+              >
+                <Square className="h-3.5 w-3.5 mr-1.5" />
+                {isStopping ? 'Stopping…' : `Stop ${stoppableCount}`}
+              </Button>
+            )}
           </div>
         </div>
       )}

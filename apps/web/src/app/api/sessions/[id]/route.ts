@@ -9,10 +9,7 @@ import type { ApiResponse, ApiError, CloudToAgentMessage } from '@sessionforge/s
 
 // ─── GET /api/sessions/:id ─────────────────────────────────────────────────────
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json(
@@ -40,18 +37,14 @@ export async function GET(
     )
   }
 
-  return NextResponse.json(
-    { data: record, error: null } satisfies ApiResponse<typeof record>,
-    { status: 200 }
-  )
+  return NextResponse.json({ data: record, error: null } satisfies ApiResponse<typeof record>, {
+    status: 200,
+  })
 }
 
 // ─── DELETE /api/sessions/:id ──────────────────────────────────────────────────
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json(
@@ -84,30 +77,20 @@ export async function DELETE(
     )
   }
 
-  if (record.status === 'stopped' || record.status === 'crashed') {
-    return NextResponse.json(
-      {
-        data: null,
-        error: {
-          code: 'SESSION_NOT_RUNNING',
-          message: `Session is already ${record.status}`,
-          statusCode: 422,
-        },
-      } satisfies ApiError,
-      { status: 422 }
-    )
+  // For already-stopped or crashed sessions, just mark dismissed (no agent command needed)
+  if (record.status !== 'stopped' && record.status !== 'crashed') {
+    // Send stop command to agent via Redis
+    const stopCommand: CloudToAgentMessage = {
+      type: 'stop_session',
+      sessionId: record.id,
+      force: false,
+    }
+    await redis.xadd(RedisKeys.agentChannel(record.machineId), '*', {
+      data: JSON.stringify(stopCommand),
+    })
   }
 
-  // Send stop command to agent via Redis
-  const stopCommand: CloudToAgentMessage = {
-    type: 'stop_session',
-    sessionId: record.id,
-    force: false,
-  }
-
-  await redis.xadd(RedisKeys.agentChannel(record.machineId), '*', { data: JSON.stringify(stopCommand) })
-
-  // Optimistically update status - agent will confirm via WebSocket
+  // Update DB status
   await db
     .update(sessions)
     .set({ status: 'stopped', stoppedAt: new Date() })

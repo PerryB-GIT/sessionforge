@@ -148,7 +148,6 @@ async function archiveSessionRecording(sessionId, orgId, startedAt, width = 220,
       })
 
     await redis.del(key)
-    console.log(`[recording] archived session ${sessionId} → gs://${RECORDING_BUCKET}/${gcsPath}`)
   } catch (err) {
     console.error('[recording] archiveSessionRecording error:', err)
   }
@@ -531,12 +530,8 @@ function handleDashboardWs(ws, userId) {
             const parsed = JSON.parse(msg)
             if (parsed.type === 'session_output') {
               if (parsed.sessionId !== ws.subscribedSessionId) {
-                console.log(
-                  `[ws/dashboard] filtered session_output sid=${parsed.sessionId} subscribed=${ws.subscribedSessionId}`
-                )
                 continue
               }
-              console.log(`[ws/dashboard] forwarding session_output sid=${parsed.sessionId}`)
             }
           } catch {
             /* not valid JSON, forward as-is */
@@ -569,7 +564,6 @@ function handleDashboardWs(ws, userId) {
       case 'subscribe_session': {
         if (!msg.sessionId) break
         ws.subscribedSessionId = msg.sessionId
-        console.log(`[ws/dashboard] subscribe_session sessionId=${msg.sessionId} userId=${userId}`)
         // Pre-populate the route cache so session_input and resize can skip a DB lookup on the hot path.
         if (!sessionRouteCache.has(msg.sessionId)) {
           const cached = await getSessionRecord(msg.sessionId, userId)
@@ -634,12 +628,6 @@ function handleDashboardWs(ws, userId) {
           sessionRouteCache.delete(msg.sessionId)
           break
         }
-        console.log(
-          '[ws/dashboard] session_input forwarding to agent, sessionId',
-          msg.sessionId,
-          'machineId',
-          record.machine_id
-        )
         await publishToAgent(record.machine_id, {
           type: 'session_input',
           sessionId: msg.sessionId,
@@ -757,7 +745,6 @@ function handleAgentWs(ws, userId, remoteAddress) {
     if (hn) machineHostname = hn
     lastHeartbeatAt = Date.now()
     if (!pollTimer) {
-      console.log(`[ws/agent] starting poll for machine ${id}`)
       pollAgentCommands()
     }
   }
@@ -808,9 +795,6 @@ function handleAgentWs(ws, userId, remoteAddress) {
     }
 
     // Control messages: serialized to prevent register/session_started race.
-    if (msg.type !== 'heartbeat') {
-      console.log('[ws/agent] recv type:', msg.type)
-    }
     agentMsgQueue = agentMsgQueue.then(async () => {
       try {
         await handleAgentMessage(msg, userId, remoteAddress, onMachineId, () => machineId)
@@ -1270,12 +1254,10 @@ async function main() {
   const wsAgent = new WebSocketServer({ noServer: true })
 
   wsDashboard.on('connection', (ws, req) => {
-    console.log(`[ws/dashboard] connected userId=${req._userId}`)
     handleDashboardWs(ws, req._userId)
   })
 
   wsAgent.on('connection', (ws, req) => {
-    console.log(`[ws/agent] connected userId=${req._userId} ip=${req._remoteAddress ?? 'unknown'}`)
     handleAgentWs(ws, req._userId, req._remoteAddress)
   })
 
